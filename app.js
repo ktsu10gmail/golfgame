@@ -1,4 +1,8 @@
-import { declareUnplayable as resolveUnplayableRelief, simulateFullShot } from "./packages/simulation/browser_engine.mjs?v=20260729-2";
+import {
+  declareUnplayable as resolveUnplayableRelief,
+  segmentPolygonEntryProgress,
+  simulateFullShot
+} from "./packages/simulation/browser_engine.mjs?v=20260729-3";
 import { scorePuttStrategy, scoreStrategy } from "./packages/simulation/browser_decision_scoring.mjs?v=20260729-2";
 import { simulateGreensideShot } from "./packages/simulation/browser_greenside.mjs?v=20260729-2";
 import { analyzeRoundStrategy } from "./packages/simulation/browser_round_analysis.mjs?v=20260729-1";
@@ -1286,6 +1290,16 @@ function chipRollRatio(clubName) {
   return 2.5;
 }
 
+function greenEdgeDistanceOnCupLine(start = state.ball) {
+  const cup = pin().center_point;
+  const progress = segmentPolygonEntryProgress(
+    canonicalPoint(start),
+    canonicalPoint(cup),
+    hole().geometries.green_complex.polygon.map(canonicalPoint)
+  );
+  return progress === null ? null : distance(start, cup) * progress;
+}
+
 function recommendedChipPlan(start = state.ball) {
   const lie = currentLieType();
   const totalYards = distance(start, pin().center_point);
@@ -1301,6 +1315,7 @@ function recommendedChipPlan(start = state.ball) {
     .sort((a, b) => a.difference - b.difference)[0];
   if (!club) return null;
   const carryYards = totalYards / (1 + club.ratio);
+  const greenEdgeYards = greenEdgeDistanceOnCupLine(start);
   const read = puttingRead(projectPointToward(start, pin().center_point, carryYards));
   const lateralOffsetYards = (read.breakInches / 36) * 0.8 * (read.startDirection === "right" ? 1 : -1);
   const centerLanding = projectPointToward(start, pin().center_point, carryYards);
@@ -1310,6 +1325,8 @@ function recommendedChipPlan(start = state.ball) {
     clubName: club.candidate.name,
     carryYards,
     rollYards: Math.max(0, totalYards - carryYards),
+    greenEdgeYards,
+    landingDepthYards: greenEdgeYards === null ? null : carryYards - greenEdgeYards,
     landingPoint,
     breakInches: read.breakInches,
     startDirection: read.startDirection,
@@ -1329,7 +1346,15 @@ function gameMasterBriefing() {
   }
   const chipPlan = isGreensideChip() ? recommendedChipPlan() : null;
   if (chipPlan) {
-    return `You have ${Math.round(c.remaining)} yards from ${c.lie.toLowerCase()} just off the green. Treat the target as a landing spot, not the cup. A ${chipPlan.clubName} should land about ${Math.round(chipPlan.carryYards)} yards on, then release the rest. Favor the ${chipPlan.startDirection} side by about ${formatInches(chipPlan.breakInches)}.`;
+    const edgeDescription = chipPlan.greenEdgeYards === null
+      ? ""
+      : ` Along the direct line, the front edge of the green is about ${Math.round(chipPlan.greenEdgeYards)} yards from the ball.`;
+    const landingDescription = chipPlan.landingDepthYards === null
+      ? `${Math.round(chipPlan.carryYards)} yards from the ball`
+      : chipPlan.landingDepthYards >= 0
+        ? `${Math.round(chipPlan.carryYards)} yards from the ball—about ${Math.max(0, Math.round(chipPlan.landingDepthYards))} yards onto the green`
+        : `${Math.round(chipPlan.carryYards)} yards from the ball—about ${Math.abs(Math.round(chipPlan.landingDepthYards))} yards short of the front edge`;
+    return `You have ${Math.round(c.remaining)} yards to the cup from ${c.lie.toLowerCase()}.${edgeDescription} Treat the target as a landing spot, not the cup. A ${chipPlan.clubName} should land about ${landingDescription}, then release about ${Math.round(chipPlan.rollYards)} yards toward the cup. Favor the ${chipPlan.startDirection} side by about ${formatInches(chipPlan.breakInches)}.`;
   }
   const unit = `${Math.round(c.remaining)} yards`;
   const sidehill = sidehillShotPlan(state.ball, normalShotTarget(state.ball));
@@ -1727,7 +1752,15 @@ function interpretGmInstruction(text) {
       state.swingPower = chipPlan.recommendedPower / 100;
       state.shotDraft = { club: true, target: true, power: true };
       updateAll();
-      addGmMessage(`I like ${chipPlan.clubName}. Land it about ${Math.round(chipPlan.carryYards)} yards onto the green, then let it release about ${Math.round(chipPlan.rollYards)} yards. Favor the ${chipPlan.startDirection} side by about ${formatInches(chipPlan.breakInches)}.`);
+      const edgeCopy = chipPlan.greenEdgeYards === null
+        ? ""
+        : ` The front edge is about ${Math.round(chipPlan.greenEdgeYards)} yards from the ball.`;
+      const landingCopy = chipPlan.landingDepthYards === null
+        ? `Land it about ${Math.round(chipPlan.carryYards)} yards from the ball.`
+        : chipPlan.landingDepthYards >= 0
+          ? `Land it about ${Math.round(chipPlan.carryYards)} yards from the ball, roughly ${Math.max(0, Math.round(chipPlan.landingDepthYards))} yards onto the green.`
+          : `The modeled landing point is ${Math.round(chipPlan.carryYards)} yards from the ball, roughly ${Math.abs(Math.round(chipPlan.landingDepthYards))} yards short of the front edge.`;
+      addGmMessage(`I like ${chipPlan.clubName}.${edgeCopy} ${landingCopy} Let it release about ${Math.round(chipPlan.rollYards)} yards toward the cup. Favor the ${chipPlan.startDirection} side by about ${formatInches(chipPlan.breakInches)}.`);
       return;
     }
     if (currentClub().name === "Putter") {

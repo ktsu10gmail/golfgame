@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { ENGINE_VERSION, declareUnplayable, simulateFullShot } from "../packages/simulation/browser_engine.mjs";
+import {
+  ENGINE_VERSION,
+  declareUnplayable,
+  segmentPolygonEntryProgress,
+  simulateFullShot
+} from "../packages/simulation/browser_engine.mjs";
 import { PUTTING_ENGINE_VERSION, derivePuttSeed, simulatePutt } from "../packages/simulation/browser_putting.mjs";
 
 const METERS_TO_YARDS = 1.09361;
@@ -33,6 +38,22 @@ function baseContext(overrides = {}) {
     default_surface: "rough", profile_version: "2026.07.1", ...overrides
   };
 }
+
+test("green-edge entry progress distinguishes edge distance from cup distance", () => {
+  const green = rectangle(8, -4, 12, 4);
+  assert.equal(
+    segmentPolygonEntryProgress({ x: 0, y: 0 }, { x: 10, y: 0 }, green),
+    .8
+  );
+  assert.equal(
+    segmentPolygonEntryProgress({ x: 9, y: 0 }, { x: 10, y: 0 }, green),
+    0
+  );
+  assert.equal(
+    segmentPolygonEntryProgress({ x: 0, y: 8 }, { x: 10, y: 8 }, green),
+    null
+  );
+});
 
 function puttContext(overrides = {}) {
   return {

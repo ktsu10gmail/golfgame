@@ -117,6 +117,44 @@ function pointInPolygon(point, polygon) {
   return inside;
 }
 
+function assertFinitePoint(point, label) {
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    throw new Error(`${label} must be a finite point`);
+  }
+}
+
+export function segmentPolygonEntryProgress(start, target, polygon) {
+  assertFinitePoint(start, "start");
+  assertFinitePoint(target, "target");
+  if (!Array.isArray(polygon) || polygon.length < 3) {
+    throw new Error("polygon must contain at least three points");
+  }
+  polygon.forEach((point, index) => assertFinitePoint(point, `polygon[${index}]`));
+  if (pointInPolygon(start, polygon)) return 0;
+
+  const ray = { x: target.x - start.x, y: target.y - start.y };
+  const rayLengthSquared = ray.x ** 2 + ray.y ** 2;
+  if (rayLengthSquared <= 1e-12) throw new Error("start and target cannot be identical");
+  const cross = (a, b) => a.x * b.y - a.y * b.x;
+  let entry = null;
+  let previous = polygon.at(-1);
+  for (const current of polygon) {
+    const edge = { x: current.x - previous.x, y: current.y - previous.y };
+    const denominator = cross(ray, edge);
+    if (Math.abs(denominator) > 1e-12) {
+      const offset = { x: previous.x - start.x, y: previous.y - start.y };
+      const progress = cross(offset, edge) / denominator;
+      const edgeProgress = cross(offset, ray) / denominator;
+      if (progress >= -1e-9 && progress <= 1 + 1e-9 &&
+          edgeProgress >= -1e-9 && edgeProgress <= 1 + 1e-9) {
+        entry = entry === null ? progress : Math.min(entry, progress);
+      }
+    }
+    previous = current;
+  }
+  return entry === null ? null : Math.max(0, Math.min(1, entry));
+}
+
 export function resolveSurface(point, surfaces, fallback = "rough") {
   const ordered = surfaces.map((surface, index) => ({ surface, index }))
     .sort((a, b) => b.surface.priority - a.surface.priority || a.index - b.index);

@@ -9,7 +9,7 @@ whenever a phase or major work package is completed.
 
 **Active phase:** Phase 2 complete — Phase 3 definition next
 **Current work package:** Define Phase 3 priorities from gameplay evidence
-**Verification baseline:** 112 automated tests defined (80 Python, 32 browser)
+**Verification baseline:** 121 automated tests defined (84 Python, 37 browser)
 
 The browser now consumes deterministic, cross-runtime Result Packets for full
 shots and putting, including authoritative penalty strokes and relief
@@ -293,3 +293,8 @@ goals can be prioritized with evidence from gameplay testing.
   authoritative packet's hundredth-yard precision. Added shared completion
   classification coverage and verified the conceded stroke, final score, and
   “Inside two feet” browser flow. Raised the verified baseline to 120 tests.
+- **2026-07-29:** Removed the ambiguous “yards just off the green” coaching
+  phrase. Greenside briefings now separately identify distance to the cup,
+  distance to the front edge along the direct line, carry from the ball,
+  landing depth onto the green, and expected rollout. Added green-boundary
+  intersection coverage and raised the verified baseline to 121 tests.
