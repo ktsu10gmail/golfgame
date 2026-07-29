@@ -20,6 +20,7 @@ from .round_analysis import (
     analysis_shot_from_packet,
     analyze_round_strategy,
 )
+from .sidehill import SIDEHILL_MODEL_VERSION, SidehillPlan, analyze_sidehill_shot
 
 __all__ = [
     "ENGINE_VERSION",
@@ -27,8 +28,11 @@ __all__ = [
     "PENALTY_RELIEF_VERSION",
     "PUTTING_ENGINE_VERSION",
     "ROUND_STRATEGY_VERSION",
+    "SIDEHILL_MODEL_VERSION",
+    "SidehillPlan",
     "analysis_shot_from_packet",
     "analyze_round_strategy",
+    "analyze_sidehill_shot",
     "declare_unplayable",
     "DECISION_SCORE_VERSION",
     "derive_putt_seed",

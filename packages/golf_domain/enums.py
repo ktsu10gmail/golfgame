@@ -126,3 +126,7 @@ class DecisionReason(StrEnum):
     PIN_ATTACK_NOT_JUSTIFIED = "pin_attack_not_justified"
     OB_RISK_NOT_JUSTIFIED = "ob_risk_not_justified"
     HERO_SHOT_NOT_JUSTIFIED = "hero_shot_not_justified"
+    SIDEHILL_COMPENSATION_CORRECT = "sidehill_compensation_correct"
+    SIDEHILL_COMPENSATION_MISSING = "sidehill_compensation_missing"
+    SIDEHILL_COMPENSATION_WRONG_DIRECTION = "sidehill_compensation_wrong_direction"
+    SIDEHILL_OVERCOMPENSATED = "sidehill_overcompensated"

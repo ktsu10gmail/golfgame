@@ -207,6 +207,34 @@ class DecisionScoringTests(unittest.TestCase):
         self.assertEqual(safe_score.label, DecisionLabel.SOUND)
         self.assertIn("favor_center_green", safe_score.advice_keys)
 
+    def test_correct_sidehill_compensation_improves_lie_management(self) -> None:
+        common = dict(
+            hole_number=4,
+            stroke_number=2,
+            distance_to_target_yards=150.0,
+            lie_type=LieType.FAIRWAY_CLEAN,
+            shot_type=StrategicShotType.APPROACH_STANDARD,
+            selected_club=_club(),
+            target_aggression=0.3,
+            stance_type="ball_below_feet",
+            sidehill_bias_yards=4.0,
+        )
+        correct = score_strategy(StrategyContext(
+            **common,
+            aim_compensation_yards=-4.0,
+            sidehill_compensation="correct",
+        )).decision
+        wrong = score_strategy(StrategyContext(
+            **common,
+            aim_compensation_yards=4.0,
+            sidehill_compensation="wrong_direction",
+        )).decision
+
+        self.assertGreater(correct.subscores.lie_management, wrong.subscores.lie_management)
+        self.assertIn("sidehill_compensation_correct", correct.reasons)
+        self.assertIn("ball_below_feet", correct.advice_keys)
+        self.assertIn("sidehill_compensation_wrong_direction", wrong.reasons)
+
     def test_proper_carry_club_grades_higher_than_thin_carry_club(self) -> None:
         safe_margin = StrategyContext(
             hole_number=2,

@@ -334,6 +334,10 @@ class StrategyContext:
     recovery_required: bool = False
     preferred_miss: PreferredMiss = PreferredMiss.NONE_DECLARED
     strategy_notes: tuple[str, ...] = ()
+    stance_type: str = "level"
+    sidehill_bias_yards: float = 0.0
+    aim_compensation_yards: float = 0.0
+    sidehill_compensation: str = "not_required"
 
     def __post_init__(self) -> None:
         if not 1 <= self.hole_number <= 18:
@@ -350,6 +354,12 @@ class StrategyContext:
             raise ValueError("forced_carry_yards cannot be negative")
         if not 0 <= self.pin_risk_level <= 2:
             raise ValueError("pin_risk_level must be between 0 and 2")
+        if self.stance_type not in {"level", "ball_below_feet", "ball_above_feet"}:
+            raise ValueError("stance_type is invalid")
+        if self.sidehill_compensation not in {
+            "not_required", "correct", "missing", "wrong_direction", "overcompensated"
+        }:
+            raise ValueError("sidehill_compensation is invalid")
 
 
 @dataclass(frozen=True, slots=True)

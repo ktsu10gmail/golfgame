@@ -43,6 +43,8 @@ built-in local commentary heuristics.
 - 80+, 90+, and 100+ player profiles
 - Customizable copied profiles saved in the browser
 - Club selection, aim preview, shot dispersion, lie effects, penalties, scoring, pin positions, and round scorecard
+- Distance- and severity-scaled ball-above/below-feet movement, natural-language
+  aim compensation, and Game Master lie-management grading
 
 ## Phase 2 authoritative engine
 
@@ -58,6 +60,10 @@ outcomes now use versioned authoritative relief records rather than provisional
 browser drops. Full shots and putts also produce separate deterministic decision
 and execution grades, which feed weighted hole and round strategy analysis,
 repeat-pattern detection, the review UI, and optional AI narration.
+Sidehill lies now apply deterministic directional bias from the standard advice
+library: ball below feet moves right and calls for left aim; ball above feet
+moves left and calls for right aim. Game Master grades that planning choice
+separately from the resulting execution.
 
 Phase 2 is complete: every browser gameplay path now consumes a replayable
 authoritative engine packet rather than calculating outcomes independently.

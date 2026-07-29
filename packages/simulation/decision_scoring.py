@@ -26,7 +26,7 @@ from packages.golf_domain import (
 )
 
 
-DECISION_SCORE_VERSION = "decision-score-v1"
+DECISION_SCORE_VERSION = "decision-score-v2"
 
 _LIE_ADVICE_KEYS: dict[LieType, str] = {
     LieType.TEE_STANDARD: "tee_standard",
@@ -265,6 +265,19 @@ def score_strategy(context: StrategyContext, result: ShotResultPacket | None = N
             lie_management += 3
             reasons.add(DecisionReason.LIE_RESPECTED)
 
+    if context.sidehill_compensation == "correct":
+        lie_management += 8
+        reasons.add(DecisionReason.SIDEHILL_COMPENSATION_CORRECT)
+    elif context.sidehill_compensation == "wrong_direction":
+        lie_management -= 12
+        reasons.add(DecisionReason.SIDEHILL_COMPENSATION_WRONG_DIRECTION)
+    elif context.sidehill_compensation == "overcompensated":
+        lie_management -= 6
+        reasons.add(DecisionReason.SIDEHILL_OVERCOMPENSATED)
+    elif context.sidehill_compensation == "missing":
+        lie_management -= 7
+        reasons.add(DecisionReason.SIDEHILL_COMPENSATION_MISSING)
+
     if context.water_in_play and context.target_aggression >= 0.60:
         hazard_management -= 8
         reasons.add(DecisionReason.HAZARD_UNDERWEIGHTED)
@@ -330,6 +343,7 @@ def score_strategy(context: StrategyContext, result: ShotResultPacket | None = N
             key
             for key in (
                 _LIE_ADVICE_KEYS[context.lie_type],
+                context.stance_type if context.stance_type != "level" else None,
                 _hazard_key(context),
                 _outcome_key(context, reasons),
             )

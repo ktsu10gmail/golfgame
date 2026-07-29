@@ -1,4 +1,4 @@
-export const DECISION_SCORE_VERSION = "decision-score-v1";
+export const DECISION_SCORE_VERSION = "decision-score-v2";
 
 const LIE_ADVICE_KEYS = {
   tee_standard: "tee_standard",
@@ -242,6 +242,20 @@ export function scoreStrategy(context, result = null) {
     }
   }
 
+  if (context.sidehill_compensation === "correct") {
+    lieManagement += 8;
+    reasons.add("sidehill_compensation_correct");
+  } else if (context.sidehill_compensation === "wrong_direction") {
+    lieManagement -= 12;
+    reasons.add("sidehill_compensation_wrong_direction");
+  } else if (context.sidehill_compensation === "overcompensated") {
+    lieManagement -= 6;
+    reasons.add("sidehill_overcompensated");
+  } else if (context.sidehill_compensation === "missing") {
+    lieManagement -= 7;
+    reasons.add("sidehill_compensation_missing");
+  }
+
   if (context.water_in_play && context.target_aggression >= 0.60) {
     hazardManagement -= 8;
     reasons.add("hazard_underweighted");
@@ -305,6 +319,7 @@ export function scoreStrategy(context, result = null) {
       reasons: [...reasons].sort(),
       advice_keys: [
         LIE_ADVICE_KEYS[context.lie_type],
+        context.stance_type && context.stance_type !== "level" ? context.stance_type : null,
         hazardKey(context),
         outcomeKey(context, reasons)
       ].filter(Boolean)

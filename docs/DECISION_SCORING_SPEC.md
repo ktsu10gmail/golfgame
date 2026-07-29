@@ -199,7 +199,7 @@ Suggested future packet:
 
 ```json
 {
-  "version": "decision-score-v1",
+  "version": "decision-score-v2",
   "shot_id": "course:hole:stroke",
   "decision": {
     "score": 78,

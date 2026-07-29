@@ -100,6 +100,36 @@ test("browser decision scorer applies shot-type weighting", () => {
   assert.ok(bunker.decision.score < approach.decision.score);
 });
 
+test("browser decision scorer rewards correct sidehill compensation", () => {
+  const base = {
+    hole_number: 4,
+    stroke_number: 2,
+    distance_to_target_yards: 150,
+    lie_type: "fairway_clean",
+    shot_type: "approach_standard",
+    selected_club: club(),
+    target_aggression: .3,
+    hazard_count: 0,
+    water_in_play: false,
+    out_of_bounds_in_play: false,
+    forced_carry_yards: 0,
+    pin_risk_level: 0,
+    recovery_required: false,
+    preferred_miss: "none_declared",
+    strategy_notes: [],
+    stance_type: "ball_below_feet",
+    sidehill_bias_yards: 4,
+    aim_compensation_yards: -4
+  };
+  const correct = scoreStrategy({ ...base, sidehill_compensation: "correct" });
+  const wrong = scoreStrategy({ ...base, sidehill_compensation: "wrong_direction" });
+
+  assert.ok(correct.decision.subscores.lie_management > wrong.decision.subscores.lie_management);
+  assert.ok(correct.decision.reasons.includes("sidehill_compensation_correct"));
+  assert.ok(correct.decision.advice_keys.includes("ball_below_feet"));
+  assert.ok(wrong.decision.reasons.includes("sidehill_compensation_wrong_direction"));
+});
+
 function puttPacket(overrides = {}) {
   return {
     made: false,

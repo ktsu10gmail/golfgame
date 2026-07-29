@@ -101,7 +101,7 @@ Completed in `packages/simulation/putting.py`,
 
 Completed in both simulation runtimes and `app.js`:
 
-- every new full shot and putt stores a `decision-score-v1` strategy packet;
+- every new full shot and putt stores a `decision-score-v2` strategy packet;
 - decision quality remains independent from execution and luck;
 - putts grade line plan, pace plan, and three-putt avoidance;
 - `round-strategy-v1` applies stable shot-type weights and produces hole scores,

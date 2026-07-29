@@ -278,10 +278,12 @@ These are not canonical lie IDs, but they are useful standard context tags.
 ### Ball Below Feet
 
 - Standard advice: `Ball below your feet. Expect the shot to leak right and come out lower. Choke down slightly, maintain posture, and aim a little left of the normal target.`
+- Game rule: apply distance- and severity-scaled rightward movement; grade leftward aim as the correct compensation.
 
 ### Ball Above Feet
 
-- Standard advice: `Ball above your feet. Expect the shot to draw left and launch a bit higher. Stand taller, make a balanced swing, and allow for left movement.`
+- Standard advice: `Ball above your feet. Expect the shot to draw left and launch a bit higher. Stand taller, make a balanced swing, and aim a little right of the normal target.`
+- Game rule: apply distance- and severity-scaled leftward movement; grade rightward aim as the correct compensation.
 
 ### Uphill Lie
 

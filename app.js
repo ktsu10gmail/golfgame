@@ -1,8 +1,9 @@
 import { declareUnplayable as resolveUnplayableRelief, simulateFullShot } from "./packages/simulation/browser_engine.mjs?v=20260729-2";
-import { scorePuttStrategy, scoreStrategy } from "./packages/simulation/browser_decision_scoring.mjs?v=20260729-1";
+import { scorePuttStrategy, scoreStrategy } from "./packages/simulation/browser_decision_scoring.mjs?v=20260729-2";
 import { simulateGreensideShot } from "./packages/simulation/browser_greenside.mjs?v=20260729-2";
 import { analyzeRoundStrategy } from "./packages/simulation/browser_round_analysis.mjs?v=20260729-1";
 import { simulatePutt } from "./packages/simulation/browser_putting.mjs?v=20260722-2";
+import { analyzeSidehillShot } from "./packages/simulation/browser_sidehill.mjs?v=20260729-1";
 import {
   appendHoleEvent,
   buildHoleBrowserState,
@@ -942,7 +943,7 @@ function authoritativeClub(club) {
   };
 }
 
-function authoritativeLie(type) {
+function authoritativeLie(type, lateralBiasYards = 0) {
   const modifiers = {
     Tee: [1, 1, .85, "tee_standard"], Fairway: [1, 1, 1, "fairway_clean"],
     Rough: [.9, .9, 1.1, "rough_light"], "Heavy rough": [.7, .65, 2.5, "rough_deep"],
@@ -950,7 +951,7 @@ function authoritativeLie(type) {
   }[type] || [.85, .8, 1.5, "rough_medium"];
   return {
     lie_type: modifiers[3], carry_multiplier: modifiers[0], roll_multiplier: modifiers[1],
-    mishit_multiplier: modifiers[2], lateral_bias_yards: 0, version: "2026.07.1"
+    mishit_multiplier: modifiers[2], lateral_bias_yards: lateralBiasYards, version: "2026.07.2"
   };
 }
 
@@ -964,12 +965,12 @@ function resultLieFromSurface(surface) {
   }[surface] || { type: "Rough", color: "#4f7a54" };
 }
 
-function authoritativeFullShot(start, target, club, power) {
-  const conditions = shotConditions();
+function authoritativeFullShot(start, target, club, power, sidehill) {
+  const conditions = shotConditions(start);
   const elevationMultiplier = bounded(1 - conditions.elevationFeet / Math.max(club.carry * 3, 1), .8, 1.2);
   const context = {
     start: canonicalPoint(start), target: canonicalPoint(target), pin: canonicalPoint(pin().center_point),
-    club: authoritativeClub(club), lie: authoritativeLie(lieTypeForPoint(start)),
+    club: authoritativeClub(club), lie: authoritativeLie(lieTypeForPoint(start), sidehill.expected_curve_yards),
     environment: {
       wind_forward_yards: 0, wind_lateral_yards: 0, wind_roll_multiplier: 1,
       elevation_carry_multiplier: elevationMultiplier,
@@ -1066,7 +1067,7 @@ function inferStrategicShotType({ strokeIndex, startLieType, targetAggression, f
   return "approach_standard";
 }
 
-function buildStrategyContext(start, intendedTarget, club, plannedRisk, strokeIndex) {
+function buildStrategyContext(start, intendedTarget, club, plannedRisk, strokeIndex, sidehill = null) {
   const startLie = lieAt(start);
   const targetDistanceYards = distance(start, intendedTarget);
   const distanceToPinYards = distance(start, pin().center_point);
@@ -1099,7 +1100,11 @@ function buildStrategyContext(start, intendedTarget, club, plannedRisk, strokeIn
     pin_risk_level: pinRiskLevel(intendedTarget),
     recovery_required: recoveryRequired,
     preferred_miss: "none_declared",
-    strategy_notes: state.shots.at(-1)?.penalty > 0 ? ["penalty"] : []
+    strategy_notes: state.shots.at(-1)?.penalty > 0 ? ["penalty"] : [],
+    stance_type: sidehill?.stance || "level",
+    sidehill_bias_yards: sidehill?.expected_curve_yards || 0,
+    aim_compensation_yards: sidehill?.player_aim_yards || 0,
+    sidehill_compensation: sidehill?.compensation || "not_required"
   };
 }
 
@@ -1151,22 +1156,80 @@ function elevationAt(point) {
   return points.at(-1).elevation_m;
 }
 
-function nearestCenterlineX(y) {
-  const points = hole().centerline_waypoints.map(w => w.point);
-  let nearest = points[0];
-  for (const point of points) if (Math.abs(point[1] - y) < Math.abs(nearest[1] - y)) nearest = point;
-  return nearest[0];
+function centerlineRelation(point) {
+  const points = hole().centerline_waypoints.map(waypoint => waypoint.point);
+  let best = null;
+  for (let index = 1; index < points.length; index++) {
+    const start = points[index - 1];
+    const end = points[index];
+    const dx = end[0] - start[0];
+    const dy = end[1] - start[1];
+    const lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared <= 1e-9) continue;
+    const progress = bounded(
+      ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / lengthSquared,
+      0,
+      1
+    );
+    const projection = [start[0] + dx * progress, start[1] + dy * progress];
+    const separation = Math.hypot(point[0] - projection[0], point[1] - projection[1]);
+    if (best && separation >= best.separation) continue;
+    const length = Math.sqrt(lengthSquared);
+    const rightX = dy / length;
+    const rightY = -dx / length;
+    const signedCourseUnits = (point[0] - projection[0]) * rightX + (point[1] - projection[1]) * rightY;
+    best = { separation, signedLateralYards: signedCourseUnits * finiteScale() };
+  }
+  return best || { separation: 0, signedLateralYards: 0 };
 }
 
-function shotConditions() {
-  const remaining = distance(state.ball, pin().center_point);
-  const elevationFeet = (elevationAt(pin().center_point) - elevationAt(state.ball)) * 3.28084;
-  const lateral = state.ball[0] - nearestCenterlineX(state.ball[1]);
-  const stance = Math.abs(lateral) < 5
+function shotConditions(from = state.ball) {
+  const remaining = distance(from, pin().center_point);
+  const elevationFeet = (elevationAt(pin().center_point) - elevationAt(from)) * 3.28084;
+  const relation = centerlineRelation(from);
+  const stanceType = Math.abs(relation.signedLateralYards) < 5
+    ? "level"
+    : relation.signedLateralYards > 0 ? "ball_above_feet" : "ball_below_feet";
+  const stance = stanceType === "level"
     ? "a fairly level stance"
-    : lateral > 0 ? "the ball above your feet" : "the ball below your feet";
+    : stanceType === "ball_above_feet" ? "the ball above your feet" : "the ball below your feet";
   const slope = elevationFeet > 4 ? "uphill" : elevationFeet < -4 ? "downhill" : "playing nearly level";
-  return { remaining, elevationFeet, stance, slope, lie: currentLieType() };
+  return {
+    remaining,
+    elevationFeet,
+    stance,
+    stanceType,
+    lateralDistanceYards: Math.abs(relation.signedLateralYards),
+    slope,
+    lie: lieTypeForPoint(from)
+  };
+}
+
+function signedAimOffsetYards(start, reference, target) {
+  const dx = reference[0] - start[0];
+  const dy = reference[1] - start[1];
+  const length = Math.hypot(dx, dy);
+  if (length <= 1e-9) return 0;
+  const rightX = dy / length;
+  const rightY = -dx / length;
+  return ((target[0] - reference[0]) * rightX + (target[1] - reference[1]) * rightY) * finiteScale();
+}
+
+function normalShotTarget(start) {
+  return distance(start, pin().center_point) <= 210
+    ? pinPoint()
+    : (fairwayCenterTarget() || pinPoint());
+}
+
+function sidehillShotPlan(start, intendedTarget) {
+  const conditions = shotConditions(start);
+  const referenceTarget = normalShotTarget(start);
+  return analyzeSidehillShot({
+    stance: conditions.stanceType,
+    lateralDistanceYards: conditions.lateralDistanceYards,
+    shotDistanceYards: distance(start, intendedTarget),
+    playerAimYards: signedAimOffsetYards(start, referenceTarget, intendedTarget)
+  });
 }
 
 function puttingRead(from = state.ball) {
@@ -1268,7 +1331,13 @@ function gameMasterBriefing() {
     return `You have ${Math.round(c.remaining)} yards from ${c.lie.toLowerCase()} just off the green. Treat the target as a landing spot, not the cup. A ${chipPlan.clubName} should land about ${Math.round(chipPlan.carryYards)} yards on, then release the rest. Favor the ${chipPlan.startDirection} side by about ${formatInches(chipPlan.breakInches)}.`;
   }
   const unit = `${Math.round(c.remaining)} yards`;
-  return `You have ${unit} to the pin from ${c.lie.toLowerCase()}. The stance has ${c.stance}, and the shot is ${c.slope}${Math.abs(c.elevationFeet) >= 4 ? ` by about ${Math.abs(Math.round(c.elevationFeet))} feet` : ""}.`;
+  const sidehill = sidehillShotPlan(state.ball, normalShotTarget(state.ball));
+  const sidehillAdvice = sidehill.stance === "level"
+    ? ""
+    : sidehill.stance === "ball_below_feet"
+      ? ` Expect about ${Math.round(Math.abs(sidehill.expected_curve_yards) * 10) / 10} yards of movement right; aim roughly ${Math.round(Math.abs(sidehill.recommended_aim_yards) * 10) / 10} yards left.`
+      : ` Expect about ${Math.round(Math.abs(sidehill.expected_curve_yards) * 10) / 10} yards of movement left; aim roughly ${Math.round(Math.abs(sidehill.recommended_aim_yards) * 10) / 10} yards right.`;
+  return `You have ${unit} to the pin from ${c.lie.toLowerCase()}. The stance has ${c.stance}, and the shot is ${c.slope}${Math.abs(c.elevationFeet) >= 4 ? ` by about ${Math.abs(Math.round(c.elevationFeet))} feet` : ""}.${sidehillAdvice}`;
 }
 
 function addGmMessage(text, role = "gm") {
@@ -1732,6 +1801,7 @@ function interpretGmInstruction(text) {
   let targetDescription = "";
   const inchOffset = normalized.match(/(\d+(?:\.\d+)?)\s*(?:inch|inches|in)\s+(?:(?:to\s+the\s+)?(right|left)|(?:to\s+)?(right|left)\s+of)/);
   const cupEdge = normalized.match(/(?:aim\s+)?(?:at\s+|the\s+)?(left|right)\s+edge\s+of\s+(?:the\s+)?(?:cup|pin)/);
+  const lateralAim = normalized.match(/(?:aim\s+)?(?:(\d+(?:\.\d+)?)\s*yards?\s+|slightly\s+)(left|right)(?:\s+of\s+(?:the\s+)?(?:pin|target|flag))?/);
   if (mapViewMode() === "putting" && cupEdge) {
     const edgeDirection = cupEdge[1];
     const cupRadiusInches = 2.125;
@@ -1751,6 +1821,23 @@ function interpretGmInstruction(text) {
       return;
     }
     targetDescription = `${formatInches(inchOffset[1])} ${offsetDirection} of the cup`;
+    state.shotDraft.target = true;
+  } else if (mapViewMode() !== "putting" && lateralAim) {
+    const direction = lateralAim[2];
+    const referenceTarget = normalShotTarget(state.ball);
+    const preview = sidehillShotPlan(state.ball, referenceTarget);
+    const requestedYards = lateralAim[1]
+      ? Number(lateralAim[1])
+      : preview.stance !== "level"
+        ? Math.abs(preview.recommended_aim_yards)
+        : 3;
+    state.target = offsetPointPerpendicular(
+      state.ball,
+      referenceTarget,
+      referenceTarget,
+      requestedYards * (direction === "right" ? 1 : -1)
+    );
+    targetDescription = `${Math.round(requestedYards * 10) / 10} yards ${direction} of the normal target`;
     state.shotDraft.target = true;
   } else if (
     hasApproxWord(normalized, "fairway") &&
@@ -1780,11 +1867,23 @@ function interpretGmInstruction(text) {
 
   const club = currentClub();
   const c = shotConditions();
+  const sidehill = state.target && mapViewMode() !== "putting"
+    ? sidehillShotPlan(state.ball, resolveIntentTarget(state.ball, state.target, club, state.swingPower) || state.target)
+    : null;
   const agreement = adjustment === recommendedAdjustment() && adjustment !== 0
     ? ` That matches the ${c.slope} adjustment.`
     : adjustment && adjustment !== recommendedAdjustment()
       ? ` I’ve set it, though the shot is ${c.slope}; check the expected range before committing.`
       : "";
+  const sidehillAgreement = sidehill?.compensation === "correct"
+    ? ` That correctly compensates for ${c.stance}.`
+    : sidehill?.compensation === "wrong_direction"
+      ? ` Warning: that aim moves with the expected sidehill curve rather than against it.`
+      : sidehill?.compensation === "overcompensated"
+        ? ` That is wider than the recommended sidehill allowance.`
+        : sidehill?.compensation === "missing"
+          ? ` ${c.stance[0].toUpperCase() + c.stance.slice(1)} still calls for about ${Math.round(Math.abs(sidehill.recommended_aim_yards) * 10) / 10} yards ${sidehill.recommended_aim_yards > 0 ? "right" : "left"} of compensation.`
+          : "";
   const swing = percentageMatch
     ? ` at ${Math.round(state.swingPower * 100)}% ${club.name === "Putter" && mapViewMode() === "putting" ? "pace" : "swing"}`
     : normalized.includes("full swing") ? " at full swing" : "";
@@ -1813,7 +1912,7 @@ function interpretGmInstruction(text) {
   const clarification = shotCommand && missing.length
     ? ` Before I play, I still need ${missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(", ")} and ${missing.at(-1)}`}.`
     : "";
-  addGmMessage(`Understood: ${clubDescription}${swing}.${agreement}${targetConfirmation}${clarification}${completeShot ? " Playing now." : ""}`);
+  addGmMessage(`Understood: ${clubDescription}${swing}.${agreement}${targetConfirmation}${sidehillAgreement}${clarification}${completeShot ? " Playing now." : ""}`);
   updateAll();
   if (completeShot && !state.holeFinished) {
     queueAutoPlay();
@@ -1979,6 +2078,9 @@ function playShot() {
       : (resolveIntentTarget(start, linePoint, club, usedPower) || linePoint);
   const intendedLie = lieAt(intendedTarget).type;
   const plannedRisk = shotRisk().value;
+  const sidehill = !isPutt && !isGreenside
+    ? sidehillShotPlan(start, intendedTarget)
+    : null;
   let resultPacket = null;
   let resultRequest = null;
   let strategyPacket = null;
@@ -2014,10 +2116,13 @@ function playShot() {
   } else {
     const authoritative = isGreenside
       ? authoritativeGreensideShot(start, intendedTarget, club, usedPower, strokeIndex)
-      : authoritativeFullShot(start, intendedTarget, club, usedPower);
+      : authoritativeFullShot(start, intendedTarget, club, usedPower, sidehill);
     resultPacket = authoritative.packet;
     resultRequest = authoritative.request;
-    strategyPacket = scoreStrategy(buildStrategyContext(start, intendedTarget, club, plannedRisk, strokeIndex), resultPacket);
+    strategyPacket = scoreStrategy(
+      buildStrategyContext(start, intendedTarget, club, plannedRisk, strokeIndex, sidehill),
+      resultPacket
+    );
     landing = coursePointFromCanonical(resultPacket.resolved_ball || resultPacket.landing);
   }
 
@@ -2051,7 +2156,8 @@ function playShot() {
     strategyPacket,
     resultRequest,
     puttPacket,
-    puttRequest
+    puttRequest,
+    sidehillPlan: sidehill
   };
   state.target = null;
   state.swingPower = 1;
@@ -2087,6 +2193,11 @@ function playShot() {
       : landingLie.type === intendedLie
       ? `${club.name} at ${shotRecord.power}% found the intended ${intendedLie.toLowerCase()}.`
       : `${club.name} at ${shotRecord.power}% missed the intended ${intendedLie.toLowerCase()} and finished in ${landingLie.type.toLowerCase()}${costly ? ", costing position or a penalty" : ""}.`;
+    if (sidehill?.compensation === "correct") {
+      shotRecord.lesson = `Correct sidehill adjustment: you aimed ${Math.abs(sidehill.player_aim_yards)} yards ${sidehill.player_aim_yards > 0 ? "right" : "left"} to counter the expected curve. ${shotRecord.lesson}`;
+    } else if (sidehill && sidehill.compensation !== "not_required") {
+      shotRecord.lesson = `Sidehill adjustment needs work: aim about ${Math.abs(sidehill.recommended_aim_yards)} yards ${sidehill.recommended_aim_yards > 0 ? "right" : "left"}. ${shotRecord.lesson}`;
+    }
   }
   shotRecord.remaining = Math.round(remaining);
   const cupToleranceYards = 2.125 / 36;
@@ -2146,6 +2257,11 @@ function playShot() {
       : costlyMiss
         ? `That was a costly miss. You aimed for ${intendedLie.toLowerCase()}, but the shot dispersed about ${Math.round(missDistance)} yards and finished in ${resultLie.type.toLowerCase()}.${greenLeave}`
         : `That shot missed your intended ${intendedLie.toLowerCase()}. It dispersed about ${Math.round(missDistance)} yards and finished in ${resultLie.type.toLowerCase()}.${greenLeave}`;
+    if (sidehill?.compensation === "correct") {
+      addGmMessage(`Correct sidehill decision: your ${Math.abs(sidehill.player_aim_yards)}-yard ${sidehill.player_aim_yards > 0 ? "right" : "left"} adjustment opposed the expected ${Math.abs(sidehill.expected_curve_yards)}-yard curve.`);
+    } else if (sidehill && sidehill.compensation !== "not_required") {
+      addGmMessage(`Sidehill review: with ${shotConditions(start).stance}, the recommended aim was about ${Math.abs(sidehill.recommended_aim_yards)} yards ${sidehill.recommended_aim_yards > 0 ? "right" : "left"}.`);
+    }
     addGmMessage(outcome);
     addGmMessage(gameMasterBriefing());
   }
