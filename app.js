@@ -8,12 +8,13 @@ import {
   appendHoleEvent,
   buildHoleBrowserState,
   buildRoundBrowserState,
+  classifyShotCompletion,
   loadRoundState,
   migrateLegacyRoundStateStorage,
   replaceHoleEvents,
   resetRoundState,
   saveRoundState
-} from "./packages/simulation/round_state.mjs?v=20260722-2";
+} from "./packages/simulation/round_state.mjs?v=20260729-1";
 
 const METERS_TO_YARDS = 1.09361;
 const PUTTER_RANGE_FEET = 60;
@@ -2200,14 +2201,9 @@ function playShot() {
     }
   }
   shotRecord.remaining = Math.round(remaining);
-  const cupToleranceYards = 2.125 / 36;
-  const gimmeToleranceYards = 2 / 3;
-  let completionType = null;
+  const completionType = classifyShotCompletion(remaining);
   let completionStrokeDelta = 0;
-  if (remaining <= cupToleranceYards) {
-    completionType = "holed";
-  } else if (remaining <= gimmeToleranceYards) {
-    completionType = "gimme";
+  if (completionType === "gimme") {
     completionStrokeDelta = 1;
   }
   const priorScore = state.shots.reduce((sum, shot) => sum + 1 + shot.penalty, 0);

@@ -289,3 +289,7 @@ goals can be prioritized with evidence from gameplay testing.
   with shot distance and lie severity, natural-language left/right aim is
   supported, and `decision-score-v2` rewards correct compensation separately
   from execution. Raised the verified baseline to 119 automated tests.
+- **2026-07-29:** Fixed the two-foot gimme and cup-edge boundaries to use the
+  authoritative packet's hundredth-yard precision. Added shared completion
+  classification coverage and verified the conceded stroke, final score, and
+  “Inside two feet” browser flow. Raised the verified baseline to 120 tests.

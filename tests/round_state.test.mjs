@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CUP_TOLERANCE_YARDS,
+  GIMME_TOLERANCE_YARDS,
   ROUND_STATE_VERSION,
   appendHoleEvent,
   buildHoleBrowserState,
   buildRoundBrowserState,
+  classifyShotCompletion,
   createRoundState,
   loadRoundState,
   migrateLegacyRoundState,
@@ -36,6 +39,17 @@ test("createRoundState builds a versioned 18-hole document", () => {
   assert.equal(round.round_seed, 90210);
   assert.equal(round.holes.length, 18);
   assert.deepEqual(round.holes[0], { hole_number: 1, score: null, events: [] });
+});
+
+test("completion policy respects rounded cup and two-foot gimme boundaries", () => {
+  assert.equal(CUP_TOLERANCE_YARDS, .06);
+  assert.equal(GIMME_TOLERANCE_YARDS, .67);
+  assert.equal(classifyShotCompletion(0), "holed");
+  assert.equal(classifyShotCompletion(.06), "holed");
+  assert.equal(classifyShotCompletion(.07), "gimme");
+  assert.equal(classifyShotCompletion(.67), "gimme");
+  assert.equal(classifyShotCompletion(.68), null);
+  assert.throws(() => classifyShotCompletion(Number.NaN), /finite non-negative/);
 });
 
 test("appendHoleEvent stores normalized hole events and updates hole score", () => {

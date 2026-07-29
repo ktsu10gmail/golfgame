@@ -1,4 +1,15 @@
 export const ROUND_STATE_VERSION = "round-state-v1";
+export const CUP_TOLERANCE_YARDS = .06;
+export const GIMME_TOLERANCE_YARDS = .67;
+
+export function classifyShotCompletion(remainingDistanceYards) {
+  if (!Number.isFinite(remainingDistanceYards) || remainingDistanceYards < 0) {
+    throw new Error("remainingDistanceYards must be a finite non-negative number");
+  }
+  if (remainingDistanceYards <= CUP_TOLERANCE_YARDS) return "holed";
+  if (remainingDistanceYards <= GIMME_TOLERANCE_YARDS) return "gimme";
+  return null;
+}
 
 export function roundStateStorageKey(courseId) {
   return `golfgame-${courseId}-round-state`;
