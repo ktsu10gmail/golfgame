@@ -84,7 +84,7 @@ function targetAxes(start, target) {
   return [forward, { x: forward.y, y: -forward.x }];
 }
 
-function projectLanding(start, target, forwardDistance, lateralDistance) {
+export function projectLanding(start, target, forwardDistance, lateralDistance) {
   const [forward, right] = targetAxes(start, target);
   return {
     x: start.x + forward.x * forwardDistance + right.x * lateralDistance,
@@ -117,7 +117,7 @@ function pointInPolygon(point, polygon) {
   return inside;
 }
 
-function resolveSurface(point, surfaces, fallback = "rough") {
+export function resolveSurface(point, surfaces, fallback = "rough") {
   const ordered = surfaces.map((surface, index) => ({ surface, index }))
     .sort((a, b) => b.surface.priority - a.surface.priority || a.index - b.index);
   const match = ordered.find(item => pointInPolygon(point, item.surface.polygon));

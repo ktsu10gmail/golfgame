@@ -9,6 +9,11 @@ from .engine import (
     resolve_penalty_relief,
     simulate_full_shot,
 )
+from .greenside import (
+    GREENSIDE_ENGINE_VERSION,
+    derive_greenside_seed,
+    simulate_greenside_shot,
+)
 from .putting import PUTTING_ENGINE_VERSION, derive_putt_seed, simulate_putt
 from .round_analysis import (
     ROUND_STRATEGY_VERSION,
@@ -18,6 +23,7 @@ from .round_analysis import (
 
 __all__ = [
     "ENGINE_VERSION",
+    "GREENSIDE_ENGINE_VERSION",
     "PENALTY_RELIEF_VERSION",
     "PUTTING_ENGINE_VERSION",
     "ROUND_STRATEGY_VERSION",
@@ -26,10 +32,12 @@ __all__ = [
     "declare_unplayable",
     "DECISION_SCORE_VERSION",
     "derive_putt_seed",
+    "derive_greenside_seed",
     "derive_shot_seed",
     "resolve_penalty_relief",
     "score_strategy",
     "score_putt_strategy",
     "simulate_full_shot",
+    "simulate_greenside_shot",
     "simulate_putt",
 ]

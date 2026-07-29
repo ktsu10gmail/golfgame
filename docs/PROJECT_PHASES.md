@@ -7,15 +7,16 @@ whenever a phase or major work package is completed.
 
 ## Current position
 
-**Active phase:** Phase 2 — Authoritative Golf Engine  
-**Current work package:** Migrate the remaining browser-local greenside shot path
-**Verification baseline:** 104 automated tests defined (76 Python, 28 browser)
+**Active phase:** Phase 2 complete — Phase 3 definition next
+**Current work package:** Define Phase 3 priorities from gameplay evidence
+**Verification baseline:** 112 automated tests defined (80 Python, 32 browser)
 
 The browser now consumes deterministic, cross-runtime Result Packets for full
 shots and putting, including authoritative penalty strokes and relief
 positions. Persistent round-state recovery, authoritative putting, deterministic
 decision scoring, weighted round analysis, and AI narration integration are now
-complete. The remaining Phase 2 gap is the browser-local greenside chip path.
+complete. Greenside chips now use the same authoritative, replayable
+cross-runtime architecture, so every browser gameplay outcome is engine-owned.
 
 ## Phase 1 — Playable Testing Prototype
 
@@ -38,7 +39,7 @@ while the authoritative engine is developed alongside it.
 
 ## Phase 2 — Authoritative Golf Engine
 
-**Status: In progress**
+**Status: Complete**
 
 ### Work package 1 — Deterministic engine foundation
 
@@ -169,20 +170,38 @@ Delivered:
   cannot replace the local practice priority;
 - Python/browser golden aggregation coverage and real-browser flow verification.
 
+### Work package 8 — Authoritative greenside shots
+
+**Status: Complete**
+
+Delivered:
+
+- immutable greenside context and result contracts;
+- deterministic `greenside-chip-v2` simulation in Python and JavaScript;
+- canonical carry landing, final resting position, surfaces, contour break,
+  slope-adjusted rollout, assessment, and audit identity;
+- complete saved request context and seed identity for exact replay;
+- authoritative relief when a chip rolls into a penalty area;
+- exact cross-runtime golden packets, replay tests, invalid-input coverage, and
+  real-course surface integration across all four courses;
+- live browser verification of a recommended rough-to-green chip and persisted
+  replay packet.
+
 ### Remaining Phase 2 work
 
 1. Add persistent round state and transactional shot handling. **Complete**
 2. Add putting to the authoritative engine. **Complete**
 3. Add decision scoring and AI Game Master narration based on engine results. **Complete**
 4. Replace the remaining browser-local greenside chip simulation with an
-   authoritative cross-runtime packet. **Next**
+   authoritative cross-runtime packet. **Complete**
 
-Phase 2 is complete only when the browser consumes authoritative engine result
-packets for full gameplay rather than calculating outcomes independently.
+Phase 2 is complete. Full shots, greenside shots, putting, penalties, relief,
+round persistence, strategy scoring, and review narration now consume
+authoritative engine packets throughout browser gameplay.
 
 ## Phase 3
 
-**Status: Not yet defined**
+**Status: Definition next**
 
 Define Phase 3 after Phase 2 integration is stable and its remaining product
 goals can be prioritized with evidence from gameplay testing.
@@ -260,3 +279,8 @@ goals can be prioritized with evidence from gameplay testing.
   context, cross-runtime golden tests, and browser-flow verification. Raised the
   verified baseline to 104 tests and set authoritative greenside shot migration
   as the final Phase 2 integration gap.
+- **2026-07-29:** Completed Phase 2 work package 8 and Phase 2 overall. Replaced
+  the browser-local chip simulator with cross-runtime `greenside-chip-v2`
+  packets, saved full replay identity, added rolled-penalty relief, verified all
+  four real course surface sets, completed a live browser chip flow, and raised
+  the baseline to 112 automated tests.

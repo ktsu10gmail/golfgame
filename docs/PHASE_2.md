@@ -112,6 +112,22 @@ Completed in both simulation runtimes and `app.js`:
 - the round-review UI and AI payload consume the same deterministic analysis;
 - Python and JavaScript golden fixtures verify aggregation parity.
 
+## Work package 8: authoritative greenside shots
+
+Completed in `packages/simulation/greenside.py`,
+`packages/simulation/browser_greenside.mjs`, and `app.js`:
+
+- immutable canonical-yard greenside request and result contracts;
+- one deterministic `greenside-chip-v2` algorithm shared across runtimes;
+- carry landing and final resting surfaces are recorded separately;
+- rollout accounts for club, lie, slope, surface, and deterministic contour;
+- chips that finish in water or out of bounds use authoritative relief;
+- saved browser history retains the complete context and seed identity;
+- Python/browser golden parity, replay, invalid-input, penalty, and all-course
+  surface tests pass;
+- a real browser flow verified the recommended chip, final lie, and persisted
+  replay packet.
+
 ## Verification
 
 The Python suite has no third-party runtime dependencies:
@@ -127,7 +143,9 @@ package dependencies:
 node --test tests/*.test.mjs
 ```
 
-## Next work package
+## Completion
 
-Move the remaining browser-local greenside chip simulator into the authoritative
-cross-runtime engine so every gameplay outcome comes from an engine packet.
+Phase 2 is complete. Full shots, greenside chips, putts, penalties, relief,
+transactional round state, decision scoring, round analysis, and optional AI
+narration all consume authoritative engine facts. Phase 3 should be defined from
+gameplay evidence rather than extending Phase 2 without a new product goal.

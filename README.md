@@ -44,10 +44,10 @@ built-in local commentary heuristics.
 - Customizable copied profiles saved in the browser
 - Club selection, aim preview, shot dispersion, lie effects, penalties, scoring, pin positions, and round scorecard
 
-## Phase 2 engine foundation
+## Phase 2 authoritative engine
 
-The production-oriented, deterministic full-shot engine is being developed in
-`packages/` alongside the Phase 1 browser prototype. It currently includes
+The production-oriented deterministic engine in `packages/` now owns full-shot,
+greenside-chip, putting, penalty, and relief outcomes. It includes
 versioned player and lie fixtures, bounded shot distributions, seeded quality
 states, coordinate projection, environment and lie modifiers, path samples,
 landing-surface resolution, replay data, immutable audit packets, and a validated
@@ -58,6 +58,9 @@ outcomes now use versioned authoritative relief records rather than provisional
 browser drops. Full shots and putts also produce separate deterministic decision
 and execution grades, which feed weighted hole and round strategy analysis,
 repeat-pattern detection, the review UI, and optional AI narration.
+
+Phase 2 is complete: every browser gameplay path now consumes a replayable
+authoritative engine packet rather than calculating outcomes independently.
 
 Run its dependency-free test suite with:
 

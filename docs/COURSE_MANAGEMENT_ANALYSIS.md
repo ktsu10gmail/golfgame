@@ -462,5 +462,5 @@ That is the real training value of the game.
 
 - validate the scoring thresholds through gameplay sessions
 - expand the machine-readable advice catalog where new situations require it
-- migrate the remaining greenside simulation path into the authoritative engine
+- validate authoritative greenside scoring thresholds through gameplay sessions
 - design multi-round progression tracking after Phase 2 integration is complete

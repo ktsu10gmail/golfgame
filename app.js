@@ -1,5 +1,6 @@
-import { declareUnplayable as resolveUnplayableRelief, deriveShotSeed, simulateFullShot } from "./packages/simulation/browser_engine.mjs?v=20260722-2";
+import { declareUnplayable as resolveUnplayableRelief, simulateFullShot } from "./packages/simulation/browser_engine.mjs?v=20260729-2";
 import { scorePuttStrategy, scoreStrategy } from "./packages/simulation/browser_decision_scoring.mjs?v=20260729-1";
+import { simulateGreensideShot } from "./packages/simulation/browser_greenside.mjs?v=20260729-2";
 import { analyzeRoundStrategy } from "./packages/simulation/browser_round_analysis.mjs?v=20260729-1";
 import { simulatePutt } from "./packages/simulation/browser_putting.mjs?v=20260722-2";
 import {
@@ -885,20 +886,6 @@ function offsetPointPerpendicular(start, target, point, lateralYards) {
   return [point[0] + rightX * offset, point[1] + rightY * offset];
 }
 
-function holeSurfaceType(point) {
-  const type = lieAt(point).type;
-  return {
-    "Out of bounds": "out_of_bounds",
-    Water: "water",
-    Bunker: "bunker",
-    Green: "green",
-    Fairway: "fairway",
-    Tee: "tee",
-    Rough: "rough",
-    "Heavy rough": "native"
-  }[type] || "rough";
-}
-
 function finitePointOrNull(point) {
   try {
     return pointArray(point);
@@ -996,6 +983,37 @@ function authoritativeFullShot(start, target, club, power) {
     roundSeed: state.roundSeed, holeNumber: state.holeIndex + 1, strokeIndex: state.shots.length + 1
   };
   return { packet: simulateFullShot(context, identity), request: { context, identity } };
+}
+
+function authoritativeGreensideShot(start, target, club, power, strokeIndex) {
+  const conditions = shotConditions();
+  const contourSeed = (state.holeIndex + 1) * 17 + state.pinIndex * 11;
+  const lie = authoritativeLie(lieTypeForPoint(start));
+  const context = {
+    start: canonicalPoint(start),
+    target: canonicalPoint(target),
+    pin: canonicalPoint(pin().center_point),
+    club_id: authoritativeClub(club).club_id,
+    accuracy: bounded(club.accuracy / 100, 0, 1),
+    lie_type: lie.lie_type,
+    power,
+    roll_slope_factor: conditions.slope === "uphill" ? 0.78 : conditions.slope === "downhill" ? 1.18 : 1,
+    break_direction: contourSeed % 2 === 0 ? "right" : "left",
+    contour_modifier: (contourSeed % 5) - 2,
+    surfaces: canonicalSurfaces(),
+    default_surface: "rough",
+    profile_version: `browser-profile-${state.profile.id}`,
+    lie_version: lie.version
+  };
+  const identity = {
+    roundSeed: state.roundSeed,
+    holeNumber: state.holeIndex + 1,
+    strokeIndex
+  };
+  return {
+    packet: simulateGreensideShot(context, identity),
+    request: { engine: "greenside", context, identity }
+  };
 }
 
 function lineSamplePoints(start, target, count = 48) {
@@ -1232,102 +1250,6 @@ function recommendedChipPlan(start = state.ball) {
     breakInches: read.breakInches,
     startDirection: read.startDirection,
     recommendedPower: 90
-  };
-}
-
-class GreensideRandom {
-  constructor(seed) {
-    this.state = seed & ((1n << 64n) - 1n);
-    this.spareGaussian = null;
-  }
-
-  random() {
-    this.state = (this.state + 0x9e3779b97f4a7c15n) & ((1n << 64n) - 1n);
-    let value = this.state;
-    value = ((value ^ (value >> 30n)) * 0xbf58476d1ce4e5b9n) & ((1n << 64n) - 1n);
-    value = ((value ^ (value >> 27n)) * 0x94d049bb133111ebn) & ((1n << 64n) - 1n);
-    value ^= value >> 31n;
-    return Number(value >> 11n) / 9007199254740992;
-  }
-
-  gauss(mean, standardDeviation) {
-    let standard;
-    if (this.spareGaussian !== null) {
-      standard = this.spareGaussian;
-      this.spareGaussian = null;
-    } else {
-      const first = Math.max(this.random(), 1 / 9007199254740992);
-      const second = this.random();
-      const radius = Math.sqrt(-2 * Math.log(first));
-      const angle = 2 * Math.PI * second;
-      standard = radius * Math.cos(angle);
-      this.spareGaussian = radius * Math.sin(angle);
-    }
-    return mean + standard * standardDeviation;
-  }
-}
-
-function simulateGreensideShot(start, landingTarget, club, power, strokeIndex) {
-  const seed = deriveShotSeed(state.roundSeed, state.holeIndex + 1, strokeIndex);
-  const rng = new GreensideRandom(seed);
-  const lie = currentLieType();
-  const carryTargetYards = distance(start, landingTarget);
-  const accuracy = bounded(club.accuracy / 100, 0, 1);
-  const carryBias = 0.82 + power * 0.2;
-  const carrySd = Math.max(0.4, carryTargetYards * (0.05 + (1 - accuracy) * 0.12 + (lie === "Heavy rough" ? 0.08 : lie === "Rough" ? 0.05 : 0.03)));
-  const actualCarry = Math.max(0.5, rng.gauss(carryTargetYards * carryBias, carrySd));
-  const lateralSd = Math.max(0.15, carryTargetYards * (0.015 + (1 - accuracy) * 0.06 + (lie === "Heavy rough" ? 0.05 : lie === "Rough" ? 0.03 : 0.01)));
-  const lateralYards = rng.gauss(0, lateralSd);
-  const carryPoint = offsetPointPerpendicular(start, landingTarget, projectPointToward(start, landingTarget, actualCarry), lateralYards);
-  const landingSurface = holeSurfaceType(carryPoint);
-  const read = puttingRead(carryPoint);
-  const slopeFactor = shotConditions().slope === "uphill" ? 0.78 : shotConditions().slope === "downhill" ? 1.18 : 1;
-  const rollRatio = chipRollRatio(club.name);
-  const rawRollYards = Math.max(0, actualCarry * rollRatio * slopeFactor * (landingSurface === "green" ? 1 : 0.65));
-  const lateralBreakYards = (read.breakInches / 36) * Math.min(1.3, rawRollYards / Math.max(distance(carryPoint, pin().center_point), 1));
-  const towardCupPoint = projectPointToward(carryPoint, pin().center_point, rawRollYards);
-  const finalPoint = offsetPointPerpendicular(carryPoint, pin().center_point, towardCupPoint, read.direction === "right" ? lateralBreakYards : -lateralBreakYards);
-  const finalSurface = holeSurfaceType(finalPoint);
-  const remainingYards = Math.round(distance(finalPoint, pin().center_point) * 100) / 100;
-  const execution = remainingYards <= 4.5 && finalSurface === "green" ? "on_plan" : "missed";
-  const targetMiss = Math.round(distance(carryPoint, landingTarget) * 10) / 10;
-  const quality = targetMiss <= 1.5 ? "solid" : targetMiss <= 3 ? "slight_mishit" : "fat";
-  return {
-    quality,
-    carry_yards: Math.round(actualCarry * 100) / 100,
-    roll_yards: Math.round(rawRollYards * 100) / 100,
-    total_yards: Math.round((actualCarry + rawRollYards) * 100) / 100,
-    lateral_yards: Math.round(lateralYards * 100) / 100,
-    landing: canonicalPoint(carryPoint),
-    path: [canonicalPoint(start), canonicalPoint(carryPoint), canonicalPoint(finalPoint)],
-    landing_surface: landingSurface,
-    landing_region_id: null,
-    remaining_distance_yards: remainingYards,
-    assessment: {
-      decision_assessment: "sound",
-      execution_assessment: execution,
-      overall_assessment: execution === "on_plan" ? "good" : "bad",
-      decision_risk: Math.min(100, Math.round(20 + targetMiss * 8)),
-      risk_label: targetMiss <= 1.5 ? "Conservative" : targetMiss <= 3 ? "Measured risk" : "High risk"
-    },
-    audit: {
-      engine_version: "greenside-chip-v1",
-      round_seed: state.roundSeed,
-      shot_seed: seed.toString(),
-      hole_number: state.holeIndex + 1,
-      stroke_index: strokeIndex,
-      profile_version: `browser-profile-${state.profile.id}`,
-      sampled_carry_yards: Math.round(actualCarry * 10000) / 10000,
-      sampled_lateral_yards: Math.round(lateralYards * 10000) / 10000,
-      mishit_probability: Math.round((1 - accuracy) * 1000) / 1000,
-      modifiers: [
-        { name: "greenside_roll_ratio", value: rollRatio },
-        { name: "greenside_slope_factor", value: slopeFactor },
-        { name: "intent_distance", value: power }
-      ]
-    },
-    relief: null,
-    resolved_ball: canonicalPoint(finalPoint)
   };
 }
 
@@ -2091,7 +2013,7 @@ function playShot() {
     };
   } else {
     const authoritative = isGreenside
-      ? { packet: simulateGreensideShot(start, intendedTarget, club, usedPower, strokeIndex), request: null }
+      ? authoritativeGreensideShot(start, intendedTarget, club, usedPower, strokeIndex)
       : authoritativeFullShot(start, intendedTarget, club, usedPower);
     resultPacket = authoritative.packet;
     resultRequest = authoritative.request;
@@ -2315,7 +2237,8 @@ function showResult(lie, remaining, penalty) {
       : `${Math.round(remaining)} yards remain.${reliefCopy}`;
   showMobileShotToast($("#result-title").textContent, $("#result-copy").textContent);
   $("#declare-unplayable").hidden = !(
-    last.resultPacket && last.resultRequest && !last.resultPacket.relief && !state.holeFinished &&
+    last.resultPacket && last.resultRequest && last.resultRequest.engine !== "greenside" &&
+    !last.resultPacket.relief && !state.holeFinished &&
     !["green", "tee", "water", "out_of_bounds"].includes(last.resultPacket.landing_surface)
   );
   if (state.holeFinished) openHoleCompleteDialog();
@@ -2323,7 +2246,8 @@ function showResult(lie, remaining, penalty) {
 
 function declareLastShotUnplayable() {
   const shot = state.shots.at(-1);
-  if (!shot?.resultPacket || shot.resultPacket.relief || state.holeFinished) return;
+  if (!shot?.resultPacket || shot.resultRequest?.engine === "greenside" ||
+    shot.resultPacket.relief || state.holeFinished) return;
   const context = shot.resultRequest.context;
   const relief = resolveUnplayableRelief(context, shot.resultPacket);
   const resolvedLie = resultLieFromSurface(relief.resulting_surface).type;

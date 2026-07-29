@@ -214,6 +214,60 @@ class ShotResultPacket:
 
 
 @dataclass(frozen=True, slots=True)
+class GreensideContext:
+    start: Vec2
+    target: Vec2
+    pin: Vec2
+    club_id: str
+    accuracy: float
+    lie_type: LieType
+    power: float
+    roll_slope_factor: float
+    break_direction: str
+    contour_modifier: int
+    surfaces: tuple[SurfaceRegion, ...] = ()
+    default_surface: SurfaceType = SurfaceType.ROUGH
+    profile_version: str = "unversioned"
+    lie_version: str = "unversioned"
+
+    def __post_init__(self) -> None:
+        if self.start.distance_to(self.target) <= 1e-9:
+            raise ValueError("start and target cannot be identical")
+        if not self.club_id:
+            raise ValueError("club_id is required")
+        if not 0 <= self.accuracy <= 1:
+            raise ValueError("accuracy must be between 0 and 1")
+        if not 0 <= self.power <= 1.5:
+            raise ValueError("power is outside the supported range")
+        if self.roll_slope_factor <= 0:
+            raise ValueError("roll_slope_factor must be positive")
+        if self.break_direction not in {"left", "right"}:
+            raise ValueError("break_direction must be left or right")
+        if not -2 <= self.contour_modifier <= 2:
+            raise ValueError("contour_modifier must be between -2 and 2")
+
+
+@dataclass(frozen=True, slots=True)
+class GreensideResultPacket:
+    quality: ShotQuality
+    carry_yards: float
+    roll_yards: float
+    total_yards: float
+    lateral_yards: float
+    landing: Vec2
+    resolved_ball: Vec2
+    path: tuple[Vec2, ...]
+    landing_surface: SurfaceType
+    landing_region_id: str | None
+    resolved_surface: SurfaceType
+    resolved_region_id: str | None
+    remaining_distance_yards: float
+    assessment: ResultAssessment
+    audit: ShotAudit
+    relief: PenaltyRelief | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class DecisionSubscores:
     target_selection: int
     club_selection: int
