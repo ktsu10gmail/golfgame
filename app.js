@@ -1,5 +1,6 @@
 import { declareUnplayable as resolveUnplayableRelief, deriveShotSeed, simulateFullShot } from "./packages/simulation/browser_engine.mjs?v=20260722-2";
-import { scoreStrategy } from "./packages/simulation/browser_decision_scoring.mjs?v=20260722-2";
+import { scorePuttStrategy, scoreStrategy } from "./packages/simulation/browser_decision_scoring.mjs?v=20260729-1";
+import { analyzeRoundStrategy } from "./packages/simulation/browser_round_analysis.mjs?v=20260729-1";
 import { simulatePutt } from "./packages/simulation/browser_putting.mjs?v=20260722-2";
 import {
   appendHoleEvent,
@@ -1462,12 +1463,18 @@ function formatStrategyReason(reason) {
     .replace(/\b\w/g, char => char.toUpperCase());
 }
 
+function formatStrategyCategory(category) {
+  return formatStrategyReason(category || "no pattern yet");
+}
+
 function strategySummary(shot) {
   const packet = strategyPacketForShot(shot);
   if (!packet) return null;
   return {
     score: packet.decision.score,
     label: packet.decision.label,
+    shotType: packet.shot_type,
+    isPutt: packet.shot_type === "putt_lag" || packet.shot_type === "putt_make_attempt",
     preferredMiss: formatPreferredMiss(packet.preferred_miss),
     preferredMissInferred: packet.preferred_miss_inferred,
     reasons: packet.decision.reasons.slice(0, 3).map(formatStrategyReason)
@@ -1544,6 +1551,7 @@ async function requestAiShotNarration(payload) {
 }
 
 function aiRoundPayload() {
+  const strategyAnalysis = analyzeRoundStrategy(state.roundHistory);
   return {
     course: { id: state.courseId, name: state.course.name },
     player: { profile_id: state.profile.id, profile_name: state.profile.name },
@@ -1552,6 +1560,7 @@ function aiRoundPayload() {
       completed_holes: state.scores.filter(score => score != null).length,
       scores: state.scores
     },
+    strategy_analysis: strategyAnalysis,
     holes: state.roundHistory.map((holeShots, index) => ({
       hole_number: index + 1,
       par: state.scorecard[index].Par,
@@ -1572,7 +1581,8 @@ function aiRoundPayload() {
         decision_quality: decisionQualityFromAssessment(packetAssessment(shot), shot.quality),
         execution_quality: executionQualityFromAssessment(packetAssessment(shot), shot.quality),
         penalty: shot.penalty,
-        remaining: shot.remaining
+        remaining: shot.remaining,
+        strategy_packet: shot.strategyPacket || null
       }))
     }))
   };
@@ -1583,8 +1593,6 @@ async function requestAiRoundReview() {
   if (!response?.verdict) return;
   const verdict = $("#round-review-summary .review-verdict p");
   if (verdict) verdict.textContent = response.verdict;
-  const focus = $("#round-review-summary .review-focus strong");
-  if (focus && response.priority) focus.textContent = response.priority;
 }
 
 function escapeHtml(value) {
@@ -2060,6 +2068,7 @@ function playShot() {
     const authoritative = authoritativePutt(start, intendedTarget, usedPower);
     puttPacket = authoritative.packet;
     puttRequest = authoritative.request;
+    strategyPacket = scorePuttStrategy(puttPacket);
     landing = coursePointFromCanonical(puttPacket.landing);
     puttingEvaluation = {
       made: puttPacket.made,
@@ -2923,29 +2932,15 @@ function openRoundReview() {
   const shots = state.roundHistory.flat();
   const decisionGood = shots.filter(shot => decisionQualityFromAssessment(packetAssessment(shot), shot.quality) === "good").length;
   const executionGood = shots.filter(shot => executionQualityFromAssessment(packetAssessment(shot), shot.quality) === "good").length;
-  const strategyShots = shots.filter(shot => strategyPacketForShot(shot));
-  const averageStrategyScore = strategyShots.length
-    ? Math.round(strategyShots.reduce((sum, shot) => sum + strategyPacketForShot(shot).decision.score, 0) / strategyShots.length)
-    : null;
-  const learningShots = shots.filter(shot =>
-    overallQualityFromAssessment(packetAssessment(shot), shot.quality) === "bad" ||
-    decisionQualityFromAssessment(packetAssessment(shot), shot.quality) === "review" ||
-    executionQualityFromAssessment(packetAssessment(shot), shot.quality) === "review"
-  );
+  const strategyAnalysis = analyzeRoundStrategy(state.roundHistory);
   const playedScore = state.scores.reduce((sum, score, index) => score == null ? sum : sum + score - state.scorecard[index].Par, 0);
-  const clubStats = shots.reduce((stats, shot) => {
-    stats[shot.club] ||= { total: 0, good: 0, review: 0 };
-    stats[shot.club].total++;
-    if (executionQualityFromAssessment(packetAssessment(shot), shot.quality) === "good") stats[shot.club].good++;
-    else stats[shot.club].review++;
-    return stats;
-  }, {});
-  const rankedClubs = Object.entries(clubStats);
-  const strength = rankedClubs.sort((a, b) => (b[1].good / b[1].total) - (a[1].good / a[1].total))[0]?.[0] || "No pattern yet";
-  const leak = [...rankedClubs].sort((a, b) => b[1].review - a[1].review)[0]?.[0] || "No pattern yet";
-  const recoverable = Math.min(learningShots.length, Math.max(0, Math.round(learningShots.length * .55)));
-  const verdict = shots.length
-    ? `Your strongest pattern was with ${strength}. ${leak !== strength ? `${leak} created the most review moments.` : "Execution was fairly consistent across the bag."} Focus first on the highlighted decisions—they represent about ${recoverable} potentially recoverable ${recoverable === 1 ? "stroke" : "strokes"}.`
+  const strength = strategyAnalysis ? formatStrategyCategory(strategyAnalysis.top_strength) : "No pattern yet";
+  const priority = strategyAnalysis ? formatStrategyCategory(strategyAnalysis.top_priority) : "No pattern yet";
+  const keyMomentCount = strategyAnalysis?.top_costly_decisions.length ?? 0;
+  const verdict = strategyAnalysis
+    ? `Your deterministic strategy score was ${strategyAnalysis.strategy_score}. ${strength} was the strongest category; ${priority} is the first priority. ${strategyAnalysis.pattern_summary}`
+    : shots.length
+      ? "This saved round predates strategy packets, so its shots remain visible but are not assigned a strategy score."
     : "Play a new shot to begin your caddie report. Rounds completed before shot tracking do not contain enough detail for coaching.";
 
   $("#round-review-summary").innerHTML = `
@@ -2954,19 +2949,17 @@ function openRoundReview() {
       <p>${verdict}</p>
     </section>
     <div class="review-stat review-score"><span>Round</span><strong>${fmtScore(playedScore)}</strong></div>
-    <div class="review-stat"><span>Strategy score</span><strong>${averageStrategyScore ?? "—"}</strong><small>${strategyShots.length ? `${strategyShots.length} scored full shots` : "No full-shot strategy packets yet"}</small></div>
+    <div class="review-stat"><span>Strategy score</span><strong>${strategyAnalysis?.strategy_score ?? "—"}</strong><small>${strategyAnalysis ? `${strategyAnalysis.scored_shots} scored decisions` : "No strategy packets yet"}</small></div>
     <div class="review-stat"><span>Decision quality</span><strong>${shots.length ? `${Math.round(decisionGood / shots.length * 100)}%` : "—"}</strong><small>${decisionGood} sound choices</small></div>
     <div class="review-stat"><span>Execution quality</span><strong>${shots.length ? `${Math.round(executionGood / shots.length * 100)}%` : "—"}</strong><small>${executionGood} shots on plan</small></div>
-    <div class="review-stat review-focus"><span>Practice next</span><strong>${leak}</strong><small>${recoverable} recoverable ${recoverable === 1 ? "stroke" : "strokes"}</small></div>`;
+    <div class="review-stat review-focus"><span>Practice next</span><strong>${priority}</strong><small>${keyMomentCount} key decision ${keyMomentCount === 1 ? "moment" : "moments"}</small></div>`;
 
-  const priorityHoles = state.roundHistory.map((holeShots, index) => ({
-    index,
-    weight: holeShots.filter(shot =>
-      overallQualityFromAssessment(packetAssessment(shot), shot.quality) === "bad" ||
-      decisionQualityFromAssessment(packetAssessment(shot), shot.quality) === "review" ||
-      executionQualityFromAssessment(packetAssessment(shot), shot.quality) === "review"
-    ).length * 3 + Math.max(0, (state.scores[index] || state.scorecard[index].Par) - state.scorecard[index].Par)
-  })).sort((a, b) => b.weight - a.weight).slice(0, 3).map(item => item.index);
+  const priorityHoles = strategyAnalysis
+    ? [...strategyAnalysis.holes]
+      .sort((a, b) => a.strategy_score - b.strategy_score || a.hole_number - b.hole_number)
+      .slice(0, 3)
+      .map(item => item.hole_number - 1)
+    : [];
 
   $("#round-review-list").innerHTML = shots.length ? state.roundHistory.map((holeShots, index) => {
     if (!holeShots.length) return "";
@@ -2993,7 +2986,9 @@ function openRoundReview() {
         </div>
         ${strategy ? `<div class="shot-strategy">
           <span class="strategy-score ${strategy.label}">Strategy <b>${strategy.score}</b></span>
-          <span class="strategy-miss">Preferred miss <b>${strategy.preferredMiss}${strategy.preferredMissInferred ? " (Inferred)" : ""}</b></span>
+          ${strategy.isPutt
+            ? `<span class="strategy-miss">Plan <b>${formatStrategyCategory(strategy.shotType)}</b></span>`
+            : `<span class="strategy-miss">Preferred miss <b>${strategy.preferredMiss}${strategy.preferredMissInferred ? " (Inferred)" : ""}</b></span>`}
         </div>` : ""}
         ${shot.puttAnalysis
           ? `<div class="shot-path"><span>${shot.puttAnalysis.playerRead} · ${shot.puttAnalysis.playerPace}%</span><i>→</i><strong>Ideal ${shot.puttAnalysis.recommendedRead} · ${shot.puttAnalysis.recommendedPace}%</strong></div>`

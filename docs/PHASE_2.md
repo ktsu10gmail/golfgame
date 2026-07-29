@@ -38,8 +38,8 @@ Completed in `packages/golf_domain/course_adapter.py`:
 
 ## Explicitly deferred
 
-- authoritative round persistence and transactional shot endpoints;
-- decision scoring and AI narration.
+- persistent player progression and multi-round trend dashboards;
+- fully course-specific strategy exceptions.
 
 ## Work package 3: browser Result Packet integration
 
@@ -97,6 +97,21 @@ Completed in `packages/simulation/putting.py`,
 - Python and browser parity tests cover deterministic replay and canonical
   golden-putt output.
 
+## Work package 7: deterministic decision scoring and round analysis
+
+Completed in both simulation runtimes and `app.js`:
+
+- every new full shot and putt stores a `decision-score-v1` strategy packet;
+- decision quality remains independent from execution and luck;
+- putts grade line plan, pace plan, and three-putt avoidance;
+- `round-strategy-v1` applies stable shot-type weights and produces hole scores,
+  a round score, category subscores, strengths, priorities, key moments, and
+  repeated strategic patterns;
+- old saved rounds without strategy packets remain readable without fabricated
+  grades;
+- the round-review UI and AI payload consume the same deterministic analysis;
+- Python and JavaScript golden fixtures verify aggregation parity.
+
 ## Verification
 
 The Python suite has no third-party runtime dependencies:
@@ -109,10 +124,10 @@ The browser Result Packet tests use Node's built-in test runner and have no
 package dependencies:
 
 ```bash
-node --test tests/browser_engine.test.mjs tests/round_state.test.mjs
+node --test tests/*.test.mjs
 ```
 
 ## Next work package
 
-Add decision scoring and AI Game Master narration based on authoritative engine
-results instead of browser-local heuristics.
+Move the remaining browser-local greenside chip simulator into the authoritative
+cross-runtime engine so every gameplay outcome comes from an engine packet.

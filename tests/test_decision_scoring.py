@@ -9,6 +9,9 @@ from packages.golf_domain import (
     PenaltyReason,
     PenaltyRelief,
     PreferredMiss,
+    PuttAudit,
+    PuttRead,
+    PuttResultPacket,
     ReliefType,
     ResultAssessment,
     ShotAudit,
@@ -19,7 +22,12 @@ from packages.golf_domain import (
     SurfaceType,
     Vec2,
 )
-from packages.simulation import DECISION_SCORE_VERSION, score_strategy
+from packages.simulation import (
+    DECISION_SCORE_VERSION,
+    analysis_shot_from_packet,
+    score_putt_strategy,
+    score_strategy,
+)
 
 
 def _club(carry_mean: float = 150.0, lateral_sd: float = 8.0) -> ClubStat:
@@ -84,6 +92,47 @@ def _result(
             modifiers=(AuditModifier(name="test", value=1.0),),
         ),
         relief=relief,
+    )
+
+
+def _putt_result(
+    *,
+    feet: float = 30.0,
+    aim_error_inches: float = 2.0,
+    power_error_points: float = 3.0,
+    remaining_distance_yards: float = 1.0,
+    made: bool = False,
+) -> PuttResultPacket:
+    return PuttResultPacket(
+        made=made,
+        landing=Vec2(0, 0),
+        total_yards=feet / 3,
+        remaining_distance_yards=remaining_distance_yards,
+        aim_error_inches=aim_error_inches,
+        power_error_points=power_error_points,
+        make_probability=0.1,
+        aim_correct=aim_error_inches <= 4,
+        pace_correct=power_error_points <= 8,
+        correct_decision=aim_error_inches <= 4 and power_error_points <= 8,
+        player_offset_inches=2,
+        player_offset_direction="left",
+        read=PuttRead(feet=feet, direction="right", start_direction="left", break_inches=4),
+        assessment=ResultAssessment(
+            decision_assessment="sound",
+            execution_assessment="on_plan",
+            overall_assessment="good",
+        ),
+        audit=PuttAudit(
+            engine_version="putting-v1",
+            round_seed=1,
+            shot_seed=2,
+            hole_number=7,
+            stroke_index=3,
+            profile_version="test",
+            sampled_power_multiplier=1,
+            sampled_lateral_yards=0,
+            make_probability=0.1,
+        ),
     )
 
 
@@ -272,6 +321,27 @@ class DecisionScoringTests(unittest.TestCase):
         self.assertEqual(good_packet.version, DECISION_SCORE_VERSION)
         self.assertEqual(good_packet.decision.score, bad_packet.decision.score)
         self.assertGreater(good_packet.execution.score, bad_packet.execution.score)
+
+    def test_putt_plan_is_scored_separately_from_execution(self) -> None:
+        made = score_putt_strategy(_putt_result(made=True, remaining_distance_yards=0))
+        missed = score_putt_strategy(_putt_result(made=False, remaining_distance_yards=4))
+
+        self.assertEqual(made.shot_type, StrategicShotType.PUTT_LAG)
+        self.assertEqual(made.decision.score, missed.decision.score)
+        self.assertEqual(made.decision.score, 91)
+        self.assertGreater(made.execution.score, missed.execution.score)
+        normalized = analysis_shot_from_packet(made)
+        self.assertEqual(normalized.hole_number, 7)
+        self.assertEqual(normalized.stroke_number, 3)
+        self.assertEqual(normalized.putting_read_discipline, 91)
+
+    def test_bad_putt_read_and_pace_grade_below_sound_plan(self) -> None:
+        sound = score_putt_strategy(_putt_result())
+        poor = score_putt_strategy(_putt_result(aim_error_inches=14, power_error_points=20))
+
+        self.assertGreater(sound.decision.score, poor.decision.score)
+        self.assertIn("putting_line_missed", poor.decision.reasons)
+        self.assertIn("putting_pace_missed", poor.decision.reasons)
 
     def test_bunker_escape_weights_lie_management_more_than_standard_approach(self) -> None:
         bunker_escape = StrategyContext(

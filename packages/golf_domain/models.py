@@ -302,10 +302,148 @@ class StrategyContext:
 class StrategyScorePacket:
     version: str
     shot_id: str
+    shot_type: StrategicShotType
     preferred_miss: PreferredMiss
     preferred_miss_inferred: bool
-    decision: DecisionEvaluation
+    decision: DecisionEvaluation | PuttDecisionEvaluation
     execution: ExecutionEvaluation | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PuttDecisionSubscores:
+    line_plan: int
+    pace_plan: int
+    three_putt_avoidance: int
+
+    def __post_init__(self) -> None:
+        for value in (self.line_plan, self.pace_plan, self.three_putt_avoidance):
+            if not 0 <= value <= 100:
+                raise ValueError("putting decision subscore values must be between 0 and 100")
+
+
+@dataclass(frozen=True, slots=True)
+class PuttDecisionEvaluation:
+    score: int
+    label: DecisionLabel
+    confidence: DecisionConfidence
+    subscores: PuttDecisionSubscores
+    reasons: tuple[str, ...]
+    advice_keys: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.score <= 100:
+            raise ValueError("putting decision score must be between 0 and 100")
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyAnalysisShot:
+    shot_id: str
+    hole_number: int
+    stroke_number: int
+    shot_type: StrategicShotType
+    decision_score: int
+    decision_subscores: DecisionSubscores | None
+    putting_read_discipline: int | None
+    reasons: tuple[str, ...]
+    advice_keys: tuple[str, ...]
+    execution_score: int | None = None
+
+    def __post_init__(self) -> None:
+        if not self.shot_id:
+            raise ValueError("shot_id is required")
+        if not 1 <= self.hole_number <= 18:
+            raise ValueError("hole_number must be between 1 and 18")
+        if self.stroke_number < 1:
+            raise ValueError("stroke_number must be positive")
+        if not 0 <= self.decision_score <= 100:
+            raise ValueError("decision_score must be between 0 and 100")
+        if self.putting_read_discipline is not None and not 0 <= self.putting_read_discipline <= 100:
+            raise ValueError("putting_read_discipline must be between 0 and 100")
+        if self.execution_score is not None and not 0 <= self.execution_score <= 100:
+            raise ValueError("execution_score must be between 0 and 100")
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionMoment:
+    shot_id: str
+    hole_number: int
+    stroke_number: int
+    shot_type: StrategicShotType
+    score: int
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyPattern:
+    key: str
+    count: int
+    high_cost_count: int
+    summary: str
+
+    def __post_init__(self) -> None:
+        if not self.key or not self.summary:
+            raise ValueError("strategy pattern key and summary are required")
+        if self.count < 1 or self.high_cost_count < 0:
+            raise ValueError("strategy pattern counts are invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class HoleStrategyAnalysis:
+    hole_number: int
+    strategy_score: int
+    scored_shots: int
+    key_decision_moment: DecisionMoment
+    pattern_summary: str
+
+
+@dataclass(frozen=True, slots=True)
+class RoundStrategySubscores:
+    target_selection: int | None
+    club_selection: int | None
+    lie_management: int | None
+    hazard_management: int | None
+    recovery_discipline: int | None
+    miss_planning: int | None
+    putting_read_discipline: int | None
+
+    def __post_init__(self) -> None:
+        for value in (
+            self.target_selection,
+            self.club_selection,
+            self.lie_management,
+            self.hazard_management,
+            self.recovery_discipline,
+            self.miss_planning,
+            self.putting_read_discipline,
+        ):
+            if value is not None and not 0 <= value <= 100:
+                raise ValueError("round strategy subscore values must be between 0 and 100")
+
+
+@dataclass(frozen=True, slots=True)
+class RoundStrategyAnalysis:
+    version: str
+    strategy_score: int
+    execution_score: int | None
+    scored_shots: int
+    subscores: RoundStrategySubscores
+    holes: tuple[HoleStrategyAnalysis, ...]
+    top_strength: str
+    top_priority: str
+    top_good_decisions: tuple[DecisionMoment, ...]
+    top_costly_decisions: tuple[DecisionMoment, ...]
+    patterns: tuple[StrategyPattern, ...]
+    pattern_summary: str
+
+    def __post_init__(self) -> None:
+        if not self.version:
+            raise ValueError("round strategy analysis version is required")
+        if not 0 <= self.strategy_score <= 100:
+            raise ValueError("strategy_score must be between 0 and 100")
+        if self.execution_score is not None and not 0 <= self.execution_score <= 100:
+            raise ValueError("execution_score must be between 0 and 100")
+        if self.scored_shots < 1:
+            raise ValueError("round analysis requires at least one scored shot")
 
 
 @dataclass(frozen=True, slots=True)

@@ -294,6 +294,7 @@ export function scoreStrategy(context, result = null) {
   return {
     version: DECISION_SCORE_VERSION,
     shot_id: shotId(context),
+    shot_type: context.shot_type,
     preferred_miss: preferredMiss,
     preferred_miss_inferred: preferredMissInferred,
     decision: {
@@ -309,5 +310,81 @@ export function scoreStrategy(context, result = null) {
       ].filter(Boolean)
     },
     execution: result ? scoreExecution(context.selected_club, context.distance_to_target_yards, result) : null
+  };
+}
+
+export function scorePuttStrategy(result) {
+  const feet = result.read.feet;
+  const longPutt = feet >= 25;
+  const shotType = feet > 10 ? "putt_lag" : "putt_make_attempt";
+  const linePlan = clamp(Math.round(90 - Math.max(0, result.aim_error_inches - 2) * 2.5));
+  const pacePlan = clamp(Math.round(90 - Math.max(0, result.power_error_points - 3) * 2));
+  const threePuttAvoidance = clamp(
+    Math.round(92 - Math.max(0, result.power_error_points - (longPutt ? 6 : 8)) * 2.5)
+  );
+  const weights = longPutt ? [0.30, 0.45, 0.25] : [0.45, 0.40, 0.15];
+  const decisionScore = Math.round(
+    linePlan * weights[0]
+      + pacePlan * weights[1]
+      + threePuttAvoidance * weights[2]
+  );
+  const puttingKey = longPutt
+    ? "long_putt"
+    : result.read.break_inches >= 3
+      ? "breaking_putt"
+      : feet <= 6
+        ? "short_must_make_putt"
+        : "breaking_putt";
+
+  const remainingFeet = result.remaining_distance_yards * 3;
+  let executionScore;
+  let executionReason;
+  if (result.made) {
+    executionScore = 95;
+    executionReason = "putt_holed";
+  } else if (remainingFeet <= 2) {
+    executionScore = 90;
+    executionReason = "tap_in_leave";
+  } else if (remainingFeet <= 6) {
+    executionScore = 78;
+    executionReason = "manageable_leave";
+  } else if (remainingFeet <= 10) {
+    executionScore = 65;
+    executionReason = "putt_finished_outside_target_window";
+  } else {
+    executionScore = 45;
+    executionReason = "three_putt_risk_created";
+  }
+
+  return {
+    version: DECISION_SCORE_VERSION,
+    shot_id: `h${result.audit.hole_number}:s${result.audit.stroke_index}`,
+    shot_type: shotType,
+    preferred_miss: "none_declared",
+    preferred_miss_inferred: false,
+    decision: {
+      score: decisionScore,
+      label: decisionLabel(decisionScore),
+      confidence: "high",
+      subscores: {
+        line_plan: linePlan,
+        pace_plan: pacePlan,
+        three_putt_avoidance: threePuttAvoidance
+      },
+      reasons: [
+        result.aim_correct ? "putting_line_respected" : "putting_line_missed",
+        result.pace_correct ? "putting_pace_respected" : "putting_pace_missed"
+      ],
+      advice_keys: [
+        puttingKey,
+        longPutt ? "accept_longer_putt" : "prioritize_solid_contact"
+      ]
+    },
+    execution: {
+      score: executionScore,
+      label: executionLabel(executionScore),
+      plan_match: executionScore >= 85 ? "matched_window" : "outside_intended_leave_window",
+      reasons: [executionReason]
+    }
   };
 }

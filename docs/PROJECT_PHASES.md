@@ -8,14 +8,14 @@ whenever a phase or major work package is completed.
 ## Current position
 
 **Active phase:** Phase 2 — Authoritative Golf Engine  
-**Current work package:** Add decision scoring and AI Game Master narration  
-**Verification baseline:** 95 automated tests defined (71 Python, 24 browser)
+**Current work package:** Migrate the remaining browser-local greenside shot path
+**Verification baseline:** 104 automated tests defined (76 Python, 28 browser)
 
 The browser now consumes deterministic, cross-runtime Result Packets for full
 shots and putting, including authoritative penalty strokes and relief
-positions. Persistent round-state recovery and authoritative putting are now
-complete. The next work package is decision scoring and AI Game Master
-narration driven by engine results.
+positions. Persistent round-state recovery, authoritative putting, deterministic
+decision scoring, weighted round analysis, and AI narration integration are now
+complete. The remaining Phase 2 gap is the browser-local greenside chip path.
 
 ## Phase 1 — Playable Testing Prototype
 
@@ -151,11 +151,31 @@ Delivered:
   packet rather than prototype-only randomness;
 - Python/browser parity coverage and deterministic replay for putting.
 
+### Work package 7 — Decision scoring and round analysis
+
+**Status: Complete**
+
+Delivered:
+
+- immutable full-shot and putting strategy-score contracts;
+- deterministic decision and execution grades kept as separate axes;
+- putting line, pace, and three-putt-avoidance scoring;
+- weighted `round-strategy-v1` aggregation with hole scores, category
+  subscores, key moments, and repeat-pattern detection;
+- legacy saved rounds without strategy packets remain readable and unscored;
+- the browser review consumes deterministic analysis instead of club-frequency
+  heuristics;
+- optional AI narration receives the analysis as authoritative context and
+  cannot replace the local practice priority;
+- Python/browser golden aggregation coverage and real-browser flow verification.
+
 ### Remaining Phase 2 work
 
 1. Add persistent round state and transactional shot handling. **Complete**
 2. Add putting to the authoritative engine. **Complete**
-3. Add decision scoring and AI Game Master narration based on engine results. **Next**
+3. Add decision scoring and AI Game Master narration based on engine results. **Complete**
+4. Replace the remaining browser-local greenside chip simulation with an
+   authoritative cross-runtime packet. **Next**
 
 Phase 2 is complete only when the browser consumes authoritative engine result
 packets for full gameplay rather than calculating outcomes independently.
@@ -234,3 +254,9 @@ goals can be prioritized with evidence from gameplay testing.
   generated Blue/White/Gold testing-quality geometry, registered the course in
   the browser, expanded authoritative adapter and surface coverage to 72 holes,
   and raised the verified baseline to 95 automated tests.
+- **2026-07-29:** Completed Phase 2 work package 7. Added deterministic putting
+  strategy packets, weighted hole/round aggregation, category subscores,
+  repeated-pattern detection, deterministic review priorities, structured AI
+  context, cross-runtime golden tests, and browser-flow verification. Raised the
+  verified baseline to 104 tests and set authoritative greenside shot migration
+  as the final Phase 2 integration gap.

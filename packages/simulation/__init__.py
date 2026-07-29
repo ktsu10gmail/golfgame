@@ -1,6 +1,6 @@
 """Deterministic simulation package."""
 
-from .decision_scoring import DECISION_SCORE_VERSION, score_strategy
+from .decision_scoring import DECISION_SCORE_VERSION, score_putt_strategy, score_strategy
 from .engine import (
     ENGINE_VERSION,
     PENALTY_RELIEF_VERSION,
@@ -10,17 +10,26 @@ from .engine import (
     simulate_full_shot,
 )
 from .putting import PUTTING_ENGINE_VERSION, derive_putt_seed, simulate_putt
+from .round_analysis import (
+    ROUND_STRATEGY_VERSION,
+    analysis_shot_from_packet,
+    analyze_round_strategy,
+)
 
 __all__ = [
     "ENGINE_VERSION",
     "PENALTY_RELIEF_VERSION",
     "PUTTING_ENGINE_VERSION",
+    "ROUND_STRATEGY_VERSION",
+    "analysis_shot_from_packet",
+    "analyze_round_strategy",
     "declare_unplayable",
     "DECISION_SCORE_VERSION",
     "derive_putt_seed",
     "derive_shot_seed",
     "resolve_penalty_relief",
     "score_strategy",
+    "score_putt_strategy",
     "simulate_full_shot",
     "simulate_putt",
 ]

@@ -1,6 +1,11 @@
 # Decision Scoring Spec
 
-Last updated: 2026-07-22
+Last updated: 2026-07-29
+
+**Implementation status:** The version 1 shot scorer, putting scorer, weighted
+hole/round aggregation, repeat-pattern detection, browser review, and structured
+AI handoff are implemented. Persistent multi-round progression remains future
+work.
 
 This document defines the deterministic scoring model for course-management
 analysis. It turns the product goals in

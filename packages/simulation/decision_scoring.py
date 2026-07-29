@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from packages.golf_domain import (
     ClubStat,
     DecisionConfidence,
@@ -13,6 +15,9 @@ from packages.golf_domain import (
     ExecutionLabel,
     LieType,
     PreferredMiss,
+    PuttDecisionEvaluation,
+    PuttDecisionSubscores,
+    PuttResultPacket,
     ShotResultPacket,
     StrategicShotType,
     StrategyContext,
@@ -113,6 +118,11 @@ _SHOT_TYPE_WEIGHTS: dict[StrategicShotType, dict[str, float]] = {
 
 def _clamp(value: int, lower: int = 0, upper: int = 100) -> int:
     return min(upper, max(lower, value))
+
+
+def _round_half_up(value: float) -> int:
+    """Match JavaScript Math.round for the non-negative strategy scores."""
+    return math.floor(value + 0.5)
 
 
 def _decision_label(score: int) -> DecisionLabel:
@@ -330,6 +340,7 @@ def score_strategy(context: StrategyContext, result: ShotResultPacket | None = N
     return StrategyScorePacket(
         version=DECISION_SCORE_VERSION,
         shot_id=_shot_id(context),
+        shot_type=context.shot_type,
         preferred_miss=preferred_miss,
         preferred_miss_inferred=preferred_miss_inferred,
         decision=decision,
@@ -361,4 +372,81 @@ def _score_execution(club: ClubStat, target_distance_yards: float, result: ShotR
         label=_execution_label(score),
         plan_match="matched_window" if score >= 85 else "below_expected_start_line_and_distance",
         reasons=tuple(reasons),
+    )
+
+
+def score_putt_strategy(result: PuttResultPacket) -> StrategyScorePacket:
+    """Convert authoritative putt planning facts into a strategy score packet."""
+    feet = result.read.feet
+    long_putt = feet >= 25
+    shot_type = StrategicShotType.PUTT_LAG if feet > 10 else StrategicShotType.PUTT_MAKE_ATTEMPT
+    line_plan = _clamp(_round_half_up(90 - max(0, result.aim_error_inches - 2) * 2.5))
+    pace_plan = _clamp(_round_half_up(90 - max(0, result.power_error_points - 3) * 2))
+    three_putt_avoidance = _clamp(
+        _round_half_up(92 - max(0, result.power_error_points - (6 if long_putt else 8)) * 2.5)
+    )
+    weights = (0.30, 0.45, 0.25) if long_putt else (0.45, 0.40, 0.15)
+    decision_score = _round_half_up(
+        line_plan * weights[0]
+        + pace_plan * weights[1]
+        + three_putt_avoidance * weights[2]
+    )
+    decision_reasons = (
+        "putting_line_respected" if result.aim_correct else "putting_line_missed",
+        "putting_pace_respected" if result.pace_correct else "putting_pace_missed",
+    )
+    putting_key = (
+        "long_putt"
+        if long_putt
+        else "breaking_putt"
+        if result.read.break_inches >= 3
+        else "short_must_make_putt"
+        if feet <= 6
+        else "breaking_putt"
+    )
+    decision = PuttDecisionEvaluation(
+        score=decision_score,
+        label=_decision_label(decision_score),
+        confidence=DecisionConfidence.HIGH,
+        subscores=PuttDecisionSubscores(
+            line_plan=line_plan,
+            pace_plan=pace_plan,
+            three_putt_avoidance=three_putt_avoidance,
+        ),
+        reasons=decision_reasons,
+        advice_keys=(
+            putting_key,
+            "accept_longer_putt" if long_putt else "prioritize_solid_contact",
+        ),
+    )
+    remaining_feet = result.remaining_distance_yards * 3
+    if result.made:
+        execution_score = 95
+        execution_reason = "putt_holed"
+    elif remaining_feet <= 2:
+        execution_score = 90
+        execution_reason = "tap_in_leave"
+    elif remaining_feet <= 6:
+        execution_score = 78
+        execution_reason = "manageable_leave"
+    elif remaining_feet <= 10:
+        execution_score = 65
+        execution_reason = "putt_finished_outside_target_window"
+    else:
+        execution_score = 45
+        execution_reason = "three_putt_risk_created"
+    execution = ExecutionEvaluation(
+        score=execution_score,
+        label=_execution_label(execution_score),
+        plan_match="matched_window" if execution_score >= 85 else "outside_intended_leave_window",
+        reasons=(execution_reason,),
+    )
+    return StrategyScorePacket(
+        version=DECISION_SCORE_VERSION,
+        shot_id=f"h{result.audit.hole_number}:s{result.audit.stroke_index}",
+        shot_type=shot_type,
+        preferred_miss=PreferredMiss.NONE_DECLARED,
+        preferred_miss_inferred=False,
+        decision=decision,
+        execution=execution,
     )

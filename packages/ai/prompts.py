@@ -41,6 +41,8 @@ def build_round_prompt(payload: dict) -> str:
     return (
         "You are the Game Master for a deterministic golf strategy game.\n"
         "Use only the supplied authoritative round facts. Do not invent scores, misses, or coaching points.\n"
+        "Treat strategy_analysis as the authoritative deterministic coaching result. Preserve its distinction "
+        "between decision quality and execution quality, and do not replace its priority or patterns with guesses.\n"
         "Return strict JSON with this schema:\n"
         f"{_dump(ROUND_RESPONSE_SCHEMA)}\n\n"
         "Keep the verdict concise and actionable.\n\n"

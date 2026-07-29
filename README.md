@@ -55,13 +55,15 @@ yard-based adapter for all 72 real course holes. Browser full shots now consume
 the same deterministic Result Packet contract and retain their complete replay
 identity and canonical request. Water, out-of-bounds, and declared-unplayable
 outcomes now use versioned authoritative relief records rather than provisional
-browser drops.
+browser drops. Full shots and putts also produce separate deterministic decision
+and execution grades, which feed weighted hole and round strategy analysis,
+repeat-pattern detection, the review UI, and optional AI narration.
 
 Run its dependency-free test suite with:
 
 ```bash
 python3 -m unittest discover -v
-node --test tests/browser_engine.test.mjs tests/round_state.test.mjs
+node --test tests/*.test.mjs
 ```
 
 See `docs/PHASE_2.md` for the work-package boundary and next integration step.

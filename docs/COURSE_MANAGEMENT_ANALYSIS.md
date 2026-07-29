@@ -1,6 +1,9 @@
 # Course Management Analysis
 
-Last updated: 2026-07-22
+Last updated: 2026-07-29
+
+Implementation status: roadmap phases 1–4 are delivered for the current
+deterministic rule set. Phase 5 progression tracking remains future work.
 
 This document defines the product thinking, scoring model, and production path
 for course-management analysis. It is intended to guide implementation from the
@@ -457,8 +460,7 @@ That is the real training value of the game.
 
 ## Immediate Next Design Tasks
 
-- create a formal shot decision-scoring schema
-- define deterministic scoring rules for lie, target, and hazard situations
-- create a machine-readable advice catalog from the standard advice library
-- extend AI prompt contracts to consume structured decision data
-- update phase documents once implementation begins
+- validate the scoring thresholds through gameplay sessions
+- expand the machine-readable advice catalog where new situations require it
+- migrate the remaining greenside simulation path into the authoritative engine
+- design multi-round progression tracking after Phase 2 integration is complete

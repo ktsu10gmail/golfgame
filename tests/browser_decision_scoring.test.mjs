@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { scoreStrategy } from "../packages/simulation/browser_decision_scoring.mjs";
+import { scorePuttStrategy, scoreStrategy } from "../packages/simulation/browser_decision_scoring.mjs";
 
 function club(overrides = {}) {
   return {
@@ -98,4 +98,40 @@ test("browser decision scorer applies shot-type weighting", () => {
 
   assert.deepEqual(bunker.decision.subscores, approach.decision.subscores);
   assert.ok(bunker.decision.score < approach.decision.score);
+});
+
+function puttPacket(overrides = {}) {
+  return {
+    made: false,
+    remaining_distance_yards: 1,
+    aim_error_inches: 2,
+    power_error_points: 3,
+    aim_correct: true,
+    pace_correct: true,
+    read: { feet: 30, break_inches: 4 },
+    audit: { hole_number: 7, stroke_index: 3 },
+    ...overrides
+  };
+}
+
+test("browser putting strategy scorer matches the deterministic packet contract", () => {
+  const packet = scorePuttStrategy(puttPacket());
+
+  assert.equal(packet.shot_id, "h7:s3");
+  assert.equal(packet.shot_type, "putt_lag");
+  assert.equal(packet.decision.score, 91);
+  assert.deepEqual(packet.decision.subscores, {
+    line_plan: 90,
+    pace_plan: 90,
+    three_putt_avoidance: 92
+  });
+  assert.equal(packet.execution.score, 78);
+});
+
+test("putt outcome changes execution but not decision score", () => {
+  const made = scorePuttStrategy(puttPacket({ made: true, remaining_distance_yards: 0 }));
+  const missed = scorePuttStrategy(puttPacket({ remaining_distance_yards: 4 }));
+
+  assert.equal(made.decision.score, missed.decision.score);
+  assert.ok(made.execution.score > missed.execution.score);
 });
