@@ -1,0 +1,533 @@
+{
+  "hole_metadata": {
+    "course_name": "Cranbury Golf Club",
+    "hole_number": 3,
+    "par": 4,
+    "handicap_rating": 6,
+    "total_distance_meters": 320.041,
+    "layout_type": "Straight / Water Left",
+    "coordinate_system": {
+      "origin": "White tee center (0, 0)",
+      "unit": "meters",
+      "axes": {
+        "y": "Forward progress",
+        "x": "Golfer-relative lateral displacement"
+      }
+    },
+    "geometry_calibration": {
+      "version": "cranbury-aerial-review-v1",
+      "source_image": "images/hole3.png",
+      "method": "reviewed schematic centerline with golfer-relative feature placement"
+    }
+  },
+  "centerline_waypoints": [
+    {
+      "index": 0,
+      "point": [
+        0.0,
+        0.0
+      ],
+      "description": "Tee center"
+    },
+    {
+      "index": 1,
+      "point": [
+        -1.999,
+        153.56
+      ],
+      "description": "Route control 1"
+    },
+    {
+      "index": 2,
+      "point": [
+        1.999,
+        249.535
+      ],
+      "description": "Route control 2"
+    },
+    {
+      "index": 3,
+      "point": [
+        0.0,
+        319.916
+      ],
+      "description": "Green center"
+    }
+  ],
+  "geometries": {
+    "tee_boxes": [
+      {
+        "id": "tee_blue_h3",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -3.744,
+            -19.681
+          ],
+          [
+            4.255,
+            -19.577
+          ],
+          [
+            4.086,
+            -6.578
+          ],
+          [
+            -3.913,
+            -6.682
+          ]
+        ]
+      },
+      {
+        "id": "tee_white_h3",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -3.935,
+            -5.052
+          ],
+          [
+            4.065,
+            -4.948
+          ],
+          [
+            3.896,
+            8.051
+          ],
+          [
+            -4.104,
+            7.947
+          ]
+        ]
+      },
+      {
+        "id": "tee_gold_h3",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -4.661,
+            50.722
+          ],
+          [
+            3.339,
+            50.826
+          ],
+          [
+            3.169,
+            63.825
+          ],
+          [
+            -4.83,
+            63.721
+          ]
+        ]
+      }
+    ],
+    "fairway_segments": [
+      {
+        "segment_id": "fairway_h3_segment_1",
+        "lie_catalog_id": "lie_fairway",
+        "polygon": [
+          [
+            -18.415,
+            31.767
+          ],
+          [
+            17.582,
+            32.236
+          ],
+          [
+            18.252,
+            159.169
+          ],
+          [
+            -21.713,
+            160.834
+          ]
+        ],
+        "description": "Playable fairway corridor segment 1 following the reviewed centerline."
+      },
+      {
+        "segment_id": "fairway_h3_segment_2",
+        "lie_catalog_id": "lie_fairway",
+        "polygon": [
+          [
+            -19.715,
+            160.751
+          ],
+          [
+            16.254,
+            159.253
+          ],
+          [
+            21.446,
+            269.298
+          ],
+          [
+            -18.538,
+            268.162
+          ]
+        ],
+        "description": "Playable fairway corridor segment 2 following the reviewed centerline."
+      }
+    ],
+    "rough_zones": [
+      {
+        "id": "rough_primary_h3",
+        "lie_catalog_id": "lie_rough_medium",
+        "polygon": [
+          [
+            -38.247,
+            18.706
+          ],
+          [
+            -39.966,
+            155.142
+          ],
+          [
+            -35.986,
+            248.456
+          ],
+          [
+            -37.985,
+            318.837
+          ],
+          [
+            37.985,
+            320.995
+          ],
+          [
+            39.984,
+            250.614
+          ],
+          [
+            35.968,
+            151.978
+          ],
+          [
+            37.747,
+            19.695
+          ]
+        ],
+        "description": "Primary rough corridor around the reviewed playing route."
+      }
+    ],
+    "hazards": [
+      {
+        "id": "water_h3_left_1",
+        "lie_catalog_id": "lie_hazard_water",
+        "polygon": [
+          [
+            -26.734,
+            232.512
+          ],
+          [
+            -21.334,
+            230.008
+          ],
+          [
+            -17.57,
+            223.623
+          ],
+          [
+            -16.451,
+            215.069
+          ],
+          [
+            -18.278,
+            206.638
+          ],
+          [
+            -22.559,
+            200.588
+          ],
+          [
+            -28.149,
+            198.542
+          ],
+          [
+            -33.55,
+            201.046
+          ],
+          [
+            -37.314,
+            207.431
+          ],
+          [
+            -38.432,
+            215.985
+          ],
+          [
+            -36.606,
+            224.416
+          ],
+          [
+            -32.324,
+            230.465
+          ]
+        ],
+        "description": "Water or wetland hazard on the golfer-left portion of the hole."
+      },
+      {
+        "id": "bunker_h3_greenside_left_1",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            -12.333,
+            296.253
+          ],
+          [
+            -10.813,
+            295.559
+          ],
+          [
+            -9.658,
+            293.578
+          ],
+          [
+            -9.178,
+            290.84
+          ],
+          [
+            -9.502,
+            288.08
+          ],
+          [
+            -10.542,
+            286.036
+          ],
+          [
+            -12.021,
+            285.257
+          ],
+          [
+            -13.541,
+            285.951
+          ],
+          [
+            -14.696,
+            287.932
+          ],
+          [
+            -15.176,
+            290.67
+          ],
+          [
+            -14.852,
+            293.43
+          ],
+          [
+            -13.812,
+            295.474
+          ]
+        ],
+        "description": "Greenside bunker on the golfer-left side."
+      },
+      {
+        "id": "bunker_h3_greenside_right_2",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            13.566,
+            300.19
+          ],
+          [
+            15.086,
+            299.496
+          ],
+          [
+            16.241,
+            297.515
+          ],
+          [
+            16.72,
+            294.777
+          ],
+          [
+            16.397,
+            292.017
+          ],
+          [
+            15.356,
+            289.974
+          ],
+          [
+            13.878,
+            289.194
+          ],
+          [
+            12.357,
+            289.888
+          ],
+          [
+            11.203,
+            291.87
+          ],
+          [
+            10.723,
+            294.607
+          ],
+          [
+            11.047,
+            297.367
+          ],
+          [
+            12.087,
+            299.411
+          ]
+        ],
+        "description": "Greenside bunker on the golfer-right side."
+      }
+    ],
+    "green_complex": {
+      "id": "green_primary_h3",
+      "lie_catalog_id": "lie_green",
+      "polygon": [
+        [
+          -0.355,
+          332.411
+        ],
+        [
+          4.691,
+          330.879
+        ],
+        [
+          8.479,
+          326.409
+        ],
+        [
+          9.996,
+          320.2
+        ],
+        [
+          8.834,
+          313.914
+        ],
+        [
+          5.305,
+          309.237
+        ],
+        [
+          0.355,
+          307.421
+        ],
+        [
+          -4.691,
+          308.953
+        ],
+        [
+          -8.479,
+          313.423
+        ],
+        [
+          -9.996,
+          319.632
+        ],
+        [
+          -8.834,
+          325.918
+        ],
+        [
+          -5.305,
+          330.595
+        ]
+      ],
+      "pin_zones": [
+        {
+          "zone_id": "front",
+          "center_point": [
+            0.142,
+            314.918
+          ],
+          "radius_meters": 2.5
+        },
+        {
+          "zone_id": "back",
+          "center_point": [
+            -0.142,
+            324.914
+          ],
+          "radius_meters": 2.5
+        },
+        {
+          "zone_id": "center_standard",
+          "center_point": [
+            0.0,
+            319.916
+          ],
+          "radius_meters": 3
+        }
+      ]
+    },
+    "out_of_bounds": [
+      {
+        "id": "ob_h3_left",
+        "lie_catalog_id": "lie_ob_hazard",
+        "polygon": [
+          [
+            -54.495,
+            37.699
+          ],
+          [
+            -55.741,
+            134.18
+          ],
+          [
+            -52.762,
+            232.012
+          ],
+          [
+            -53.618,
+            305.771
+          ],
+          [
+            -31.62,
+            306.026
+          ],
+          [
+            -30.764,
+            232.267
+          ],
+          [
+            -33.751,
+            133.512
+          ],
+          [
+            -32.497,
+            37.985
+          ]
+        ],
+        "description": "Course boundary on the golfer-left side."
+      }
+    ]
+  },
+  "elevation_profile": {
+    "sampling_interval_meters": 80.01,
+    "points": [
+      {
+        "y": 0.0,
+        "elevation_m": -0.0
+      },
+      {
+        "y": 80.01,
+        "elevation_m": -0.15
+      },
+      {
+        "y": 160.02,
+        "elevation_m": -0.3
+      },
+      {
+        "y": 240.03,
+        "elevation_m": -0.45
+      },
+      {
+        "y": 320.041,
+        "elevation_m": -0.6
+      }
+    ],
+    "description": "Approximate net elevation transcribed from the supplied GPS image."
+  }
+}

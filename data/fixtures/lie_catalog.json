@@ -1,0 +1,14 @@
+{
+  "version": "2026.07.1",
+  "lies": [
+    {"id": "tee_standard", "name": "Tee box", "carry_multiplier": 1.00, "roll_multiplier": 1.00, "mishit_multiplier": 0.85},
+    {"id": "fairway_clean", "name": "Clean fairway lie", "carry_multiplier": 1.00, "roll_multiplier": 1.00, "mishit_multiplier": 1.00},
+    {"id": "rough_light", "name": "1-inch light rough", "carry_multiplier": 0.90, "roll_multiplier": 0.90, "mishit_multiplier": 1.10},
+    {"id": "rough_medium", "name": "2-inch moderate rough", "carry_multiplier": 0.85, "roll_multiplier": 0.80, "mishit_multiplier": 1.50},
+    {"id": "rough_deep", "name": "4-inch deep rough", "carry_multiplier": 0.70, "roll_multiplier": 0.65, "mishit_multiplier": 2.50},
+    {"id": "rough_flyer", "name": "Flyer lie", "carry_multiplier": 1.05, "roll_multiplier": 1.15, "mishit_multiplier": 1.20},
+    {"id": "hardpan", "name": "Hardpan", "carry_multiplier": 0.92, "roll_multiplier": 1.25, "mishit_multiplier": 1.35},
+    {"id": "bunker_fairway", "name": "Fairway bunker", "carry_multiplier": 0.80, "roll_multiplier": 0.50, "mishit_multiplier": 2.00},
+    {"id": "bunker_buried", "name": "Buried fried-egg lie", "carry_multiplier": 0.40, "roll_multiplier": 0.20, "mishit_multiplier": 3.00}
+  ]
+}

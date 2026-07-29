@@ -1,0 +1,36 @@
+{
+  "version": "2026.07.1",
+  "profiles": [
+    {
+      "id": "100_plus",
+      "display_name": "100+ Golfer",
+      "typical_score": 104,
+      "clubs": {
+        "driver": {"carry": 165, "roll": 15, "carry_sd": 17, "lateral_sd": 28, "bias": 8, "mishit": 0.25},
+        "3_wood": {"carry": 145, "roll": 10, "carry_sd": 20, "lateral_sd": 28, "bias": 9, "mishit": 0.30},
+        "7_iron": {"carry": 108, "roll": 7, "carry_sd": 12, "lateral_sd": 17, "bias": 5, "mishit": 0.18}
+      }
+    },
+    {
+      "id": "90_plus",
+      "display_name": "90+ Golfer",
+      "typical_score": 94,
+      "clubs": {
+        "driver": {"carry": 192, "roll": 18, "carry_sd": 15, "lateral_sd": 23, "bias": 7, "mishit": 0.18},
+        "3_wood": {"carry": 170, "roll": 15, "carry_sd": 18, "lateral_sd": 25, "bias": 8, "mishit": 0.22},
+        "7_iron": {"carry": 133, "roll": 7, "carry_sd": 9, "lateral_sd": 12, "bias": 3, "mishit": 0.08}
+      }
+    },
+    {
+      "id": "80_plus",
+      "display_name": "80+ Golfer",
+      "typical_score": 85,
+      "clubs": {
+        "driver": {"carry": 215, "roll": 20, "carry_sd": 12, "lateral_sd": 18, "bias": 4, "mishit": 0.12},
+        "3_wood": {"carry": 195, "roll": 15, "carry_sd": 14, "lateral_sd": 19, "bias": 4, "mishit": 0.15},
+        "7_iron": {"carry": 148, "roll": 7, "carry_sd": 7, "lateral_sd": 9, "bias": 2, "mishit": 0.05}
+      }
+    }
+  ]
+}
+

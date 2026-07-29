@@ -1,0 +1,14 @@
+[project]
+name = "golf-strategy-simulator"
+version = "0.2.0"
+description = "Deterministic engine and browser prototype for the Golf Strategy Simulator"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+

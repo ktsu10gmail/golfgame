@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A strategic golf game featuring four complete 18-hole courses."
+    />
+    <title>Middlesex — The Strategy Round</title>
+    <link rel="stylesheet" href="styles.css?v=20260727-4" />
+  </head>
+  <body>
+    <div id="loading" class="loading-screen">
+      <div class="loading-mark" aria-hidden="true">M</div>
+      <p>Walking the course…</p>
+    </div>
+
+    <main id="app" class="app-shell" hidden>
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Middlesex Strategy Round home">
+          <span class="brand-mark">M</span>
+          <span>
+            <strong id="brand-course-name">The Meadows</strong>
+            <small>Strategy round</small>
+          </span>
+        </a>
+        <select id="course-select" class="course-select" aria-label="Select golf course">
+          <option value="meadows">The Meadows at Middlesex</option>
+          <option value="warrenbrook">Warrenbrook Golf Course</option>
+          <option value="cranbury">Cranbury Golf Club</option>
+          <option value="gallopinghills">Galloping Hill Golf Course</option>
+        </select>
+
+        <div class="round-status">
+          <span>Hole <strong id="header-hole">1</strong> of 18</span>
+          <span class="status-rule"></span>
+          <span><strong id="header-score">E</strong> to par</span>
+        </div>
+
+        <div class="topbar-actions">
+          <button id="fullscreen-button" class="fullscreen-button" type="button" aria-pressed="false">Full screen</button>
+          <button id="reset-game-button" class="reset-game-button" type="button">Reset game</button>
+          <button id="profile-button" class="profile-button" type="button">
+            <span id="profile-monogram">9</span>
+            <span id="profile-button-name">90+ player</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="game-layout">
+        <aside class="hole-brief panel">
+          <div class="eyebrow">Course book / <span id="hole-layout">Dogleg right</span></div>
+          <div class="hole-title">
+            <span class="hole-number" id="hole-number">01</span>
+            <div>
+              <h1 id="hole-name">Opening line</h1>
+              <p id="hole-facts">Par 5 · HCP 4 · 510 yards</p>
+            </div>
+          </div>
+
+          <div class="tee-switch" aria-label="Choose tee">
+            <button type="button" data-tee="Blue">Blue</button>
+            <button type="button" data-tee="White" class="active">White</button>
+            <button type="button" data-tee="Red">Red</button>
+          </div>
+
+          <div class="strategy-note">
+            <span>Architect’s note</span>
+            <p id="strategy-copy"></p>
+          </div>
+
+          <dl class="conditions">
+            <div>
+              <dt>Pin</dt>
+              <dd>
+                <select id="pin-select" aria-label="Pin location"></select>
+              </dd>
+            </div>
+            <div>
+              <dt>Elevation</dt>
+              <dd id="elevation-value">−2 ft</dd>
+            </div>
+            <div>
+              <dt>Current lie</dt>
+              <dd id="current-lie">Tee</dd>
+            </div>
+          </dl>
+
+          <div class="hole-progress">
+            <div class="round-card-heading">
+              <span class="eyebrow">Round card</span>
+              <strong id="round-card-score">E</strong>
+            </div>
+            <div class="round-card-grid" id="round-card-grid" aria-label="Scorecard hole navigation"></div>
+            <div class="round-card-actions">
+              <button id="previous-hole" type="button" aria-label="Previous hole"><span aria-hidden="true">←</span> Previous</button>
+              <button id="next-hole" type="button" aria-label="Next hole">Next <span aria-hidden="true">→</span></button>
+            </div>
+          </div>
+
+          <div class="score-strip">
+            <div><span>Strokes</span><strong id="hole-score">—</strong></div>
+            <div><span>Round score</span><strong id="round-score">E</strong></div>
+            <div class="score-links">
+              <button id="scorecard-button" type="button">Scorecard</button>
+              <button id="round-review-button" type="button">Review</button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="course-stage" aria-label="Interactive hole map">
+          <div class="mobile-hole-overlay" aria-hidden="true">
+            <div class="mobile-hole-band">
+              <div class="mobile-hole-chip">
+                <strong id="mobile-hole-label">Hole 1</strong>
+                <span id="mobile-hole-facts">Par 4 · 386 yd</span>
+              </div>
+              <button id="mobile-scorecard-chip" class="mobile-scorecard-chip" type="button">
+                <span>Round</span>
+                <strong id="mobile-score-chip">E</strong>
+              </button>
+            </div>
+          </div>
+          <div class="map-toolbar">
+            <span class="map-hint"><i></i> Click to set line · drag to refine</span>
+            <div class="map-actions">
+              <button id="reference-image-button" type="button" data-reference-image hidden>View actual hole</button>
+              <button id="enlarge-green" type="button" hidden>Enlarge line</button>
+              <button id="reset-view" type="button">Reset hole</button>
+            </div>
+          </div>
+          <div id="course-map" class="course-map"></div>
+          <div id="distance-badge" class="distance-badge" hidden></div>
+          <div id="mobile-shot-toast" class="mobile-shot-toast" hidden>
+            <strong id="mobile-shot-toast-title"></strong>
+            <p id="mobile-shot-toast-copy"></p>
+          </div>
+          <button id="enlarged-reference-image-button" class="enlarged-reference-image-button" data-reference-image type="button" hidden>View actual hole</button>
+          <button id="close-enlarged-green" class="close-enlarged-green" type="button" hidden>Close enlarged view</button>
+          <div id="target-nudge" class="target-nudge" hidden>
+            <span id="nudge-label">Adjust line · 1 yd</span>
+            <div>
+              <button type="button" data-nudge="0,1" aria-label="Move line forward">↑</button>
+              <button type="button" data-nudge="-1,0" aria-label="Move line left">←</button>
+              <button type="button" data-nudge="1,0" aria-label="Move line right">→</button>
+              <button type="button" data-nudge="0,-1" aria-label="Move line back">↓</button>
+            </div>
+          </div>
+          <div class="map-key">
+            <span><i class="fairway"></i>Fairway</span>
+            <span><i class="rough"></i>Rough</span>
+            <span><i class="bunker"></i>Bunker</span>
+            <span><i class="water"></i>Water</span>
+            <span><i class="green"></i>Green</span>
+            <span><i class="ball"></i>Ball</span>
+            <span><i class="target"></i>Line</span>
+          </div>
+          <section id="mobile-shot-sheet" class="mobile-shot-sheet" data-sheet-state="collapsed" aria-label="Mobile shot controls">
+            <button id="mobile-sheet-handle" class="mobile-sheet-handle" type="button" aria-expanded="false" aria-controls="mobile-shot-sheet-body">
+              <span></span>
+            </button>
+            <div class="mobile-sheet-summary mobile-plan-summary">
+              <div class="mobile-plan-head">
+                <div>
+                  <span class="eyebrow">Map planner</span>
+                  <strong id="mobile-plan-shot-label">Plan this shot</strong>
+                </div>
+                <button id="mobile-plan-next" class="mobile-play-shot" type="button">Next</button>
+              </div>
+              <div class="mobile-plan-grid">
+                <div class="mobile-plan-card">
+                  <span>Pin</span>
+                  <strong id="mobile-plan-pin">386 yd</strong>
+                </div>
+                <div class="mobile-plan-card">
+                  <span>200 mark</span>
+                  <strong id="mobile-plan-200">186 yd</strong>
+                </div>
+                <div class="mobile-plan-card">
+                  <span>Current line</span>
+                  <strong id="mobile-plan-line">Tap map</strong>
+                </div>
+              </div>
+              <p id="mobile-plan-copy" class="mobile-plan-copy">Tap the map to place the target line. Use the landmarks to decide club, target, and swing before opening the shot page.</p>
+            </div>
+            <div id="mobile-shot-sheet-body" class="mobile-sheet-body">
+              <div class="mobile-sheet-section">
+                <div class="mobile-sheet-header">
+                  <div>
+                    <span class="eyebrow">Shot plan</span>
+                    <strong id="mobile-shot-number">Shot 1</strong>
+                  </div>
+                  <div class="mobile-sheet-distance">
+                    <strong id="mobile-sheet-distance">220 yd</strong>
+                    <span id="mobile-sheet-distance-label">to target</span>
+                  </div>
+                </div>
+                <div class="mobile-sheet-grid">
+                  <div>
+                    <span>Current lie</span>
+                    <strong id="mobile-sheet-lie">Tee</strong>
+                  </div>
+                  <div>
+                    <span>Expected</span>
+                    <strong id="mobile-sheet-expected">—</strong>
+                  </div>
+                  <div>
+                    <span>Risk</span>
+                    <strong id="mobile-sheet-risk">—</strong>
+                  </div>
+                </div>
+                <p id="mobile-risk-copy" class="mobile-risk-copy">Tap the map to set your target line.</p>
+              </div>
+              <div class="mobile-sheet-section mobile-caddie-section">
+                <div class="mobile-section-title">
+                  <span class="eyebrow">Game Master</span>
+                  <strong id="mobile-caddie-label">Hole briefing</strong>
+                </div>
+                <div id="mobile-gm-history" class="mobile-gm-history" aria-live="polite"></div>
+              </div>
+              <div class="mobile-sheet-section">
+                <div class="mobile-section-title">
+                  <span class="eyebrow">Club</span>
+                  <strong id="mobile-club-summary">Driver</strong>
+                </div>
+                <div id="mobile-club-carousel" class="mobile-club-carousel" aria-label="Club selection"></div>
+              </div>
+              <div class="mobile-sheet-section">
+                <div class="mobile-section-title">
+                  <span class="eyebrow">Power</span>
+                  <strong id="mobile-power-readout">100%</strong>
+                </div>
+                <input id="mobile-power-slider" class="mobile-power-slider" type="range" min="5" max="100" step="1" value="100" aria-label="Swing power percentage" />
+              </div>
+              <div class="mobile-sheet-section">
+                <form id="mobile-gm-form" class="mobile-gm-form">
+                  <label for="mobile-gm-input">Adjustment</label>
+                  <div class="mobile-gm-command">
+                    <input
+                      id="mobile-gm-input"
+                      type="text"
+                      autocomplete="off"
+                      spellcheck="true"
+                      autocorrect="on"
+                      autocapitalize="sentences"
+                      placeholder="Aim 5 in right of cup"
+                      aria-label="Tell the Game Master your adjustment"
+                    />
+                    <button type="submit">Apply</button>
+                  </div>
+                  <p id="mobile-gm-help" class="mobile-gm-help">Examples: aim 5 in right of cup, one club up, 85% swing.</p>
+                </form>
+              </div>
+              <div class="mobile-sheet-section mobile-sheet-actions">
+                <button id="mobile-scorecard-button" class="secondary-action" type="button">Scorecard</button>
+                <button id="mobile-review-button" class="secondary-action" type="button">Review</button>
+                <button id="mobile-back-to-map" class="secondary-action" type="button">Back to map</button>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <aside class="shot-desk panel">
+          <div class="desktop-shot-plan">
+            <div class="shot-heading">
+              <div>
+                <span class="eyebrow">Shot plan</span>
+                <h2 id="shot-number">Shot 1</h2>
+              </div>
+              <div class="yards-left">
+                <strong id="yards-left">510</strong>
+                <span>yd left</span>
+              </div>
+            </div>
+            <div class="desktop-plan-grid">
+              <div class="desktop-plan-card">
+                <span>200 mark</span>
+                <strong id="desktop-plan-200">310 yd</strong>
+              </div>
+              <div class="desktop-plan-card">
+                <span>Current lie</span>
+                <strong id="desktop-shot-lie">Tee</strong>
+              </div>
+              <div class="desktop-plan-card">
+                <span>Expected</span>
+                <strong id="desktop-shot-expected">—</strong>
+              </div>
+              <div class="desktop-plan-card">
+                <span>Risk</span>
+                <strong id="desktop-shot-risk">Set line</strong>
+              </div>
+              <div class="desktop-plan-card">
+                <span>Current line</span>
+                <strong id="aim-distance">—</strong>
+              </div>
+              <div class="desktop-plan-card">
+                <span>Club carry</span>
+                <strong id="club-carry">215 yd carry</strong>
+              </div>
+            </div>
+            <p id="risk-copy" class="desktop-plan-copy">Click an aim line on the course to preview the shot.</p>
+          </div>
+
+          <section class="game-master" aria-label="Game Master conversation">
+            <header>
+              <span class="gm-mark">GM</span>
+              <div>
+                <strong>Game Master</strong>
+                <small>Course briefing</small>
+              </div>
+            </header>
+            <div id="gm-conversation" class="gm-conversation" aria-live="polite"></div>
+          </section>
+
+          <div class="desktop-shot-controls">
+            <div class="desktop-control-section">
+              <div class="desktop-control-heading">
+                <span class="eyebrow">Club</span>
+              </div>
+              <div class="club-picker">
+                <select id="club-select"></select>
+              </div>
+            </div>
+
+            <div class="desktop-control-section">
+              <div class="desktop-control-heading">
+                <span class="eyebrow">Power</span>
+                <strong id="desktop-power-readout">100%</strong>
+              </div>
+              <input id="desktop-power-slider" class="mobile-power-slider desktop-power-slider" type="range" min="5" max="100" step="1" value="100" aria-label="Swing power percentage" />
+            </div>
+          </div>
+
+          <section class="desktop-shot-entry" aria-label="Your shot">
+            <header>
+              <div>
+                <span class="eyebrow">Your shot</span>
+              </div>
+            </header>
+            <form id="gm-form" class="gm-form">
+              <p id="gm-command-help" class="gm-command-help">
+                Aim at <strong>target</strong>, <strong>pin</strong>, or <strong>cup</strong> before play shot. Optional <strong>lie adjustment</strong>.
+              </p>
+              <div class="gm-command">
+                <input
+                  id="gm-input"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="true"
+                  autocorrect="on"
+                  autocapitalize="sentences"
+                  placeholder="Driver, fairway center, 100% swing"
+                  aria-label="Tell the Game Master your shot"
+                />
+                <button type="submit">Play shot</button>
+              </div>
+              <button id="gm-spell-hint" class="gm-spell-hint" type="button" hidden></button>
+            </form>
+            <div class="gm-suggestions">
+              <button type="button" data-gm-suggestion="What do you recommend?">Recommendation</button>
+              <button id="gm-target-suggestion" type="button" data-gm-suggestion="Aim fairway center">Fairway center</button>
+            </div>
+          </section>
+
+          <div class="shot-result" id="shot-result" aria-live="polite" hidden>
+            <span>Result</span>
+            <strong id="result-title"></strong>
+            <p id="result-copy"></p>
+            <button id="declare-unplayable" class="declare-unplayable" type="button" hidden>Declare unplayable</button>
+          </div>
+
+          <section id="putt-analysis" class="putt-analysis" hidden>
+            <header><span class="eyebrow">Putt analysis</span><strong id="putt-analysis-distance"></strong></header>
+            <div class="putt-analysis-grid">
+              <span></span><b>Recommended</b><b>Your decision</b>
+              <span>Starting line</span><strong id="putt-read-recommended"></strong><strong id="putt-read-player"></strong>
+              <span>Pace</span><strong id="putt-pace-recommended"></strong><strong id="putt-pace-player"></strong>
+            </div>
+            <dl>
+              <div><dt>Make probability</dt><dd id="putt-probability"></dd></div>
+              <div><dt>Result</dt><dd id="putt-analysis-result"></dd></div>
+            </dl>
+            <p id="putt-analysis-lesson"></p>
+          </section>
+
+        </aside>
+      </section>
+    </main>
+
+    <nav class="mobile-round-nav" aria-label="Round navigation">
+      <button id="mobile-previous-hole" type="button"><span aria-hidden="true">←</span><span>Previous</span></button>
+      <button id="mobile-round-current" class="mobile-round-current" type="button" aria-haspopup="dialog">
+        <strong>Hole 1 of 18</strong>
+        <small>Open round card</small>
+      </button>
+      <button id="mobile-next-hole" type="button"><span>Next</span><span aria-hidden="true">→</span></button>
+    </nav>
+
+    <dialog id="profile-dialog" class="modal">
+      <form method="dialog" class="modal-card">
+        <header>
+          <div>
+            <span class="eyebrow">Player setup</span>
+            <h2>How do you play?</h2>
+          </div>
+          <button class="modal-close" value="close" aria-label="Close">×</button>
+        </header>
+        <p class="modal-intro">Choose a typical scoring range. Copy a profile to tune full-swing clubs and putting statistics.</p>
+        <div id="profile-list" class="profile-list"></div>
+        <button id="customize-profile" class="secondary-action" type="button">Copy & customize selected profile</button>
+      </form>
+    </dialog>
+
+    <dialog id="custom-dialog" class="modal">
+      <form id="custom-form" class="modal-card profile-editor">
+        <header>
+          <div>
+            <span class="eyebrow">Custom bag</span>
+            <h2>Build your game</h2>
+          </div>
+          <button class="modal-close" type="button" data-close-custom aria-label="Close">×</button>
+        </header>
+        <label class="editor-name">Profile name <input id="custom-name" maxlength="24" required /></label>
+        <p class="editor-guidance">Enter full-swing carry and accuracy from your golf GPS statistics.</p>
+        <div class="editor-head"><span>Club</span><span>Carry (yd)</span><span>Accuracy (%)</span></div>
+        <div id="club-editor" class="club-editor"></div>
+        <section class="putting-editor" aria-labelledby="putting-editor-title">
+          <div class="putting-editor-heading">
+            <div>
+              <span class="eyebrow">Putter</span>
+              <h3 id="putting-editor-title">Made putts</h3>
+            </div>
+            <small>Enter your make percentage at each distance.</small>
+          </div>
+          <div class="putting-rate-grid">
+            <label>
+              <span>3 ft</span>
+              <span class="percent-field">
+                <input data-putting-distance="3" type="number" inputmode="numeric" min="0" max="100" step="1" aria-label="Three-foot putt make percentage" required>
+                <span aria-hidden="true">%</span>
+              </span>
+            </label>
+            <label>
+              <span>6 ft</span>
+              <span class="percent-field">
+                <input data-putting-distance="6" type="number" inputmode="numeric" min="0" max="100" step="1" aria-label="Six-foot putt make percentage" required>
+                <span aria-hidden="true">%</span>
+              </span>
+            </label>
+            <label>
+              <span>10 ft</span>
+              <span class="percent-field">
+                <input data-putting-distance="10" type="number" inputmode="numeric" min="0" max="100" step="1" aria-label="Ten-foot putt make percentage" required>
+                <span aria-hidden="true">%</span>
+              </span>
+            </label>
+          </div>
+          <p>The game calculates every other distance between these points and extends the curve beyond 10 feet.</p>
+        </section>
+        <div class="modal-actions">
+          <button class="secondary-action" type="button" data-close-custom>Cancel</button>
+          <button class="primary-action" type="submit">Save profile</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="scorecard-dialog" class="modal scorecard-modal">
+      <form method="dialog" class="modal-card">
+        <header>
+          <div>
+            <span id="scorecard-course-name" class="eyebrow">The Meadows at Middlesex</span>
+            <h2>Round card</h2>
+          </div>
+          <button class="modal-close" value="close" aria-label="Close">×</button>
+        </header>
+        <div id="scorecard-grid" class="scorecard-grid"></div>
+      </form>
+    </dialog>
+
+    <dialog id="round-nav-dialog" class="modal round-nav-modal">
+      <form method="dialog" class="modal-card">
+        <header>
+          <div>
+            <span class="eyebrow">Round card</span>
+            <h2>Choose a hole</h2>
+          </div>
+          <button class="modal-close" value="close" aria-label="Close">×</button>
+        </header>
+        <div id="mobile-round-card-grid" class="round-card-grid round-card-grid-expanded" aria-label="Scorecard hole navigation"></div>
+      </form>
+    </dialog>
+
+    <dialog id="reference-image-dialog" class="modal reference-image-modal">
+      <form method="dialog" class="modal-card">
+        <header>
+          <div><span class="eyebrow">Course reference</span><h2 id="reference-image-title">Hole image</h2></div>
+          <button class="modal-close" value="close" aria-label="Close">×</button>
+        </header>
+        <img id="reference-hole-image" alt="Course reference for the current hole" />
+      </form>
+    </dialog>
+
+    <dialog id="round-review-dialog" class="modal round-review-modal">
+      <form method="dialog" class="modal-card">
+        <header>
+          <div>
+            <span class="eyebrow">Post-round learning report</span>
+            <h2>Your round, reviewed</h2>
+          </div>
+          <button class="modal-close" value="close" aria-label="Close">×</button>
+        </header>
+        <div id="round-review-summary" class="review-summary"></div>
+        <div id="round-review-list" class="review-list"></div>
+      </form>
+    </dialog>
+
+    <dialog id="reset-game-dialog" class="modal confirm-modal">
+      <form method="dialog" class="modal-card">
+        <header>
+          <div>
+            <span class="eyebrow">New round</span>
+            <h2>Reset the game?</h2>
+          </div>
+          <button class="modal-close" value="cancel" aria-label="Close">×</button>
+        </header>
+        <p class="modal-intro">This clears every hole score and returns you to the first tee. Your player profiles will be kept.</p>
+        <div class="modal-actions">
+          <button class="secondary-action" value="cancel">Keep playing</button>
+          <button id="confirm-reset-game" class="primary-action" value="confirm">Reset game</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="hole-complete-dialog" class="modal confirm-modal">
+      <form method="dialog" class="modal-card">
+        <header>
+          <div>
+            <span class="eyebrow">Hole complete</span>
+            <h2 id="hole-complete-title">Holed</h2>
+          </div>
+          <button class="modal-close" value="stay" aria-label="Close">×</button>
+        </header>
+        <p id="hole-complete-copy" class="modal-intro">Move to the next hole when you are ready.</p>
+        <div class="modal-actions">
+          <button class="secondary-action" value="stay">Stay on hole</button>
+          <button id="hole-complete-next" class="primary-action" value="next">Next hole</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="app.js?v=20260727-8"></script>
+  </body>
+</html>

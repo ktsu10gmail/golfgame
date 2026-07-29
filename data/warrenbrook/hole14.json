@@ -1,0 +1,423 @@
+{
+  "hole_metadata": {
+    "course_name": "Warrenbrook Golf Course",
+    "hole_number": 14,
+    "par": 4,
+    "handicap_rating": 16,
+    "total_distance_meters": 284.379,
+    "layout_type": "Gentle Dogleg Left",
+    "coordinate_system": {
+      "origin": "White tee center (0, 0)",
+      "unit": "meters",
+      "axes": {
+        "y": "Forward progress",
+        "x": "Golfer-relative lateral displacement"
+      }
+    },
+    "geometry_calibration": {
+      "version": "warrenbrook-aerial-review-v2",
+      "source_image": "images/hole14.png",
+      "method": "reviewed schematic centerline with golfer-relative feature placement"
+    }
+  },
+  "centerline_waypoints": [
+    {
+      "index": 0,
+      "point": [
+        0.0,
+        0.0
+      ],
+      "description": "Tee center"
+    },
+    {
+      "index": 1,
+      "point": [
+        3.976,
+        121.554
+      ],
+      "description": "Route control 1"
+    },
+    {
+      "index": 2,
+      "point": [
+        -3.976,
+        206.359
+      ],
+      "description": "Route control 2"
+    },
+    {
+      "index": 3,
+      "point": [
+        -17.893,
+        282.684
+      ],
+      "description": "Green center"
+    }
+  ],
+  "geometries": {
+    "tee_boxes": [
+      {
+        "id": "tee_blue_h14",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -4.61,
+            -18.575
+          ],
+          [
+            3.386,
+            -18.837
+          ],
+          [
+            3.811,
+            -5.844
+          ],
+          [
+            -4.185,
+            -5.582
+          ]
+        ]
+      },
+      {
+        "id": "tee_white_h14",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -4.161,
+            -4.867
+          ],
+          [
+            3.834,
+            -5.128
+          ],
+          [
+            4.259,
+            7.865
+          ],
+          [
+            -3.736,
+            8.126
+          ]
+        ]
+      },
+      {
+        "id": "tee_red_h14",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -2.637,
+            41.743
+          ],
+          [
+            5.359,
+            41.482
+          ],
+          [
+            5.784,
+            54.475
+          ],
+          [
+            -2.212,
+            54.736
+          ]
+        ]
+      }
+    ],
+    "fairway_segments": [
+      {
+        "segment_id": "fairway_h14_segment_1",
+        "lie_catalog_id": "lie_fairway",
+        "polygon": [
+          [
+            -17.061,
+            29.011
+          ],
+          [
+            18.92,
+            27.834
+          ],
+          [
+            21.968,
+            143.902
+          ],
+          [
+            -17.857,
+            140.168
+          ]
+        ],
+        "description": "Playable fairway corridor segment 1 following the reviewed centerline."
+      },
+      {
+        "segment_id": "fairway_h14_segment_2",
+        "lie_catalog_id": "lie_fairway",
+        "polygon": [
+          [
+            -15.866,
+            140.354
+          ],
+          [
+            19.977,
+            143.715
+          ],
+          [
+            9.945,
+            241.509
+          ],
+          [
+            -29.407,
+            234.334
+          ]
+        ],
+        "description": "Playable fairway corridor segment 2 following the reviewed centerline."
+      }
+    ],
+    "rough_zones": [
+      {
+        "id": "rough_primary_h14",
+        "lie_catalog_id": "lie_rough_medium",
+        "polygon": [
+          [
+            -37.422,
+            18.296
+          ],
+          [
+            -33.858,
+            118.006
+          ],
+          [
+            -41.36,
+            199.543
+          ],
+          [
+            -55.277,
+            275.868
+          ],
+          [
+            19.491,
+            289.5
+          ],
+          [
+            33.408,
+            213.175
+          ],
+          [
+            41.81,
+            125.102
+          ],
+          [
+            38.538,
+            15.811
+          ]
+        ],
+        "description": "Primary rough corridor around the reviewed playing route."
+      }
+    ],
+    "hazards": [
+      {
+        "id": "bunker_h14_greenside_right_1",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            -1.841,
+            278.273
+          ],
+          [
+            0.294,
+            277.709
+          ],
+          [
+            2.194,
+            275.451
+          ],
+          [
+            3.349,
+            272.104
+          ],
+          [
+            3.45,
+            268.565
+          ],
+          [
+            2.469,
+            265.781
+          ],
+          [
+            0.67,
+            264.5
+          ],
+          [
+            -1.466,
+            265.064
+          ],
+          [
+            -3.366,
+            267.322
+          ],
+          [
+            -4.521,
+            270.669
+          ],
+          [
+            -4.621,
+            274.208
+          ],
+          [
+            -3.641,
+            276.991
+          ]
+        ],
+        "description": "Greenside bunker on the golfer-right side."
+      }
+    ],
+    "green_complex": {
+      "id": "green_primary_h14",
+      "lie_catalog_id": "lie_green",
+      "polygon": [
+        [
+          -20.135,
+          294.981
+        ],
+        [
+          -14.916,
+          294.231
+        ],
+        [
+          -10.494,
+          290.386
+        ],
+        [
+          -8.055,
+          284.478
+        ],
+        [
+          -8.252,
+          278.089
+        ],
+        [
+          -11.032,
+          272.931
+        ],
+        [
+          -15.651,
+          270.387
+        ],
+        [
+          -20.87,
+          271.137
+        ],
+        [
+          -25.292,
+          274.982
+        ],
+        [
+          -27.731,
+          280.89
+        ],
+        [
+          -27.534,
+          287.279
+        ],
+        [
+          -24.754,
+          292.437
+        ]
+      ],
+      "pin_zones": [
+        {
+          "zone_id": "front",
+          "center_point": [
+            -16.996,
+            277.765
+          ],
+          "radius_meters": 2.5
+        },
+        {
+          "zone_id": "back",
+          "center_point": [
+            -18.79,
+            287.603
+          ],
+          "radius_meters": 2.5
+        },
+        {
+          "zone_id": "center_standard",
+          "center_point": [
+            -17.893,
+            282.684
+          ],
+          "radius_meters": 3
+        }
+      ]
+    },
+    "out_of_bounds": [
+      {
+        "id": "ob_h14_right",
+        "lie_catalog_id": "lie_ob_hazard",
+        "polygon": [
+          [
+            33.099,
+            33.061
+          ],
+          [
+            35.923,
+            117.017
+          ],
+          [
+            28.196,
+            206.417
+          ],
+          [
+            15.619,
+            277.285
+          ],
+          [
+            37.281,
+            281.129
+          ],
+          [
+            49.858,
+            210.262
+          ],
+          [
+            57.84,
+            118.922
+          ],
+          [
+            55.087,
+            32.342
+          ]
+        ],
+        "description": "Course boundary on the golfer-right side."
+      }
+    ]
+  },
+  "elevation_profile": {
+    "sampling_interval_meters": 71.09,
+    "points": [
+      {
+        "y": 0.0,
+        "elevation_m": -0.0
+      },
+      {
+        "y": 71.095,
+        "elevation_m": -1.975
+      },
+      {
+        "y": 142.19,
+        "elevation_m": -3.95
+      },
+      {
+        "y": 213.285,
+        "elevation_m": -5.925
+      },
+      {
+        "y": 284.379,
+        "elevation_m": -7.9
+      }
+    ],
+    "description": "Approximate net elevation transcribed from the supplied GPS image."
+  }
+}

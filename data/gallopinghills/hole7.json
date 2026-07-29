@@ -1,0 +1,438 @@
+{
+  "hole_metadata": {
+    "course_name": "Galloping Hill Golf Course",
+    "hole_number": 7,
+    "par": 4,
+    "handicap_rating": 5,
+    "total_distance_meters": 314.555,
+    "layout_type": "Dogleg Right",
+    "coordinate_system": {
+      "origin": "White tee center (0, 0)",
+      "unit": "meters",
+      "axes": {
+        "y": "Forward progress",
+        "x": "Golfer-relative lateral displacement"
+      }
+    },
+    "geometry_calibration": {
+      "version": "gallopinghills-aerial-review-v1",
+      "source_image": "images/hole7.png",
+      "method": "reviewed schematic centerline with golfer-relative feature placement"
+    }
+  },
+  "centerline_waypoints": [
+    {
+      "index": 0,
+      "point": [
+        0.0,
+        0.0
+      ],
+      "description": "Tee center"
+    },
+    {
+      "index": 1,
+      "point": [
+        2.972,
+        130.866
+      ],
+      "description": "Route control 1"
+    },
+    {
+      "index": 2,
+      "point": [
+        18.821,
+        221.226
+      ],
+      "description": "Route control 2"
+    },
+    {
+      "index": 3,
+      "point": [
+        35.66,
+        311.586
+      ],
+      "description": "Green center"
+    }
+  ],
+  "geometries": {
+    "tee_boxes": [
+      {
+        "id": "tee_blue_h7",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -4.694,
+            -30.505
+          ],
+          [
+            3.304,
+            -30.686
+          ],
+          [
+            3.599,
+            -17.69
+          ],
+          [
+            -4.399,
+            -17.508
+          ]
+        ]
+      },
+      {
+        "id": "tee_white_h7",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -4.112,
+            -4.908
+          ],
+          [
+            3.885,
+            -5.09
+          ],
+          [
+            4.181,
+            7.907
+          ],
+          [
+            -3.817,
+            8.089
+          ]
+        ]
+      },
+      {
+        "id": "tee_red_h7",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -3.926,
+            3.32
+          ],
+          [
+            4.072,
+            3.138
+          ],
+          [
+            4.367,
+            16.135
+          ],
+          [
+            -3.63,
+            16.316
+          ]
+        ]
+      }
+    ],
+    "fairway_segments": [
+      {
+        "segment_id": "fairway_h7_segment_1",
+        "lie_catalog_id": "lie_fairway",
+        "polygon": [
+          [
+            -17.281,
+            31.856
+          ],
+          [
+            18.71,
+            31.039
+          ],
+          [
+            27.228,
+            153.392
+          ],
+          [
+            -12.17,
+            160.302
+          ]
+        ],
+        "description": "Playable fairway corridor segment 1 following the reviewed centerline."
+      },
+      {
+        "segment_id": "fairway_h7_segment_2",
+        "lie_catalog_id": "lie_fairway",
+        "polygon": [
+          [
+            -10.2,
+            159.957
+          ],
+          [
+            25.258,
+            153.737
+          ],
+          [
+            46.101,
+            258.445
+          ],
+          [
+            6.778,
+            265.773
+          ]
+        ],
+        "description": "Playable fairway corridor segment 2 following the reviewed centerline."
+      }
+    ],
+    "rough_zones": [
+      {
+        "id": "rough_primary_h7",
+        "lie_catalog_id": "lie_rough_medium",
+        "polygon": [
+          [
+            -37.562,
+            19.731
+          ],
+          [
+            -34.457,
+            137.431
+          ],
+          [
+            -18.536,
+            228.188
+          ],
+          [
+            -1.697,
+            318.548
+          ],
+          [
+            73.017,
+            304.624
+          ],
+          [
+            56.178,
+            214.264
+          ],
+          [
+            40.401,
+            124.301
+          ],
+          [
+            38.419,
+            18.006
+          ]
+        ],
+        "description": "Primary rough corridor around the reviewed playing route."
+      }
+    ],
+    "hazards": [
+      {
+        "id": "bunker_h7_fairway_right_1",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            29.886,
+            174.33
+          ],
+          [
+            31.659,
+            172.863
+          ],
+          [
+            32.563,
+            169.545
+          ],
+          [
+            32.357,
+            165.267
+          ],
+          [
+            31.095,
+            161.173
+          ],
+          [
+            29.115,
+            158.362
+          ],
+          [
+            26.949,
+            157.585
+          ],
+          [
+            25.175,
+            159.053
+          ],
+          [
+            24.271,
+            162.37
+          ],
+          [
+            24.477,
+            166.649
+          ],
+          [
+            25.739,
+            170.742
+          ],
+          [
+            27.719,
+            173.554
+          ]
+        ],
+        "description": "Fairway bunker on the golfer-right side."
+      },
+      {
+        "id": "bunker_h7_greenside_left_2",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            19.054,
+            298.895
+          ],
+          [
+            20.615,
+            297.718
+          ],
+          [
+            21.438,
+            295.144
+          ],
+          [
+            21.304,
+            291.863
+          ],
+          [
+            20.247,
+            288.754
+          ],
+          [
+            18.552,
+            286.65
+          ],
+          [
+            16.672,
+            286.115
+          ],
+          [
+            15.111,
+            287.291
+          ],
+          [
+            14.288,
+            289.865
+          ],
+          [
+            14.422,
+            293.146
+          ],
+          [
+            15.479,
+            296.255
+          ],
+          [
+            17.174,
+            298.359
+          ]
+        ],
+        "description": "Greenside bunker on the golfer-left side."
+      }
+    ],
+    "green_complex": {
+      "id": "green_primary_h7",
+      "lie_catalog_id": "lie_green",
+      "polygon": [
+        [
+          37.95,
+          323.874
+        ],
+        [
+          42.559,
+          321.312
+        ],
+        [
+          45.319,
+          316.144
+        ],
+        [
+          45.491,
+          309.754
+        ],
+        [
+          43.029,
+          303.855
+        ],
+        [
+          38.592,
+          300.028
+        ],
+        [
+          33.37,
+          299.298
+        ],
+        [
+          28.761,
+          301.86
+        ],
+        [
+          26.001,
+          307.028
+        ],
+        [
+          25.829,
+          313.418
+        ],
+        [
+          28.291,
+          319.317
+        ],
+        [
+          32.728,
+          323.144
+        ]
+      ],
+      "pin_zones": [
+        {
+          "zone_id": "front",
+          "center_point": [
+            34.744,
+            306.671
+          ],
+          "radius_meters": 2.5
+        },
+        {
+          "zone_id": "back",
+          "center_point": [
+            36.576,
+            316.501
+          ],
+          "radius_meters": 2.5
+        },
+        {
+          "zone_id": "center_standard",
+          "center_point": [
+            35.66,
+            311.586
+          ],
+          "radius_meters": 3
+        }
+      ]
+    },
+    "out_of_bounds": []
+  },
+  "elevation_profile": {
+    "sampling_interval_meters": 78.64,
+    "points": [
+      {
+        "y": 0.0,
+        "elevation_m": 0.0
+      },
+      {
+        "y": 78.639,
+        "elevation_m": 1.75
+      },
+      {
+        "y": 157.277,
+        "elevation_m": 3.5
+      },
+      {
+        "y": 235.916,
+        "elevation_m": 5.25
+      },
+      {
+        "y": 314.555,
+        "elevation_m": 7.0
+      }
+    ],
+    "description": "Approximate net elevation transcribed from the supplied GPS image."
+  }
+}
