@@ -87,9 +87,9 @@ class SeedAndPacketTests(unittest.TestCase):
         self.assertEqual(first, replay)
         self.assertEqual(first.audit.engine_version, ENGINE_VERSION)
         self.assertEqual(first.audit.shot_seed, derive_shot_seed(90210, 4, 2))
-        self.assertEqual(first.audit.shot_seed, 10619222070006940461)
-        self.assertEqual(first.total_yards, 151.03)
-        self.assertEqual(first.landing, Vec2(151.0272, -0.1307))
+        self.assertEqual(first.audit.shot_seed, 9101625523428572884)
+        self.assertEqual(first.total_yards, 133.19)
+        self.assertEqual(first.landing, Vec2(133.1899, -16.8409))
 
     def test_stroke_identity_changes_derived_seed_and_result(self) -> None:
         first = simulate_full_shot(context(), round_seed=77, hole_number=1, stroke_index=1)
@@ -97,6 +97,22 @@ class SeedAndPacketTests(unittest.TestCase):
 
         self.assertNotEqual(first.audit.shot_seed, second.audit.shot_seed)
         self.assertNotEqual(first, second)
+
+    def test_green_contour_slope_changes_putt_travel(self) -> None:
+        downhill_context = replace(
+            putt_context(),
+            read=replace(putt_context().read, slope="downhill", slope_degrees=5, downhill_strength=5),
+        )
+        uphill_context = replace(
+            putt_context(),
+            read=replace(putt_context().read, slope="uphill", slope_degrees=5, downhill_strength=-5),
+        )
+        average = lambda sample: statistics.mean(
+            simulate_putt(sample, round_seed=seed, hole_number=12, stroke_index=3).total_yards
+            for seed in range(1, 1001)
+        )
+        self.assertGreater(average(downhill_context), average(putt_context()))
+        self.assertGreater(average(putt_context()), average(uphill_context))
 
     def test_result_packet_has_trace_surface_and_audit(self) -> None:
         result = simulate_full_shot(context(), round_seed=8, hole_number=1, stroke_index=1)
@@ -168,6 +184,39 @@ class ModifierAndQualityTests(unittest.TestCase):
         self.assertEqual(fat_result.quality, ShotQuality.FAT)
         self.assertLess(fat_result.carry_yards, solid_result.carry_yards * 0.75)
         self.assertLess(fat_result.roll_yards, solid_result.roll_yards)
+
+    def test_full_shots_cap_carry_at_108_percent_and_keep_roll_separate(self) -> None:
+        base = context()
+        three_wood = replace(
+            base.club,
+            club_id="3_wood",
+            carry_mean=200,
+            carry_sd=40,
+            roll_mean=12,
+            lateral_sd=0,
+            directional_bias=0,
+            mishit_probability=0,
+        )
+        sample = replace(
+            base,
+            club=three_wood,
+            target=Vec2(250, 0),
+            environment=EnvironmentModifiers(elevation_carry_multiplier=2),
+        )
+
+        results = []
+        for round_seed in range(1, 101):
+            result = simulate_full_shot(
+                sample, round_seed=round_seed, hole_number=7, stroke_index=2
+            )
+            results.append(result)
+            self.assertLessEqual(result.carry_yards, 216)
+            self.assertAlmostEqual(
+                result.total_yards, result.carry_yards + result.roll_yards, places=2
+            )
+        longest = max(results, key=lambda result: result.carry_yards)
+        self.assertEqual(longest.carry_yards, 216)
+        self.assertEqual(longest.total_yards, 228)
 
 
 class PenaltyReliefTests(unittest.TestCase):
@@ -249,8 +298,8 @@ class PuttingTests(unittest.TestCase):
         self.assertEqual(first, replay)
         self.assertEqual(first.audit.engine_version, PUTTING_ENGINE_VERSION)
         self.assertEqual(first.audit.shot_seed, derive_putt_seed(90210, 4, 2))
-        self.assertEqual(first.landing, Vec2(-0.8802, 11.4466))
-        self.assertEqual(first.remaining_distance_yards, 1.04)
+        self.assertEqual(first.landing, Vec2(-0.7087, 9.4976))
+        self.assertEqual(first.remaining_distance_yards, 2.6)
         self.assertFalse(first.made)
         self.assertAlmostEqual(first.make_probability, 0.0, places=6)
         self.assertEqual(first.assessment.decision_assessment, "review")
@@ -263,6 +312,50 @@ class PuttingTests(unittest.TestCase):
 
         self.assertNotEqual(first.audit.shot_seed, second.audit.shot_seed)
         self.assertNotEqual(first, second)
+
+    def test_putt_read_is_relative_to_player_to_cup_line_on_rotated_green(self) -> None:
+        rotated = PuttContext(
+            start=Vec2(0, 0),
+            target=Vec2(12, -4 / 36),
+            pin=Vec2(12, 0),
+            profile=PuttProfile(0.9, 0.55, 0.3),
+            read=PuttRead(feet=12, direction="right", start_direction="right", break_inches=4),
+            pace_scale=0.2,
+            profile_version="rotated-green-test",
+        )
+
+        packet = simulate_putt(rotated, round_seed=41, hole_number=3, stroke_index=2)
+
+        self.assertEqual(packet.aim_error_inches, 0)
+        self.assertEqual(packet.player_offset_inches, 4)
+        self.assertEqual(packet.player_offset_direction, "right")
+        self.assertTrue(packet.aim_correct)
+
+    def test_contour_putt_matches_browser_golden_and_records_path(self) -> None:
+        contour_context = PuttContext(
+            start=Vec2(0, -4),
+            target=Vec2(0, 4),
+            pin=Vec2(0, 4),
+            profile=PuttProfile(0.9, 0.55, 0.3),
+            read=PuttRead(
+                feet=24,
+                direction="right",
+                start_direction="left",
+                break_inches=0,
+            ),
+            pace_scale=0.4,
+            profile_version="contour-test",
+            green_polygon=(Vec2(-8, -8), Vec2(8, -8), Vec2(8, 8), Vec2(-8, 8)),
+            contour_hole_number=1,
+        )
+
+        packet = simulate_putt(contour_context, round_seed=90210, hole_number=1, stroke_index=1)
+
+        self.assertEqual(packet.landing, Vec2(0.0825, 3.3345))
+        self.assertEqual(len(packet.path), 21)
+        self.assertEqual(packet.path[-1], packet.landing)
+        self.assertTrue(packet.audit.contour_physics)
+        self.assertEqual(packet.audit.physics_steps, 80)
 
 
 if __name__ == "__main__":

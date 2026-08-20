@@ -6,3 +6,5 @@ htmlcov/
 .venv/
 .tools/
 .playwright-cli/
+data/player_accounts.sqlite3*
+.env

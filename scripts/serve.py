@@ -1,34 +1,210 @@
 #!/usr/bin/env python3
-"""Serve the browser app and Gemini-backed AI endpoints from one process."""
+"""Serve the browser app and optional AI endpoints from one process."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 import sys
 from http import HTTPStatus
+from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from packages.ai import GeminiProviderError, create_ai_service
+
+def _load_local_environment(path: Path) -> None:
+    """Load simple KEY=VALUE settings without overriding service environment."""
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        name = name.strip()
+        value = value.strip().strip('"').strip("'")
+        if name:
+            os.environ.setdefault(name, value)
+
+
+_load_local_environment(ROOT / ".env")
+
+from packages.ai import AiProviderError, create_ai_service
+from packages.accounts import (
+    AccountError,
+    PlayerStore,
+    SupabaseAuth,
+    SupabaseConfig,
+    attach_verified_learning_context,
+)
+from scripts.import_mapped_course import install_package, validate_package
 
 AI_SERVICE = create_ai_service()
+PLAYER_STORE = PlayerStore(os.getenv("GOLFGAME_PLAYER_DB", ROOT / "data" / "player_accounts.sqlite3"))
+SUPABASE_CONFIG = SupabaseConfig.from_values(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_ANON_KEY"))
+SUPABASE_AUTH = SupabaseAuth(SUPABASE_CONFIG) if SUPABASE_CONFIG else None
+SESSION_COOKIE = "golfgame_session"
+CENSUS_GEOCODER_URL = (
+    "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
+)
+DEVELOPER_EMAILS = {
+    value.strip().casefold()
+    for value in os.getenv("GOLFGAME_DEVELOPER_EMAILS", "admin@jetta.com").split(",")
+    if value.strip()
+}
+DEVELOPER_NAMES = {
+    value.strip().casefold()
+    for value in os.getenv("GOLFGAME_DEVELOPER_NAMES", "").split(",")
+    if value.strip()
+}
 
 
 class AppHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
+    def end_headers(self) -> None:
+        """Keep the game shell fresh while allowing conditional asset requests."""
+        path = urlparse(self.path).path
+        if path in {"/", "/index.html"}:
+            self.send_header("Cache-Control", "no-store, max-age=0")
+        elif Path(path).suffix.lower() in {".js", ".mjs", ".css"}:
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         if parsed.path == "/api/ai/health":
             self._json_response(HTTPStatus.OK, AI_SERVICE.status())
+            return
+        if parsed.path == "/api/geocode":
+            self._handle_geocode(parsed.query)
+            return
+        if parsed.path == "/api/player/session":
+            player = self._current_player()
+            self._json_response(HTTPStatus.OK, {"player": player})
+            return
+        if parsed.path == "/api/auth/config":
+            payload = SUPABASE_CONFIG.public_payload() if SUPABASE_CONFIG else {"provider": "local"}
+            self._json_response(HTTPStatus.OK, payload)
+            return
+        if parsed.path == "/api/player/active-round":
+            player = self._require_player()
+            if player is not None:
+                self._json_response(HTTPStatus.OK, {"round": PLAYER_STORE.active_round(player["id"])})
+            return
+        if parsed.path == "/api/player/gps-round":
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                query = parse_qs(parsed.query)
+                round_id = query.get("round_id", [None])[0]
+                course_id = query.get("course_id", [None])[0]
+                gps_round = (
+                    PLAYER_STORE.gps_round(player["id"], round_id)
+                    if round_id else PLAYER_STORE.active_gps_round(player["id"], course_id)
+                )
+            except AccountError as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, {"round": gps_round})
+            return
+        if parsed.path == "/api/player/gps-round-history":
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                limit = int(parse_qs(parsed.query).get("limit", ["50"])[0])
+                rounds = PLAYER_STORE.gps_round_history(player["id"], limit)
+            except (AccountError, TypeError, ValueError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, {"rounds": rounds})
+            return
+        if parsed.path == "/api/player/gps-club-stats":
+            player = self._require_player()
+            if player is not None:
+                self._json_response(HTTPStatus.OK, {"statistics": PLAYER_STORE.on_course_club_stats(player["id"])})
+            return
+        if parsed.path == "/api/player/profile":
+            player = self._require_player()
+            if player is not None:
+                self._json_response(HTTPStatus.OK, {"profile": PLAYER_STORE.player_profile(player["id"])})
+            return
+        if parsed.path == "/api/player/round-history":
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                raw_limit = parse_qs(parsed.query).get("limit", ["50"])[0]
+                limit = int(raw_limit)
+                rounds = PLAYER_STORE.completed_round_history(player["id"], limit)
+            except (AccountError, TypeError, ValueError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, {"rounds": rounds})
+            return
+        if parsed.path == "/api/player/leaderboard":
+            player = self._require_player()
+            if player is None:
+                return
+            self._json_response(HTTPStatus.OK, {"leaders": PLAYER_STORE.leaderboard(10)})
+            return
+        if parsed.path == "/api/player/learning":
+            player = self._require_player()
+            if player is not None:
+                self._json_response(HTTPStatus.OK, {"learning": PLAYER_STORE.player_learning(player["id"])})
+            return
+        if parsed.path == "/api/player/feedback":
+            player = self._require_player()
+            if player is not None:
+                self._json_response(HTTPStatus.OK, PLAYER_STORE.player_feedback(player["id"]))
+            return
+        if parsed.path == "/api/player/feedback-attachment":
+            player = self._require_player()
+            if player is None:
+                return
+            attachment_id = parse_qs(parsed.query).get("id", [""])[0]
+            attachment = PLAYER_STORE.feedback_attachment(
+                attachment_id,
+                None if player.get("is_developer") else player["id"],
+            )
+            if attachment is None:
+                self._json_response(HTTPStatus.NOT_FOUND, {"error": "feedback screenshot was not found"})
+                return
+            self._binary_response(
+                HTTPStatus.OK,
+                attachment["file_data"],
+                attachment["mime_type"],
+                attachment["file_name"],
+            )
+            return
+        if parsed.path == "/api/developer/feedback":
+            player = self._require_developer()
+            if player is None:
+                return
+            try:
+                query = parse_qs(parsed.query)
+                limit = int(query.get("limit", ["100"])[0])
+                payload = PLAYER_STORE.developer_feedback(
+                    limit,
+                    query.get("status", [None])[0],
+                    query.get("category", [None])[0],
+                )
+            except (AccountError, TypeError, ValueError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, payload)
             return
         return super().do_GET()
 
@@ -38,11 +214,220 @@ class AppHandler(SimpleHTTPRequestHandler):
             self._handle_json_route(AI_SERVICE.narrate_shot)
             return
         if parsed.path == "/api/ai/review":
-            self._handle_json_route(AI_SERVICE.review_round)
+            self._handle_json_route(AI_SERVICE.review_round, attach_verified_learning=True)
+            return
+        if parsed.path == "/api/ai/gps-hole-review":
+            self._handle_json_route(AI_SERVICE.review_gps_hole)
+            return
+        if parsed.path == "/api/ai/strategy":
+            self._handle_json_route(AI_SERVICE.critique_strategy, attach_verified_learning=True)
+            return
+        if parsed.path == "/api/ai/competition-decision":
+            self._handle_json_route(AI_SERVICE.explain_competition_decision)
+            return
+        if parsed.path == "/api/course-mapper/install":
+            self._handle_course_install()
+            return
+        if parsed.path == "/api/player/register":
+            self._handle_player_access(create=True)
+            return
+        if parsed.path == "/api/player/login":
+            self._handle_player_access(create=False)
+            return
+        if parsed.path == "/api/player/logout":
+            token = self._session_token()
+            PLAYER_STORE.delete_session(token)
+            self._json_response(
+                HTTPStatus.OK,
+                {"logged_out": True},
+                headers={"Set-Cookie": self._expired_session_cookie()},
+            )
+            return
+        if parsed.path in {"/api/player/feedback", "/api/player/feedback/reply"}:
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                payload = self._read_json_body(max_bytes=2 * 1024 * 1024)
+                if parsed.path.endswith("/reply"):
+                    result = PLAYER_STORE.reply_to_feedback(
+                        player["id"], payload.get("feedback_id"), payload.get("body"), player["name"]
+                    )
+                else:
+                    result = PLAYER_STORE.create_feedback(
+                        player["id"], payload.get("category"), payload.get("title"),
+                        payload.get("body"), payload.get("context"), payload.get("attachment"),
+                    )
+            except (AccountError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, result)
             return
         self._json_response(HTTPStatus.NOT_FOUND, {"error": "unknown api route"})
 
-    def _handle_json_route(self, handler) -> None:
+    def do_PUT(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path not in {
+            "/api/player/active-round", "/api/player/profile", "/api/player/gps-round",
+            "/api/player/rating", "/api/player/feedback/read", "/api/developer/feedback",
+        }:
+            self._json_response(HTTPStatus.NOT_FOUND, {"error": "unknown api route"})
+            return
+        player = self._require_developer() if parsed.path == "/api/developer/feedback" else self._require_player()
+        if player is None:
+            return
+        try:
+            if parsed.path == "/api/player/profile":
+                payload = self._read_json_body(max_bytes=128 * 1024)
+                result = PLAYER_STORE.save_profile(player["id"], payload.get("profile"))
+            elif parsed.path == "/api/player/gps-round":
+                payload = self._read_json_body(max_bytes=2 * 1024 * 1024)
+                result = PLAYER_STORE.save_gps_round(player["id"], payload.get("round"))
+            elif parsed.path == "/api/player/rating":
+                payload = self._read_json_body()
+                result = PLAYER_STORE.save_game_rating(player["id"], payload.get("stars"), payload.get("comment"))
+            elif parsed.path == "/api/player/feedback/read":
+                self._read_json_body()
+                result = PLAYER_STORE.mark_feedback_read(player["id"])
+            elif parsed.path == "/api/developer/feedback":
+                payload = self._read_json_body()
+                result = PLAYER_STORE.update_feedback_as_developer(
+                    payload.get("feedback_id"), player["name"], payload.get("status"), payload.get("reply"),
+                )
+            else:
+                payload = self._read_json_body(max_bytes=10 * 1024 * 1024)
+                result = PLAYER_STORE.save_round(player["id"], payload.get("round"))
+        except (AccountError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+            self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            return
+        self._json_response(HTTPStatus.OK, result)
+
+    def _session_token(self) -> str | None:
+        cookies = SimpleCookie()
+        try:
+            cookies.load(self.headers.get("Cookie", ""))
+        except Exception:
+            return None
+        morsel = cookies.get(SESSION_COOKIE)
+        return morsel.value if morsel else None
+
+    def _current_player(self) -> dict | None:
+        if SUPABASE_AUTH is not None:
+            authorization = self.headers.get("Authorization", "")
+            token = authorization.removeprefix("Bearer ").strip() if authorization.startswith("Bearer ") else None
+            identity = SUPABASE_AUTH.get_user(token)
+            if identity is None:
+                return None
+            player = PLAYER_STORE.upsert_supabase_player(
+                identity["external_id"], identity["email"], identity["name"]
+            )
+        else:
+            player = PLAYER_STORE.player_for_session(self._session_token())
+        return self._with_access_role(player)
+
+    @staticmethod
+    def _with_access_role(player: dict | None) -> dict | None:
+        if player is None:
+            return None
+        player = dict(player)
+        player["is_developer"] = (
+            str(player.get("email") or "").casefold() in DEVELOPER_EMAILS
+            or str(player.get("name") or "").casefold() in DEVELOPER_NAMES
+        )
+        return player
+
+    def _require_player(self) -> dict | None:
+        player = self._current_player()
+        if player is None:
+            self._json_response(HTTPStatus.UNAUTHORIZED, {"error": "player login required"})
+        return player
+
+    def _require_developer(self) -> dict | None:
+        player = self._require_player()
+        if player is not None and not player.get("is_developer"):
+            self._json_response(HTTPStatus.FORBIDDEN, {"error": "developer access required"})
+            return None
+        return player
+
+    @staticmethod
+    def _session_cookie(token: str) -> str:
+        return f"{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000"
+
+    @staticmethod
+    def _expired_session_cookie() -> str:
+        return f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"
+
+    def _read_json_body(self, max_bytes: int = 64 * 1024) -> dict:
+        content_length = int(self.headers.get("Content-Length", "0"))
+        if content_length <= 0 or content_length > max_bytes:
+            raise ValueError("request body has an invalid size")
+        payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("request body must be an object")
+        return payload
+
+    def _handle_player_access(self, *, create: bool) -> None:
+        if SUPABASE_AUTH is not None:
+            self._json_response(
+                HTTPStatus.CONFLICT,
+                {"error": "player access is managed by Supabase"},
+            )
+            return
+        try:
+            payload = self._read_json_body()
+            if create:
+                player = PLAYER_STORE.create_player(payload.get("name"), payload.get("pin"))
+            else:
+                player = PLAYER_STORE.authenticate(payload.get("name"), payload.get("pin"))
+                if player is None:
+                    self._json_response(HTTPStatus.UNAUTHORIZED, {"error": "player name or PIN is incorrect"})
+                    return
+            token = PLAYER_STORE.create_session(player["id"])
+        except (AccountError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+            self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            return
+        self._json_response(
+            HTTPStatus.OK,
+            {"player": self._with_access_role(player)},
+            headers={"Set-Cookie": self._session_cookie(token)},
+        )
+
+    def _handle_course_install(self) -> None:
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0 or content_length > 25 * 1024 * 1024:
+                raise ValueError("course package must be between 1 byte and 25 MB")
+            payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
+            payload = validate_package(payload)
+            destination = install_package(payload, force=True)
+        except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+            self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            return
+        except OSError as error:
+            self._json_response(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"error": f"could not write the course files: {error}"},
+            )
+            return
+        self._json_response(HTTPStatus.OK, {
+            "installed": True,
+            "course_id": payload["course_id"],
+            "course_name": payload["course_name"],
+            "holes": 18,
+            "gps_calibrated_holes": sum(
+                1 for hole in payload["holes"].values()
+                if hole.get("hole_metadata", {}).get("gps_calibration")
+            ),
+            "map_updated_at": payload.get("exported_at"),
+            "destination": str(destination.relative_to(ROOT)),
+        })
+
+    def _attach_verified_learning(self, payload: dict) -> None:
+        player = self._current_player()
+        learning = PLAYER_STORE.player_learning(player["id"]) if player is not None else None
+        attach_verified_learning_context(payload, learning)
+
+    def _handle_json_route(self, handler, *, attach_verified_learning: bool = False) -> None:
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
@@ -50,18 +435,73 @@ class AppHandler(SimpleHTTPRequestHandler):
             self._json_response(HTTPStatus.BAD_REQUEST, {"error": "invalid json body"})
             return
         try:
+            if attach_verified_learning:
+                self._attach_verified_learning(payload)
             response = handler(payload)
-        except GeminiProviderError as error:
+        except AiProviderError as error:
             self._json_response(HTTPStatus.SERVICE_UNAVAILABLE, {"error": str(error)})
             return
         self._json_response(HTTPStatus.OK, response)
 
-    def _json_response(self, status: HTTPStatus, payload: dict) -> None:
+    def _handle_geocode(self, query: str) -> None:
+        address = parse_qs(query).get("address", [""])[0].strip()
+        if not address:
+            self._json_response(HTTPStatus.BAD_REQUEST, {"error": "address is required"})
+            return
+        parameters = urlencode({
+            "address": address,
+            "benchmark": "Public_AR_Current",
+            "format": "json",
+        })
+        request = Request(
+            f"{CENSUS_GEOCODER_URL}?{parameters}",
+            headers={"User-Agent": "MiddlesexGolfCourseMapper/1.0"},
+        )
+        try:
+            with urlopen(request, timeout=12) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
+            self._json_response(
+                HTTPStatus.BAD_GATEWAY,
+                {"error": "The U.S. Census address service is unavailable. Try again shortly."},
+            )
+            return
+        matches = payload.get("result", {}).get("addressMatches", [])
+        if not matches:
+            self._json_response(
+                HTTPStatus.NOT_FOUND,
+                {"error": "No U.S. street-address match was found. Include street, city, state, and ZIP."},
+            )
+            return
+        match = matches[0]
+        coordinates = match.get("coordinates", {})
+        self._json_response(HTTPStatus.OK, {
+            "formatted_address": match.get("matchedAddress", address),
+            "location": {
+                "lat": coordinates.get("y"),
+                "lng": coordinates.get("x"),
+            },
+            "source": "U.S. Census Geocoder",
+        })
+
+    def _json_response(self, status: HTTPStatus, payload: dict, headers: dict | None = None) -> None:
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _binary_response(self, status: HTTPStatus, body: bytes, mime_type: str, file_name: str) -> None:
+        safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", file_name).strip("-") or "feedback-image"
+        self.send_response(status)
+        self.send_header("Content-Type", mime_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Disposition", f'inline; filename="{safe_name}"')
+        self.send_header("Cache-Control", "private, no-store")
         self.end_headers()
         self.wfile.write(body)
 

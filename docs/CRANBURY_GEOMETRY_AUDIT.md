@@ -1,8 +1,8 @@
 # Cranbury Golf Club Geometry Audit
 
-Source assets are preserved in `data/cranbury/`. The geometry is a
-testing-quality schematic derived from the supplied GPS aerial images and
-scorecard, not surveyed course data.
+The active editor-installed geometry is stored in
+`data/cranbury-golf-club/`. The retired built-in Cranbury dataset and source
+assets have been removed.
 
 ## Authoritative orientation
 
@@ -32,14 +32,5 @@ vegetation obscure portions of the feature boundaries.
   distance. Separate Blue, White, and Gold tee surfaces cover all starting
   positions.
 
-## Reproducibility
-
-Run the generator after changing reviewed route or feature definitions:
-
-```bash
-python3 scripts/generate_cranbury_course.py
-```
-
-The generated files are validated by the course adapter and by Cranbury-specific
-tests for route distance, confirmed left turns, tee coverage, and golfer-relative
-hazard sides.
+Future changes should be made in the Course Mapper and installed from the saved
+`.golfmap` project so the game geometry remains aligned with the authored map.

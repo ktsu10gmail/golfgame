@@ -99,9 +99,37 @@ class GreensideEngineTests(unittest.TestCase):
         self.assertEqual(packet.relief.penalty_strokes, 1)
         self.assertEqual(packet.resolved_surface, SurfaceType.GREEN)
 
+    def test_overshot_landing_continues_forward_instead_of_reversing(self) -> None:
+        overshot = GreensideContext(
+            start=Vec2(0, 0),
+            target=Vec2(20, 0),
+            pin=Vec2(10, 0),
+            club_id="sand_wedge",
+            accuracy=1,
+            lie_type=LieType.FAIRWAY_CLEAN,
+            power=0.9,
+            roll_slope_factor=1,
+            break_direction="right",
+            contour_modifier=1,
+            surfaces=(
+                SurfaceRegion(SurfaceType.FAIRWAY, rectangle(-5, -10, 5, 10), 40, "fairway"),
+                SurfaceRegion(SurfaceType.GREEN, rectangle(5, -10, 50, 10), 70, "green"),
+            ),
+            profile_version="test-profile",
+            lie_version="test-lie",
+        )
+        packet = simulate_greenside_shot(
+            overshot, round_seed=972206328, hole_number=10, stroke_index=4
+        )
+
+        self.assertGreater(packet.landing.x, 10)
+        self.assertGreater(packet.resolved_ball.x, packet.landing.x)
+        self.assertEqual(packet.resolved_surface, SurfaceType.GREEN)
+
     def test_real_course_surfaces_are_consumed_for_all_courses(self) -> None:
         for course_id in ("themeadow", "warrenbrook", "cranbury", "gallopinghills"):
-            hole = load_course(ROOT / "data" / course_id)[0]
+            directory = "cranbury-golf-club" if course_id == "cranbury" else course_id
+            hole = load_course(ROOT / "data" / directory)[0]
             previous = hole.centerline[-2]
             dx, dy = previous.x - hole.pin.x, previous.y - hole.pin.y
             length = max((dx * dx + dy * dy) ** 0.5, 1)

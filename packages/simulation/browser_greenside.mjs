@@ -4,9 +4,10 @@ import {
   projectLanding,
   resolvePenaltyRelief,
   resolveSurface
-} from "./browser_engine.mjs?v=20260729-2";
+} from "./browser_engine.mjs?v=20260815-4";
 
-export const GREENSIDE_ENGINE_VERSION = "greenside-chip-v2";
+export const GREENSIDE_ENGINE_VERSION = "greenside-chip-v3";
+const GREENSIDE_SEED_VERSION = "greenside-chip-v2";
 
 const MASK_64 = (1n << 64n) - 1n;
 const FNV_OFFSET_64 = 0xcbf29ce484222325n;
@@ -94,7 +95,7 @@ function breakInches(feet, contourModifier) {
 export function deriveGreensideSeed(roundSeed, holeNumber, strokeIndex) {
   if (holeNumber < 1 || holeNumber > 18) throw new Error("hole_number must be between 1 and 18");
   if (strokeIndex < 1) throw new Error("stroke_index must be positive");
-  const material = `${GREENSIDE_ENGINE_VERSION}:${roundSeed}:${holeNumber}:${strokeIndex}`;
+  const material = `${GREENSIDE_SEED_VERSION}:${roundSeed}:${holeNumber}:${strokeIndex}`;
   let hashed = FNV_OFFSET_64;
   for (const byte of new TextEncoder().encode(material)) {
     hashed ^= BigInt(byte);
@@ -157,7 +158,21 @@ export function simulateGreensideShot(context, { roundSeed, holeNumber, strokeIn
   const breakScale = Math.min(1.3, rollYards / Math.max(distanceToPin, 1));
   const lateralBreak = readBreakInches / 36 * breakScale *
     (context.break_direction === "right" ? 1 : -1);
-  const finalPoint = projectLanding(carryPoint, context.pin, rollYards, lateralBreak);
+  const forwardX = context.pin.x - context.start.x;
+  const forwardY = context.pin.y - context.start.y;
+  const forwardLength = Math.max(Math.hypot(forwardX, forwardY), 1e-9);
+  const pinStillAhead = (context.pin.x - carryPoint.x) * forwardX +
+    (context.pin.y - carryPoint.y) * forwardY > 0;
+  // Roll toward the cup while it remains ahead. If carry dispersion has
+  // already passed the cup, continue generally forward instead of reversing
+  // the ball back through its landing point.
+  const rollTarget = pinStillAhead
+    ? context.pin
+    : {
+        x: carryPoint.x + forwardX / forwardLength,
+        y: carryPoint.y + forwardY / forwardLength
+      };
+  const finalPoint = projectLanding(carryPoint, rollTarget, rollYards, lateralBreak);
   const [finalSurface, finalRegionId] = resolveSurface(
     finalPoint, context.surfaces, context.default_surface
   );

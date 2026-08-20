@@ -114,6 +114,17 @@ test("saveRoundState and loadRoundState persist by course-specific key", () => {
   assert.deepEqual(loadRoundState(storage, "cranbury"), round);
 });
 
+test("player-scoped saves keep two players' rounds separate", () => {
+  const storage = memoryStorage();
+  const first = createRoundState({ courseId: "cranbury", roundSeed: 7 });
+  const second = createRoundState({ courseId: "cranbury", roundSeed: 9 });
+  saveRoundState(storage, first, 12);
+  saveRoundState(storage, second, 34);
+  assert.deepEqual(loadRoundState(storage, "cranbury", 12), first);
+  assert.deepEqual(loadRoundState(storage, "cranbury", 34), second);
+  assert.notEqual(roundStateStorageKey("cranbury", 12), roundStateStorageKey("cranbury", 34));
+});
+
 test("resetRoundState clears holes while preserving course identity", () => {
   const round = appendHoleEvent(createRoundState({ courseId: "warrenbrook", roundSeed: 5 }), 0, {
     stroke_count_delta: 1,

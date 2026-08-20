@@ -7,6 +7,17 @@ hole/round aggregation, repeat-pattern detection, browser review, and structured
 AI handoff are implemented. Persistent multi-round progression remains future
 work.
 
+## Shot-only adjustment reward
+
+Declared, verifiable condition adjustments may temporarily tighten execution
+dispersion without changing the saved player profile. The deterministic grader
+awards up to `+15` accuracy points for an excellent applied adjustment, `+8`
+for a sound but imperfect adjustment, and `+4` for a relevant partial lie plan.
+Effective accuracy is capped at `92%`; incorrect, unrecognized, or undeclared
+adjustments receive no bonus. The saved reward packet keeps decision credit
+separate from the eventual execution result and is supplied to AI only for
+explanation.
+
 This document defines the deterministic scoring model for course-management
 analysis. It turns the product goals in
 `docs/COURSE_MANAGEMENT_ANALYSIS.md` into implementation-oriented rules,

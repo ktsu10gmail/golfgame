@@ -19,18 +19,108 @@ Then open `http://localhost:8080`.
 
 The app must be served over HTTP because browsers do not allow JavaScript modules to load course JSON from a `file://` page.
 
-### Gemini-backed AI narration
+### Map a new golf course
 
-To enable Gemini as the primary Game Master provider, start the server with:
+Open `http://localhost:8080/editor.html` to align calculation geometry over local
+aerial or illustrated hole images. The companion editor provides editable tee,
+fairway, rough, bunker, green, water, and boundary shapes; draggable starting-ball,
+tee, pin, and route markers; two-point distance calibration; portable 18-hole
+projects; and complete game packages containing both artwork and geometry.
+
+It requires no map API key or billing account. See [Course Mapper](docs/COURSE_MAPPER.md)
+for setup, mapping, export, and local installation instructions.
+
+### Player accounts and automatic round resume
+
+The game supports Supabase email/password authentication. Every shot and round
+position is saved automatically to this server under the authenticated Supabase
+user ID. After sign-in, the most recently played unfinished round opens at the
+saved course and hole.
+
+To enable Supabase:
+
+1. Create a Supabase project.
+2. In **Project Settings → API**, copy the Project URL and publishable/anon key.
+3. Copy `.env.example` to `.env` and replace both placeholder values.
+4. In **Authentication → URL Configuration**, set the Site URL to
+   `https://golfgame.jetta.com` and add that exact address to Redirect URLs.
+5. Restart `scripts/serve.py`.
+
+Supabase manages account creation, email confirmation, password recovery, and
+access/refresh tokens. The public anon/publishable key is intentionally available
+to the browser; never place a Supabase service-role key in `.env` for this app.
+The round database remains local at `data/player_accounts.sqlite3` and is
+excluded from version control. When Supabase variables are absent, the local
+name/PIN login remains available for offline development.
+
+Portable round files remain available as an optional backup. Open **Scorecard**, then:
+
+1. Choose **Save round file** and keep the `.golfround` file in Downloads,
+   Files, or cloud storage.
+2. On the other device, open **Scorecard** and choose **Load round file**.
+3. Select the saved file to restore the course, current hole, tee, shots, score,
+   replay identity, and player profile.
+
+Loading a file replaces the saved round for that course on the receiving
+device. The game asks for confirmation when that course already has progress.
+
+### Player feedback and developer replies
+
+Signed-in players can open **Account → Feedback Center** without leaving or
+changing the active round. They can rate the game, send a bug, suggestion,
+feature request, course/map report, or AI Caddie comment, optionally attach a
+compressed screenshot, and continue a private reply thread. Course, hole,
+mode, lie, viewport, and browser context are included automatically; exact GPS
+coordinates are not included.
+
+Developer accounts also see a protected **Developer** inbox with status and
+category filters, rating summary, workflow statuses, and player replies. Set a
+comma-separated production allowlist in `.env` when needed:
 
 ```bash
+GOLFGAME_DEVELOPER_EMAILS=admin@jetta.com,another-developer@example.com
+```
+
+The default developer email is `admin@jetta.com`. Authorization uses the
+authenticated account email, not a browser-only UI flag. Feedback and ratings
+are stored with the other player-account data in
+`data/player_accounts.sqlite3`.
+
+### Local AI Game Master
+
+The server uses local Ollama with `qwen3.5:4b` by default. Install and pull the
+model once:
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen3.5:4b
+```
+
+Then start the game normally:
+
+```bash
+python3 scripts/serve.py --port 8080
+```
+
+Ollama generates concise shot narration and round reviews from compact,
+authoritative engine packets. If Ollama is unavailable, gameplay continues with
+the built-in local commentary.
+
+The defaults are tuned for a 6 GB NVIDIA GPU: a 4096-token context and
+temperature `0.3`. They can be overridden with `OLLAMA_MODEL`,
+`OLLAMA_HOST`, `OLLAMA_NUM_CTX`, `OLLAMA_TEMPERATURE`, and
+`OLLAMA_TIMEOUT_SECONDS`.
+
+Gemini remains available as an explicit alternative:
+
+```bash
+export AI_PROVIDER="gemini"
 export GEMINI_API_KEY="your-key"
 export GEMINI_MODEL="gemini-2.5-flash"
 python3 scripts/serve.py --port 8080
 ```
 
-If `GEMINI_API_KEY` is not set, the app still works and falls back to its
-built-in local commentary heuristics.
+Set `AI_PROVIDER=off` to disable model-backed narration entirely.
 
 ## Included
 
@@ -42,6 +132,14 @@ built-in local commentary heuristics.
   Galloping Hill
 - 80+, 90+, and 100+ player profiles
 - Customizable copied profiles saved in the browser
+- Player login with automatic server-backed unfinished-round resume across devices
+- Private player Feedback Center with ratings, screenshots, threaded developer replies, and unread notices
+- Player-scoped browser saves plus portable `.golfround` backup and import
+- Satellite Course Mapper with editable GPS geometry and direct mapped-course registration
+- Two or three context-sensitive strategy choices with player-specific clubs,
+  distinct targets, map previews, confirmation, and deterministic `?` explanations
+- Calm, responsive yardage-book interface with a map-centered desktop layout,
+  a two-column tablet planning desk, and a scroll-safe mobile shot sheet
 - Club selection, aim preview, shot dispersion, lie effects, penalties, scoring, pin positions, and round scorecard
 - Distance- and severity-scaled ball-above/below-feet movement, natural-language
   aim compensation, and Game Master lie-management grading
@@ -94,11 +192,9 @@ data/warrenbrook/
   hole1.json … hole18.json
   images/hole1.png … hole18.png
 
-data/cranbury/
+data/cranbury-golf-club/
   scorecard.csv
-  scorecard-source.txt / scorecard-source.png
   hole1.json … hole18.json
-  images/hole1.png … hole18.png
 
 data/gallopinghills/
   scorecard.csv

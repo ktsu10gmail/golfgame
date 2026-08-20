@@ -11,8 +11,9 @@ export function classifyShotCompletion(remainingDistanceYards) {
   return null;
 }
 
-export function roundStateStorageKey(courseId) {
-  return `golfgame-${courseId}-round-state`;
+export function roundStateStorageKey(courseId, playerId = null) {
+  const playerScope = playerId == null ? "" : `player-${String(playerId)}-`;
+  return `golfgame-${playerScope}${courseId}-round-state`;
 }
 
 function emptyHole(index) {
@@ -179,16 +180,16 @@ export function validateRoundState(roundState) {
   return roundState;
 }
 
-export function loadRoundState(storage, courseId) {
+export function loadRoundState(storage, courseId, playerId = null) {
   assertCourseId(courseId);
-  const raw = storage.getItem(roundStateStorageKey(courseId));
+  const raw = storage.getItem(roundStateStorageKey(courseId, playerId));
   if (!raw) return null;
   return validateRoundState(JSON.parse(raw));
 }
 
-export function saveRoundState(storage, roundState) {
+export function saveRoundState(storage, roundState, playerId = null) {
   validateRoundState(roundState);
-  storage.setItem(roundStateStorageKey(roundState.course_id), JSON.stringify(roundState));
+  storage.setItem(roundStateStorageKey(roundState.course_id, playerId), JSON.stringify(roundState));
   return roundState;
 }
 

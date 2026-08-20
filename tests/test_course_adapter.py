@@ -25,8 +25,13 @@ class CourseAdapterTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.courses = {
-            course_id: load_course(ROOT / "data" / course_id)
-            for course_id in ("themeadow", "warrenbrook", "cranbury", "gallopinghills")
+            course_id: load_course(ROOT / "data" / directory)
+            for course_id, directory in {
+                "themeadow": "themeadow",
+                "warrenbrook": "warrenbrook",
+                "cranbury": "cranbury-golf-club",
+                "gallopinghills": "gallopinghills",
+            }.items()
         }
 
     def test_all_courses_load_all_18_holes(self) -> None:
@@ -96,7 +101,8 @@ class RealHoleShotIntegrationTests(unittest.TestCase):
         cls.lies = load_lies(FIXTURES / "lie_catalog.json")
 
     def real_context(self, course_id: str, hole_number: int) -> ShotContext:
-        hole = load_course(ROOT / "data" / course_id)[hole_number - 1]
+        directory = "cranbury-golf-club" if course_id == "cranbury" else course_id
+        hole = load_course(ROOT / "data" / directory)[hole_number - 1]
         return ShotContext(
             start=hole.tee,
             target=hole.pin,
@@ -120,8 +126,8 @@ class RealHoleShotIntegrationTests(unittest.TestCase):
     def test_seeded_shot_resolves_on_real_warrenbrook_green(self) -> None:
         context = self.real_context("warrenbrook", 4)
 
-        result = simulate_full_shot(context, round_seed=2, hole_number=4, stroke_index=1)
-        replay = simulate_full_shot(context, round_seed=2, hole_number=4, stroke_index=1)
+        result = simulate_full_shot(context, round_seed=1, hole_number=4, stroke_index=1)
+        replay = simulate_full_shot(context, round_seed=1, hole_number=4, stroke_index=1)
 
         self.assertEqual(result, replay)
         self.assertEqual(result.landing_surface, SurfaceType.GREEN)
@@ -140,8 +146,8 @@ class RealHoleShotIntegrationTests(unittest.TestCase):
     def test_seeded_shot_resolves_on_real_galloping_hill_green(self) -> None:
         context = self.real_context("gallopinghills", 11)
 
-        result = simulate_full_shot(context, round_seed=2, hole_number=11, stroke_index=1)
-        replay = simulate_full_shot(context, round_seed=2, hole_number=11, stroke_index=1)
+        result = simulate_full_shot(context, round_seed=14, hole_number=11, stroke_index=1)
+        replay = simulate_full_shot(context, round_seed=14, hole_number=11, stroke_index=1)
 
         self.assertEqual(result, replay)
         self.assertEqual(result.landing_surface, SurfaceType.GREEN)

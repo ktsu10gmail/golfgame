@@ -1,7 +1,9 @@
 // Browser port of packages/simulation/engine.py. Keep numerical changes paired.
 
-export const ENGINE_VERSION = "full-shot-v3";
+export const ENGINE_VERSION = "full-shot-v4";
 export const PENALTY_RELIEF_VERSION = "penalty-relief-v1";
+
+const MAX_CARRY_MULTIPLIER = 1.08;
 
 const MASK_64 = (1n << 64n) - 1n;
 const FNV_OFFSET_64 = 0xcbf29ce484222325n;
@@ -321,11 +323,17 @@ export function simulateFullShot(context, { roundSeed, holeNumber, strokeIndex }
   const quality = weightedQuality(rng, context);
   const [qualityCarry, qualityRoll, qualityLateral, qualityBias] = QUALITY_MODIFIERS[quality];
   const lowerCarry = Math.max(1, context.club.carry_mean - 2.75 * context.club.carry_sd);
-  const upperCarry = context.club.carry_mean + 2.75 * context.club.carry_sd;
+  const carryCap = Math.max(1,
+    context.club.carry_mean * context.intent.distance_multiplier * MAX_CARRY_MULTIPLIER);
+  const upperCarry = Math.min(
+    context.club.carry_mean + 2.75 * context.club.carry_sd,
+    context.club.carry_mean * MAX_CARRY_MULTIPLIER
+  );
   const sampledCarry = boundedGauss(rng, context.club.carry_mean, context.club.carry_sd, lowerCarry, upperCarry);
-  const carryYards = Math.max(1, sampledCarry * context.lie.carry_multiplier *
+  const uncappedCarryYards = Math.max(1, sampledCarry * context.lie.carry_multiplier *
     context.environment.elevation_carry_multiplier * qualityCarry * context.intent.distance_multiplier +
     context.environment.wind_forward_yards);
+  const carryYards = Math.min(carryCap, uncappedCarryYards);
   const rollYards = Math.max(0, context.club.roll_mean * context.lie.roll_multiplier *
     context.environment.surface_roll_multiplier * context.environment.wind_roll_multiplier * qualityRoll);
   const totalYards = carryYards + rollYards;

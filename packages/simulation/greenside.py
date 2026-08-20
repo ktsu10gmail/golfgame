@@ -21,7 +21,8 @@ from packages.golf_domain import (
 from .engine import resolve_penalty_relief
 
 
-GREENSIDE_ENGINE_VERSION = "greenside-chip-v2"
+GREENSIDE_ENGINE_VERSION = "greenside-chip-v3"
+_GREENSIDE_SEED_VERSION = "greenside-chip-v2"
 
 _MASK_64 = (1 << 64) - 1
 _FNV_OFFSET_64 = 0xCBF29CE484222325
@@ -60,7 +61,7 @@ def derive_greenside_seed(round_seed: int, hole_number: int, stroke_index: int) 
         raise ValueError("hole_number must be between 1 and 18")
     if stroke_index < 1:
         raise ValueError("stroke_index must be positive")
-    material = f"{GREENSIDE_ENGINE_VERSION}:{round_seed}:{hole_number}:{stroke_index}".encode()
+    material = f"{_GREENSIDE_SEED_VERSION}:{round_seed}:{hole_number}:{stroke_index}".encode()
     hashed = _FNV_OFFSET_64
     for byte in material:
         hashed ^= byte
@@ -163,7 +164,24 @@ def simulate_greenside_shot(
     lateral_break = break_inches / 36 * break_scale
     if context.break_direction == "left":
         lateral_break *= -1
-    final_point = project_landing(carry_point, context.pin, roll_yards, lateral_break)
+    forward_x = context.pin.x - context.start.x
+    forward_y = context.pin.y - context.start.y
+    forward_length = max(math.hypot(forward_x, forward_y), 1e-9)
+    pin_still_ahead = (
+        (context.pin.x - carry_point.x) * forward_x
+        + (context.pin.y - carry_point.y) * forward_y
+    ) > 0
+    # Roll toward the cup while it remains ahead. If carry dispersion has
+    # already passed it, continue forward instead of reversing direction.
+    roll_target = (
+        context.pin
+        if pin_still_ahead
+        else Vec2(
+            carry_point.x + forward_x / forward_length,
+            carry_point.y + forward_y / forward_length,
+        )
+    )
+    final_point = project_landing(carry_point, roll_target, roll_yards, lateral_break)
     final_surface, final_region_id = resolve_surface(
         final_point, context.surfaces, context.default_surface
     )

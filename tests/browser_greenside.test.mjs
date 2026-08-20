@@ -91,6 +91,25 @@ test("greenside roll into water receives authoritative relief", () => {
   assert.deepEqual(packet.resolved_ball, packet.relief.ball_position);
 });
 
+test("an overshot landing continues forward instead of rolling backward toward the cup", () => {
+  const packet = simulateGreensideShot(
+    context({
+      target: { x: 20, y: 0 },
+      pin: { x: 10, y: 0 },
+      accuracy: 1,
+      surfaces: [
+        { surface: "fairway", polygon: rectangle(-5, -10, 5, 10), priority: 40, region_id: "fairway" },
+        { surface: "green", polygon: rectangle(5, -10, 50, 10), priority: 70, region_id: "green" }
+      ]
+    }),
+    { roundSeed: 972206328, holeNumber: 10, strokeIndex: 4 }
+  );
+
+  assert.ok(packet.landing.x > 10, "carry should finish beyond the cup");
+  assert.ok(packet.resolved_ball.x > packet.landing.x, "roll must continue forward");
+  assert.equal(packet.resolved_surface, "green");
+});
+
 test("browser greenside engine rejects invalid canonical input", () => {
   const identity = { roundSeed: 1, holeNumber: 1, strokeIndex: 1 };
   assert.throws(

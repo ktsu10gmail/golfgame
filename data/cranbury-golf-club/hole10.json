@@ -1,0 +1,550 @@
+{
+  "hole_metadata": {
+    "course_name": "Cranbury Golf Club",
+    "hole_number": 10,
+    "par": 5,
+    "handicap_rating": 11,
+    "total_distance_meters": 453.121,
+    "layout_type": "Mostly Straight",
+    "coordinate_system": {
+      "origin": "White tee marker (0, 0)",
+      "unit": "meters",
+      "axes": {
+        "y": "Forward progress toward mapped pin",
+        "x": "Golfer-relative lateral displacement"
+      }
+    },
+    "geometry_calibration": {
+      "version": "cranbury-golf-club-aerial-map-v1",
+      "source_image": "Local image for Hole 10",
+      "imagery_source": "User-selected local hole images",
+      "method": "User-aligned local hole artwork transformed from mapped coordinates",
+      "hazards_authored_at_game_scale": true,
+      "local_image_calibration": {
+        "white_tee_to_pin_yards": 485,
+        "measured_before_yards": 502.5,
+        "scale_factor": 0.9652,
+        "calibrated_at": "2026-08-10T17:12:39.337Z"
+      }
+    },
+    "source_geography": {
+      "address": null,
+      "white_tee": {
+        "lat": 40.51908441871139,
+        "lng": -74.41421542569849
+      },
+      "pin": {
+        "lat": 40.523000613764054,
+        "lng": -74.41317475089478
+      }
+    }
+  },
+  "centerline_waypoints": [
+    {
+      "index": 0,
+      "point": [
+        0,
+        0
+      ],
+      "description": "White tee marker"
+    },
+    {
+      "index": 1,
+      "point": [
+        -44.523,
+        209.355
+      ],
+      "description": "Route control 1"
+    },
+    {
+      "index": 2,
+      "point": [
+        0,
+        444.257
+      ],
+      "description": "Mapped pin"
+    }
+  ],
+  "geometries": {
+    "tee_boxes": [
+      {
+        "id": "tee_blue_h10_1",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            0.244,
+            -22.918
+          ],
+          [
+            7.813,
+            -21.389
+          ],
+          [
+            5.137,
+            -8.144
+          ],
+          [
+            -2.431,
+            -9.673
+          ]
+        ]
+      },
+      {
+        "id": "tee_white_h10_2",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -3.088,
+            -9.496
+          ],
+          [
+            5.674,
+            -7.726
+          ],
+          [
+            2.576,
+            7.607
+          ],
+          [
+            -6.185,
+            5.837
+          ]
+        ]
+      },
+      {
+        "id": "tee_red_h10_3",
+        "lie_catalog_id": "lie_tee",
+        "elevation_m": 0,
+        "polygon": [
+          [
+            -22.513,
+            27.852
+          ],
+          [
+            -14.945,
+            29.381
+          ],
+          [
+            -17.62,
+            42.626
+          ],
+          [
+            -25.189,
+            41.097
+          ]
+        ]
+      }
+    ],
+    "fairway_segments": [
+      {
+        "segment_id": "fairway_h10_segment_1",
+        "lie_catalog_id": "lie_fairway",
+        "polygon": [
+          [
+            -27.321,
+            37.129
+          ],
+          [
+            -63.522,
+            209.533
+          ],
+          [
+            -23.883,
+            420.285
+          ],
+          [
+            13.453,
+            413.209
+          ],
+          [
+            -25.524,
+            209.177
+          ],
+          [
+            9.848,
+            45.034
+          ]
+        ],
+        "description": "Auto-draft fairway"
+      }
+    ],
+    "rough_zones": [
+      {
+        "id": "rough_h10_1",
+        "lie_catalog_id": "lie_rough_medium",
+        "polygon": [
+          [
+            -39.125,
+            -8.321
+          ],
+          [
+            -84.524,
+            209.355
+          ],
+          [
+            -39.301,
+            451.706
+          ],
+          [
+            39.302,
+            436.809
+          ],
+          [
+            -4.522,
+            209.355
+          ],
+          [
+            39.125,
+            8.321
+          ]
+        ],
+        "description": "Auto-draft playing corridor"
+      }
+    ],
+    "hazards": [
+      {
+        "id": "bunker_h10_1",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            -24.456,
+            204.126
+          ],
+          [
+            -20.511,
+            203.088
+          ],
+          [
+            -16.487,
+            197.847
+          ],
+          [
+            -14.741,
+            191.475
+          ],
+          [
+            -16.297,
+            187.703
+          ],
+          [
+            -20.242,
+            188.742
+          ],
+          [
+            -24.266,
+            193.982
+          ],
+          [
+            -26.012,
+            200.355
+          ]
+        ],
+        "description": "Sand bunker"
+      },
+      {
+        "id": "bunker_h10_2",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            -24.653,
+            234.767
+          ],
+          [
+            -21.111,
+            232.742
+          ],
+          [
+            -18.58,
+            226.639
+          ],
+          [
+            -18.543,
+            220.032
+          ],
+          [
+            -21.022,
+            216.791
+          ],
+          [
+            -24.564,
+            218.816
+          ],
+          [
+            -27.095,
+            224.919
+          ],
+          [
+            -27.132,
+            231.526
+          ]
+        ],
+        "description": "Sand bunker 2"
+      },
+      {
+        "id": "bunker_h10_3",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            -17.55,
+            392.879
+          ],
+          [
+            -18.002,
+            387.431
+          ],
+          [
+            -23.982,
+            380.9
+          ],
+          [
+            -31.985,
+            377.114
+          ],
+          [
+            -37.325,
+            378.289
+          ],
+          [
+            -36.873,
+            383.737
+          ],
+          [
+            -30.893,
+            390.268
+          ],
+          [
+            -22.889,
+            394.054
+          ]
+        ],
+        "description": "Sand bunker 3"
+      },
+      {
+        "id": "bunker_h10_4",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            12.905,
+            438.892
+          ],
+          [
+            14.96,
+            435.368
+          ],
+          [
+            14.1,
+            428.817
+          ],
+          [
+            10.829,
+            423.077
+          ],
+          [
+            7.062,
+            421.51
+          ],
+          [
+            5.006,
+            425.034
+          ],
+          [
+            5.866,
+            431.585
+          ],
+          [
+            9.138,
+            437.325
+          ]
+        ],
+        "description": "Sand bunker 4"
+      },
+      {
+        "id": "bunker_h10_5",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            11.673,
+            452.776
+          ],
+          [
+            15.881,
+            451.953
+          ],
+          [
+            18.273,
+            448.395
+          ],
+          [
+            17.449,
+            444.188
+          ],
+          [
+            13.892,
+            441.796
+          ],
+          [
+            9.684,
+            442.619
+          ],
+          [
+            7.292,
+            446.177
+          ],
+          [
+            8.116,
+            450.384
+          ]
+        ],
+        "description": "Circle bunker 5"
+      },
+      {
+        "id": "bunker_h10_6",
+        "lie_catalog_id": "lie_hazard_sand",
+        "polygon": [
+          [
+            -15.848,
+            451.983
+          ],
+          [
+            -11.419,
+            451.115
+          ],
+          [
+            -8.901,
+            447.371
+          ],
+          [
+            -9.768,
+            442.942
+          ],
+          [
+            -13.513,
+            440.424
+          ],
+          [
+            -17.941,
+            441.291
+          ],
+          [
+            -20.46,
+            445.036
+          ],
+          [
+            -19.593,
+            449.464
+          ]
+        ],
+        "description": "Circle bunker 6"
+      }
+    ],
+    "green_complex": {
+      "id": "green_primary_h10",
+      "lie_catalog_id": "lie_green",
+      "polygon": [
+        [
+          -2.254,
+          459.365
+        ],
+        [
+          1.903,
+          458.761
+        ],
+        [
+          5.665,
+          456.131
+        ],
+        [
+          8.459,
+          451.877
+        ],
+        [
+          9.862,
+          446.645
+        ],
+        [
+          9.657,
+          441.232
+        ],
+        [
+          7.878,
+          436.463
+        ],
+        [
+          4.795,
+          433.063
+        ],
+        [
+          0.876,
+          431.55
+        ],
+        [
+          -3.28,
+          432.155
+        ],
+        [
+          -7.043,
+          434.784
+        ],
+        [
+          -9.837,
+          439.039
+        ],
+        [
+          -11.239,
+          444.27
+        ],
+        [
+          -11.035,
+          449.683
+        ],
+        [
+          -9.256,
+          454.452
+        ],
+        [
+          -6.172,
+          457.852
+        ]
+      ],
+      "pin_zones": [
+        {
+          "zone_id": "center_standard",
+          "center_point": [
+            0,
+            444.257
+          ],
+          "radius_meters": 3
+        }
+      ]
+    },
+    "out_of_bounds": []
+  },
+  "elevation_profile": {
+    "sampling_interval_meters": 113.28,
+    "points": [
+      {
+        "y": 0,
+        "elevation_m": 0
+      },
+      {
+        "y": 113.28,
+        "elevation_m": 0
+      },
+      {
+        "y": 226.561,
+        "elevation_m": 0
+      },
+      {
+        "y": 339.841,
+        "elevation_m": 0
+      },
+      {
+        "y": 453.121,
+        "elevation_m": 0
+      }
+    ],
+    "description": "Linear elevation profile from the mapper's entered tee-to-green change."
+  }
+}

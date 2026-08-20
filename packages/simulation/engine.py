@@ -24,8 +24,9 @@ from packages.golf_domain import (
 )
 
 
-ENGINE_VERSION = "full-shot-v3"
+ENGINE_VERSION = "full-shot-v4"
 PENALTY_RELIEF_VERSION = "penalty-relief-v1"
+MAX_CARRY_MULTIPLIER = 1.08
 
 _MASK_64 = (1 << 64) - 1
 _FNV_OFFSET_64 = 0xCBF29CE484222325
@@ -325,7 +326,14 @@ def simulate_full_shot(
     quality_modifiers = QUALITY_MODIFIERS[quality]
 
     lower_carry = max(1.0, context.club.carry_mean - 2.75 * context.club.carry_sd)
-    upper_carry = context.club.carry_mean + 2.75 * context.club.carry_sd
+    carry_cap = max(
+        1.0,
+        context.club.carry_mean * context.intent.distance_multiplier * MAX_CARRY_MULTIPLIER,
+    )
+    upper_carry = min(
+        context.club.carry_mean + 2.75 * context.club.carry_sd,
+        context.club.carry_mean * MAX_CARRY_MULTIPLIER,
+    )
     sampled_carry = _bounded_gauss(
         rng,
         context.club.carry_mean,
@@ -341,7 +349,7 @@ def simulate_full_shot(
         * context.intent.distance_multiplier
         + context.environment.wind_forward_yards
     )
-    carry_yards = max(1.0, carry_yards)
+    carry_yards = min(carry_cap, max(1.0, carry_yards))
 
     roll_yards = max(
         0.0,

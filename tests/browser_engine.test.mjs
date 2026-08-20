@@ -8,7 +8,13 @@ import {
   segmentPolygonEntryProgress,
   simulateFullShot
 } from "../packages/simulation/browser_engine.mjs";
-import { PUTTING_ENGINE_VERSION, derivePuttSeed, simulatePutt } from "../packages/simulation/browser_putting.mjs";
+import {
+  PUTTING_ENGINE_VERSION,
+  derivePuttSeed,
+  rollPuttAcrossContour,
+  simulatePutt
+} from "../packages/simulation/browser_putting.mjs";
+import { sampleCourseGreenContour } from "../packages/simulation/browser_green_contour.mjs";
 
 const METERS_TO_YARDS = 1.09361;
 const rectangle = (x1, y1, x2, y2) => [
@@ -76,25 +82,47 @@ function puttContext(overrides = {}) {
 test("browser packet exactly matches the Python engine golden result", () => {
   const packet = simulateFullShot(baseContext(), { roundSeed: 90210, holeNumber: 4, strokeIndex: 2 });
   assert.equal(packet.audit.engine_version, ENGINE_VERSION);
-  assert.equal(packet.audit.shot_seed, "10619222070006940461");
-  assert.equal(packet.quality, "pure");
+  assert.equal(packet.audit.shot_seed, "9101625523428572884");
+  assert.equal(packet.quality, "solid");
   assert.deepEqual(packet.assessment, {
     decision_assessment: "sound",
-    execution_assessment: "missed",
-    overall_assessment: "bad",
+    execution_assessment: "on_plan",
+    overall_assessment: "good",
     decision_risk: 12,
     risk_label: "Conservative"
   });
-  assert.equal(packet.total_yards, 151.03);
-  assert.deepEqual(packet.landing, { x: 151.0272, y: -0.1307 });
-  assert.equal(packet.landing_surface, "green");
-  assert.equal(packet.remaining_distance_yards, 1.04);
+  assert.equal(packet.total_yards, 133.19);
+  assert.deepEqual(packet.landing, { x: 133.1899, y: -16.8409 });
+  assert.equal(packet.landing_surface, "fairway");
+  assert.equal(packet.remaining_distance_yards, 23.79);
   assert.equal(packet.path.length, 13);
 });
 
 test("recorded seed identity replays the same complete packet", () => {
   const identity = { roundSeed: 7319, holeNumber: 12, strokeIndex: 3 };
   assert.deepEqual(simulateFullShot(baseContext(), identity), simulateFullShot(baseContext(), identity));
+});
+
+test("full shots cap carry at 108 percent while keeping roll separate", () => {
+  const club = {
+    club_id: "3_wood", carry_mean: 200, carry_sd: 40, roll_mean: 12,
+    lateral_sd: 0, directional_bias: 0, mishit_probability: 0
+  };
+  const environment = {
+    wind_forward_yards: 0, wind_lateral_yards: 0, wind_roll_multiplier: 1,
+    elevation_carry_multiplier: 2, slope_mishit_multiplier: 1, surface_roll_multiplier: 1
+  };
+  let longest = null;
+  for (let roundSeed = 1; roundSeed <= 100; roundSeed++) {
+    const packet = simulateFullShot(baseContext({ club, environment, target: { x: 250, y: 0 } }), {
+      roundSeed, holeNumber: 7, strokeIndex: 2
+    });
+    if (!longest || packet.carry_yards > longest.carry_yards) longest = packet;
+    assert.ok(packet.carry_yards <= 216);
+    assert.equal(packet.total_yards, Math.round((packet.carry_yards + packet.roll_yards) * 100) / 100);
+  }
+  assert.equal(longest.carry_yards, 216);
+  assert.equal(longest.total_yards, 228);
 });
 
 test("authoritative putt packet exactly matches the Python golden result", () => {
@@ -108,8 +136,8 @@ test("authoritative putt packet exactly matches the Python golden result", () =>
     decision_risk: null,
     risk_label: null
   });
-  assert.deepEqual(packet.landing, { x: -0.8802, y: 11.4466 });
-  assert.equal(packet.remaining_distance_yards, 1.04);
+  assert.deepEqual(packet.landing, { x: -0.7087, y: 9.4976 });
+  assert.equal(packet.remaining_distance_yards, 2.6);
   assert.equal(packet.made, false);
   assert.equal(packet.make_probability, 0);
 });
@@ -117,6 +145,143 @@ test("authoritative putt packet exactly matches the Python golden result", () =>
 test("recorded putt seed identity replays the same complete packet", () => {
   const identity = { roundSeed: 7319, holeNumber: 12, strokeIndex: 3 };
   assert.deepEqual(simulatePutt(puttContext(), identity), simulatePutt(puttContext(), identity));
+});
+
+test("putting read is graded relative to the player-to-cup line on a rotated green", () => {
+  const packet = simulatePutt(puttContext({
+    start: { x: 0, y: 0 },
+    pin: { x: 12, y: 0 },
+    target: { x: 12, y: -4 / 36 },
+    read: { feet: 12, direction: "right", start_direction: "right", break_inches: 4 },
+    pace_scale: .2
+  }), { roundSeed: 41, holeNumber: 3, strokeIndex: 2 });
+
+  assert.equal(packet.aim_error_inches, 0);
+  assert.equal(packet.player_offset_inches, 4);
+  assert.equal(packet.player_offset_direction, "right");
+  assert.equal(packet.aim_correct, true);
+});
+
+test("contour putt physics preserves calibrated flat-green travel", () => {
+  const greenPolygon = rectangle(-8, -8, 8, 8);
+  const result = rollPuttAcrossContour({
+    start: { x: 0, y: 0 }, target: { x: 0, y: 6 }, pin: { x: 0, y: 6 },
+    greenPolygon, holeNumber: 1, desiredTravelYards: 6, contourStrength: 0
+  });
+  assert.ok(Math.abs(result.totalYards - 6) < .01);
+  assert.ok(result.path.length > 10);
+  assert.deepEqual(result.path[0], { x: 0, y: 0 });
+  assert.deepEqual(result.path.at(-1), result.landing);
+});
+
+test("contour putt physics travels farther downhill than uphill", () => {
+  const greenPolygon = rectangle(-8, -8, 8, 8);
+  const sample = sampleCourseGreenContour([0, 0], greenPolygon.map(({ x, y }) => [x, y]), 1);
+  const downhill = { x: sample.downhill_course_x, y: sample.downhill_course_y };
+  const roll = direction => rollPuttAcrossContour({
+    start: { x: 0, y: 0 },
+    target: { x: direction.x * 6, y: direction.y * 6 },
+    greenPolygon, holeNumber: 1, desiredTravelYards: 6
+  });
+  assert.ok(roll(downhill).totalYards > roll({ x: -downhill.x, y: -downhill.y }).totalYards + .1);
+});
+
+test("contour putt physics turns a cross-slope putt downhill", () => {
+  const greenPolygon = rectangle(-8, -8, 8, 8);
+  const sample = sampleCourseGreenContour([0, 0], greenPolygon.map(({ x, y }) => [x, y]), 1);
+  const downhill = { x: sample.downhill_course_x, y: sample.downhill_course_y };
+  const crossSlope = { x: -downhill.y, y: downhill.x };
+  const result = rollPuttAcrossContour({
+    start: { x: 0, y: 0 }, target: { x: crossSlope.x * 5, y: crossSlope.y * 5 },
+    greenPolygon, holeNumber: 1, desiredTravelYards: 5
+  });
+  const downhillDeflection = result.landing.x * downhill.x + result.landing.y * downhill.y;
+  assert.ok(downhillDeflection > .05);
+});
+
+test("contour putt physics supports a changing double-break curve", () => {
+  const result = rollPuttAcrossContour({
+    start: { x: -6, y: -6 }, target: { x: -6, y: 6 },
+    greenPolygon: rectangle(-8, -8, 8, 8), holeNumber: 1, desiredTravelYards: 12
+  });
+  const lateralSteps = result.path.slice(1).map((point, index) => point.x - result.path[index].x);
+  const curvature = lateralSteps.slice(1).map((step, index) => step - lateralSteps[index]);
+  assert.ok(Math.min(...curvature) < -.001);
+  assert.ok(Math.max(...curvature) > .001);
+});
+
+test("authoritative contour putt exposes the replayable curved path", () => {
+  const context = puttContext({
+    start: { x: 0, y: -4 }, target: { x: 0, y: 4 }, pin: { x: 0, y: 4 },
+    read: { feet: 24, direction: "right", start_direction: "left", break_inches: 0,
+      slope: "level", slope_degrees: 0, downhill_strength: 0 },
+    pace_scale: .4,
+    green_polygon: rectangle(-8, -8, 8, 8),
+    contour_hole_number: 1,
+    contour_strength: 1,
+    profile_version: "contour-test"
+  });
+  const packet = simulatePutt(context, { roundSeed: 90210, holeNumber: 1, strokeIndex: 1 });
+  assert.deepEqual(packet.landing, { x: .0825, y: 3.3345 });
+  assert.equal(packet.path.length, 21);
+  assert.deepEqual(packet.path.at(-1), packet.landing);
+  assert.equal(packet.audit.contour_physics, true);
+  assert.equal(packet.audit.physics_steps, 80);
+});
+
+test("authoritative putt uses the course-specific contour key", () => {
+  const shared = {
+    start: { x: 0, y: -4 }, target: { x: 0, y: 4 }, pin: { x: 0, y: 4 },
+    read: { feet: 24, direction: "right", start_direction: "left", break_inches: 0,
+      slope: "level", slope_degrees: 0, downhill_strength: 0 },
+    pace_scale: .4,
+    green_polygon: rectangle(-8, -8, 8, 8),
+    contour_hole_number: 1,
+    contour_strength: 1,
+    profile_version: "seeded-contour-test"
+  };
+  const identity = { roundSeed: 90210, holeNumber: 1, strokeIndex: 1 };
+  const first = simulatePutt(puttContext({ ...shared, contour_key: "course-a:hole-1" }), identity);
+  const second = simulatePutt(puttContext({ ...shared, contour_key: "course-a:hole-2" }), identity);
+
+  assert.notDeepEqual(first.path, second.path);
+  assert.notDeepEqual(first.landing, second.landing);
+});
+
+test("green contour slope changes putt travel and required pace", () => {
+  const averageTravel = read => {
+    let total = 0;
+    for (let roundSeed = 1; roundSeed <= 1000; roundSeed++) {
+      total += simulatePutt(puttContext({ read }), { roundSeed, holeNumber: 12, strokeIndex: 3 }).total_yards;
+    }
+    return total / 1000;
+  };
+  const levelRead = puttContext().read;
+  const downhill = averageTravel({ ...levelRead, slope: "downhill", slope_degrees: 5, downhill_strength: 5 });
+  const level = averageTravel(levelRead);
+  const uphill = averageTravel({ ...levelRead, slope: "uphill", slope_degrees: 5, downhill_strength: -5 });
+  assert.ok(downhill > level);
+  assert.ok(level > uphill);
+});
+
+test("well-planned long putts meet the calibrated two-foot leave bands", () => {
+  const expected = new Map([[20, [50, 65]], [30, [30, 45]], [50, [15, 30]], [70, [10, 20]]]);
+  for (const [feet, [minimum, maximum]] of expected) {
+    const yards = feet / 3;
+    const context = puttContext({
+      pin: { x: 0, y: yards },
+      target: { x: 0, y: yards },
+      read: { feet, direction: "right", start_direction: "left", break_inches: 0 },
+      pace_scale: feet / 60
+    });
+    let insideTwoFeet = 0;
+    for (let roundSeed = 1; roundSeed <= 2000; roundSeed++) {
+      const packet = simulatePutt(context, { roundSeed, holeNumber: 1, strokeIndex: 1 });
+      if (packet.remaining_distance_yards <= .67) insideTwoFeet++;
+    }
+    const percentage = insideTwoFeet / 20;
+    assert.ok(percentage >= minimum && percentage <= maximum, `${feet} ft produced ${percentage}%`);
+  }
 });
 
 test("putting engine rejects non-finite point inputs", () => {
@@ -213,7 +378,7 @@ test("real Meadows and Warrenbrook surfaces resolve through browser packets", as
 });
 
 test("real Cranbury green and forced-carry water resolve through browser packets", async () => {
-  const cranbury = JSON.parse(await readFile(new URL("../data/cranbury/hole14.json", import.meta.url)));
+  const cranbury = JSON.parse(await readFile(new URL("../data/cranbury-golf-club/hole14.json", import.meta.url)));
   const water = cranbury.geometries.hazards.find(item => item.lie_catalog_id.includes("water"));
   const cases = [
     [regionContext(cranbury.geometries.green_complex.polygon, "green", "cranbury-green"), "green"],

@@ -118,7 +118,7 @@ Completed in `packages/simulation/greenside.py`,
 `packages/simulation/browser_greenside.mjs`, and `app.js`:
 
 - immutable canonical-yard greenside request and result contracts;
-- one deterministic `greenside-chip-v2` algorithm shared across runtimes;
+- one deterministic `greenside-chip-v3` algorithm shared across runtimes;
 - carry landing and final resting surfaces are recorded separately;
 - rollout accounts for club, lie, slope, surface, and deterministic contour;
 - chips that finish in water or out of bounds use authoritative relief;

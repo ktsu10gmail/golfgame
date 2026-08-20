@@ -531,6 +531,9 @@ class PuttRead:
     direction: str
     start_direction: str
     break_inches: float
+    slope: str = "level"
+    slope_degrees: float = 0.0
+    downhill_strength: float = 0.0
 
     def __post_init__(self) -> None:
         if self.feet < 0:
@@ -541,6 +544,12 @@ class PuttRead:
             raise ValueError("start_direction must be left or right")
         if self.break_inches < 0:
             raise ValueError("break_inches cannot be negative")
+        if self.slope not in {"level", "uphill", "downhill", "cross-slope"}:
+            raise ValueError("unsupported putting slope")
+        if not 0 <= self.slope_degrees <= 10:
+            raise ValueError("putting slope_degrees must be between 0 and 10")
+        if not -10 <= self.downhill_strength <= 10:
+            raise ValueError("putting downhill_strength must be between -10 and 10")
 
 
 @dataclass(frozen=True, slots=True)
@@ -552,12 +561,21 @@ class PuttContext:
     read: PuttRead
     pace_scale: float
     profile_version: str = "unversioned"
+    green_polygon: tuple[Vec2, ...] = ()
+    contour_hole_number: int = 1
+    contour_strength: float = 1.0
 
     def __post_init__(self) -> None:
         if self.start.distance_to(self.target) <= 1e-9:
             raise ValueError("start and target cannot be identical")
         if not 0 <= self.pace_scale <= 1.5:
             raise ValueError("pace_scale is outside the supported range")
+        if self.green_polygon and len(self.green_polygon) < 3:
+            raise ValueError("green_polygon must contain at least three points")
+        if not 1 <= self.contour_hole_number <= 18:
+            raise ValueError("contour_hole_number must be between 1 and 18")
+        if not 0 <= self.contour_strength <= 2:
+            raise ValueError("contour_strength must be between 0 and 2")
 
 
 @dataclass(frozen=True, slots=True)
@@ -571,6 +589,8 @@ class PuttAudit:
     sampled_power_multiplier: float
     sampled_lateral_yards: float
     make_probability: float
+    physics_steps: int = 0
+    contour_physics: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -590,3 +610,4 @@ class PuttResultPacket:
     read: PuttRead
     assessment: ResultAssessment
     audit: PuttAudit
+    path: tuple[Vec2, ...] = ()

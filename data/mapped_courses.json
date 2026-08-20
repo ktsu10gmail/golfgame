@@ -1,0 +1,74 @@
+[
+  {
+    "id": "cranbury-golf-club",
+    "name": "Cranbury Golf Club",
+    "shortName": "Cranbury Golf Club",
+    "dataPath": "data/cranbury-golf-club",
+    "scorecard": "scorecard.csv",
+    "dataVersion": "2026-08-10T17:38:39.689Z",
+    "mapUpdatedAt": "2026-08-10T17:38:39.689Z",
+    "images": false,
+    "illustrations": false,
+    "illustrationPath": "",
+    "illustrationExtension": "jpg",
+    "teeLabels": {
+      "Blue": "Blue",
+      "White": "White",
+      "Red": "Forward"
+    }
+  },
+  {
+    "id": "galloping-hills-golf-course",
+    "name": "Galloping Hills Golf Course",
+    "shortName": "Galloping Hills Golf Course",
+    "dataPath": "data/galloping-hills-golf-course",
+    "scorecard": "scorecard.csv",
+    "dataVersion": "2026-08-15T22:35:36.115Z",
+    "mapUpdatedAt": "2026-08-15T22:35:36.115Z",
+    "images": false,
+    "illustrations": false,
+    "illustrationPath": "",
+    "illustrationExtension": "jpg",
+    "teeLabels": {
+      "Blue": "Blue",
+      "White": "White",
+      "Red": "Forward"
+    }
+  },
+  {
+    "id": "the-meadow-at-middlesex-golf-course",
+    "name": "The Meadow at Middlesex Golf Course",
+    "shortName": "The Meadow at Middlesex Golf Course",
+    "dataPath": "data/the-meadow-at-middlesex-golf-course",
+    "scorecard": "scorecard.csv",
+    "dataVersion": "2026-08-15T18:30:08.813Z",
+    "mapUpdatedAt": "2026-08-15T18:30:08.813Z",
+    "images": false,
+    "illustrations": false,
+    "illustrationPath": "",
+    "illustrationExtension": "jpg",
+    "teeLabels": {
+      "Blue": "Blue",
+      "White": "White",
+      "Red": "Forward"
+    }
+  },
+  {
+    "id": "the-warrenbrook-golf-course",
+    "name": "The Warrenbrook Golf Course",
+    "shortName": "The Warrenbrook Golf Course",
+    "dataPath": "data/the-warrenbrook-golf-course",
+    "scorecard": "scorecard.csv",
+    "dataVersion": "2026-08-16T20:53:03.221Z",
+    "mapUpdatedAt": "2026-08-16T20:53:03.221Z",
+    "images": false,
+    "illustrations": false,
+    "illustrationPath": "",
+    "illustrationExtension": "jpg",
+    "teeLabels": {
+      "Blue": "Blue",
+      "White": "White",
+      "Red": "Forward"
+    }
+  }
+]

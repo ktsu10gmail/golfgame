@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Align editable golf-course geometry over local reference images and install a generated game-ready course illustration."
+    />
+    <title>Course Mapper — Middlesex Strategy Round</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.css" />
+    <link rel="stylesheet" href="editor.css?v=20260815-11" />
+  </head>
+  <body>
+    <main class="mapper-shell">
+      <header class="mapper-header">
+        <a class="mapper-brand" href="index.html">
+          <span class="mapper-mark" aria-hidden="true">M</span>
+          <span><strong>Course Mapper</strong><small>Artwork + calculation desk</small></span>
+        </a>
+        <label class="course-name-field">
+          <span>Course</span>
+          <input id="course-name" value="New golf course" maxlength="80" />
+        </label>
+        <label class="hole-switcher">
+          <span>Hole</span>
+          <select id="hole-number" aria-label="Hole number"></select>
+        </label>
+        <div class="header-actions">
+          <button id="undo-editor" class="undo-button" type="button" disabled title="Nothing to undo"><span aria-hidden="true">↶</span> Undo</button>
+          <button id="new-project" class="quiet-button" type="button">New</button>
+          <button id="load-project" class="quiet-button" type="button">Load project</button>
+          <button id="open-scorecard-import" class="quiet-button" type="button">Import scorecard</button>
+          <button id="save-project" class="accent-button" type="button">Save project</button>
+          <input id="project-file" type="file" accept=".golfmap,application/json" hidden />
+        </div>
+      </header>
+
+      <section class="mapper-workspace">
+        <aside class="tool-panel">
+          <section class="panel-section location-section">
+            <span class="section-number">01</span>
+            <div>
+              <h2>Choose hole artwork</h2>
+              <p>Use a local aerial image as an alignment reference. The game creates its illustrated map from your finished shapes.</p>
+            </div>
+            <button id="choose-local-image-panel" class="panel-image-button" type="button">Choose or replace image</button>
+            <div class="image-rotation-actions" aria-label="Rotate hole artwork">
+              <button id="rotate-image-left" type="button" aria-label="Rotate hole artwork 90 degrees left"><span aria-hidden="true">↶</span> 90° left</button>
+              <output id="image-rotation-value" aria-label="Current hole artwork rotation">0°</output>
+              <button id="rotate-image-right" type="button" aria-label="Rotate hole artwork 90 degrees right">90° right <span aria-hidden="true">↷</span></button>
+            </div>
+            <div class="zoom-actions">
+              <button id="zoom-out" type="button" aria-label="Shrink map view">− Shrink</button>
+              <button id="fit-hole" type="button">Fit artwork</button>
+              <button id="zoom-in" type="button" aria-label="Enlarge map view">+ Enlarge</button>
+            </div>
+          </section>
+
+          <section class="panel-section hole-data-section">
+            <span class="section-number">02</span>
+            <div><h2>Hole card</h2><p>These values become the scorecard and hole metadata.</p></div>
+            <div class="hole-data-grid">
+              <label>Par<input id="hole-par" type="number" min="3" max="6" value="4" /></label>
+              <label>HCP<input id="hole-handicap" type="number" min="1" max="18" value="1" /></label>
+              <label>Blue yd<input id="yards-blue" type="number" min="0" max="800" /></label>
+              <label>White yd<input id="yards-white" type="number" min="0" max="800" /></label>
+              <label>Forward yd<input id="yards-forward" type="number" min="0" max="800" /></label>
+              <label>Elevation m<input id="elevation-change" type="number" min="-100" max="100" step=".1" value="0" /></label>
+            </div>
+            <label class="wide-field">Layout
+              <input id="layout-type" value="Mostly Straight" maxlength="80" />
+            </label>
+          </section>
+
+          <section class="panel-section shape-section">
+            <span class="section-number">03</span>
+            <div>
+              <h2>Place field shapes</h2>
+              <p>Choose a template and click the map. Select a shape to edit its points, or choose Move shape to reposition the whole shape.</p>
+            </div>
+            <div class="shape-palette" aria-label="Hole shape tools">
+              <button data-tool="tee_white" type="button"><i class="swatch tee-white"></i>White tee box</button>
+              <button data-tool="fairway" type="button"><i class="swatch fairway"></i>Fairway</button>
+              <button data-tool="rough" type="button"><i class="swatch rough"></i>Rough</button>
+              <button data-tool="bunker" type="button"><i class="swatch bunker"></i>Sand bunker</button>
+              <button data-tool="bunker_circle" type="button"><i class="swatch bunker circle"></i>Circle bunker</button>
+              <button data-tool="green_oval" type="button"><i class="swatch green"></i>Green oval</button>
+              <button data-tool="green_circle" type="button"><i class="swatch green circle"></i>Green circle</button>
+              <button data-tool="water" type="button"><i class="swatch water"></i>Water</button>
+              <button data-tool="stream_brush" class="stream-brush-tool" type="button"><i class="stream-brush-icon"></i>Stream / ditch brush · 3 yd</button>
+              <button data-tool="cart_path_brush" class="cart-path-brush-tool" type="button"><i class="cart-path-brush-icon"></i>Cart path brush · 4 yd</button>
+              <button data-tool="trees_circle" type="button"><i class="swatch trees circle"></i>Trees circle</button>
+              <button data-tool="tree_brush" class="tree-brush-tool" type="button"><i class="tree-brush-icon"></i>Tree brush</button>
+              <label class="tree-brush-size">Brush width
+                <select id="tree-brush-width">
+                  <option value="10">10 yd</option>
+                  <option value="20" selected>20 yd</option>
+                  <option value="30">30 yd</option>
+                  <option value="40">40 yd</option>
+                </select>
+              </label>
+              <button data-tool="out_of_bounds" type="button"><i class="swatch boundary"></i>Out of bounds</button>
+              <button data-tool="box_select" class="box-select-tool" type="button"><i class="selection-box-icon"></i>Box select trees</button>
+            </div>
+            <small class="guided-scan-help">Drag a brush across the feature and release to create one editable shape. Stream / ditch stays 3 yards wide; Cart path stays 4 yards wide.</small>
+          </section>
+
+          <section class="panel-section marker-section">
+            <span class="section-number">04</span>
+            <div><h2>Set play points</h2><p>Set the White tee and pin. Blue and Forward tees align automatically from the scorecard yardages.</p></div>
+            <div class="marker-palette">
+              <button data-tool="marker_white_tee" type="button">White tee / start ball</button>
+              <button data-tool="marker_pin" type="button">Pin</button>
+              <button data-tool="route_point_1" type="button">Route point 1</button>
+              <button data-tool="route_point_2" type="button">Route point 2</button>
+              <button data-tool="measure" class="measure-tool" type="button">Measure two points</button>
+              <button id="auto-draft-hole" class="auto-draft-tool" type="button">Auto-draft from tee &amp; pin</button>
+              <small class="auto-draft-help">Builds the rough, fairway, green, and tee surfaces. Add trees with the Tree brush.</small>
+              <button id="clear-route" type="button">Clear route points</button>
+              <button id="clear-play-points" class="clear-play-points" type="button">Clear all play points</button>
+            </div>
+          </section>
+        </aside>
+
+        <section class="map-stage">
+          <div id="map" class="map-canvas" aria-label="Local hole artwork editor"></div>
+          <div class="imagery-source" role="group" aria-label="Hole artwork controls">
+            <span>Hole artwork</span>
+            <button id="choose-local-image" class="choose-image-button" type="button">Choose image</button>
+            <label class="artwork-opacity">Image <input id="background-opacity" type="range" min="25" max="100" value="82" aria-label="Hole artwork opacity" /><output id="background-opacity-value">82%</output></label>
+            <input id="local-image-file" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+          </div>
+          <button id="reference-image-toggle" class="reference-image-toggle" type="button" hidden>Show hole image</button>
+          <aside id="reference-image-panel" class="reference-image-panel" hidden aria-label="Hole reference image">
+            <header>
+              <div><span class="eyebrow">Supplied reference</span><strong id="reference-image-title">Hole 1</strong></div>
+              <button id="close-reference-image" type="button" aria-label="Close hole reference image">×</button>
+            </header>
+            <button id="enlarge-reference-image" class="reference-image-frame" type="button" aria-label="Enlarge hole reference image">
+              <img id="reference-hole-image" alt="" />
+            </button>
+            <footer>
+              <button id="reference-previous-hole" type="button"><span aria-hidden="true">←</span> Previous</button>
+              <button id="view-source-scorecard" type="button">Scorecard</button>
+              <button id="reference-next-hole" type="button">Next <span aria-hidden="true">→</span></button>
+            </footer>
+          </aside>
+          <div class="map-mode">
+            <span id="active-tool-label">Pan and inspect</span>
+            <button id="cancel-tool" type="button" hidden>Cancel tool</button>
+          </div>
+          <div id="map-source-note" class="map-attribution-note">Local artwork · colored outlines are the game’s calculation layer.</div>
+        </section>
+
+        <aside class="ledger-panel">
+          <section class="datum-card">
+            <div class="datum-heading">
+              <span class="eyebrow">Live hole datum</span>
+              <strong id="hole-status-mark">Incomplete</strong>
+            </div>
+            <div class="datum-axis" aria-hidden="true">
+              <span class="axis-forward">Y · toward pin</span>
+              <span class="axis-origin">0,0</span>
+              <span class="axis-right">X · golfer right</span>
+            </div>
+            <p id="hole-validation">Mark the white tee, pin, white tee box, green, and fairway.</p>
+          </section>
+
+          <section class="ledger-section gps-calibration-section">
+            <header>
+              <div><span class="eyebrow">On-course GPS</span><h2>Three-point calibration</h2></div>
+              <strong id="gps-calibration-mark">—</strong>
+            </header>
+            <p class="gps-calibration-intro">Paste Google Earth coordinates in decimal or degrees–minutes–seconds format. The bunker supplies the sideways reference needed to align phone GPS.</p>
+            <div class="gps-anchor-list">
+              <label class="gps-anchor-row">
+                <span class="gps-anchor-key">1</span>
+                <span class="gps-anchor-copy"><strong>White tee center</strong><small>Uses the W marker</small></span>
+                <input id="gps-white-tee" inputmode="decimal" autocomplete="off" placeholder="40.12345, -74.12345" aria-label="White tee center latitude and longitude" />
+              </label>
+              <label class="gps-anchor-row">
+                <span class="gps-anchor-key">2</span>
+                <span class="gps-anchor-copy"><strong>Bunker center</strong><small>Choose the matching shape</small></span>
+                <select id="gps-bunker-feature" aria-label="Mapped bunker used as GPS anchor"><option value="">Select bunker…</option></select>
+                <input id="gps-bunker-center" inputmode="decimal" autocomplete="off" placeholder="40.12345, -74.12345" aria-label="Bunker center latitude and longitude" />
+              </label>
+              <label class="gps-anchor-row">
+                <span class="gps-anchor-key">3</span>
+                <span class="gps-anchor-copy"><strong>Green center</strong><small>Uses the green shape</small></span>
+                <input id="gps-green-center" inputmode="decimal" autocomplete="off" placeholder="40.12345, -74.12345" aria-label="Green center latitude and longitude" />
+              </label>
+            </div>
+            <div class="gps-calibration-actions">
+              <button id="save-gps-calibration" type="button">Validate &amp; save</button>
+              <button id="clear-gps-calibration" type="button">Clear</button>
+            </div>
+            <p id="gps-calibration-status" class="gps-calibration-status">Optional. This does not move your artwork or calculation shapes.</p>
+          </section>
+
+          <section class="ledger-section selected-section">
+            <header><div><span class="eyebrow">Selected geometry</span><h2 id="selected-name">Nothing selected</h2></div></header>
+            <div id="selected-empty" class="empty-copy">Select a shape to edit it. Hold Shift while clicking to select several shapes.</div>
+            <div id="selected-controls" hidden>
+              <label>Feature label<input id="feature-label" maxlength="100" /></label>
+              <dl class="feature-metrics">
+                <div><dt>Points</dt><dd id="feature-points">—</dd></div>
+                <div><dt>Area</dt><dd id="feature-area">—</dd></div>
+              </dl>
+              <div class="feature-edit-modes" aria-label="Selected shape interaction mode">
+                <button id="move-feature-mode" type="button">Move shape</button>
+                <button id="edit-feature-points-mode" type="button">Edit points</button>
+              </div>
+              <div class="rotation-actions" aria-label="Rotate selected shape">
+                <button id="rotate-feature-left" type="button" aria-label="Rotate selected shape 5 degrees left"><span aria-hidden="true">↶</span> 5° left</button>
+                <button id="rotate-feature-right" type="button" aria-label="Rotate selected shape 5 degrees right">5° right <span aria-hidden="true">↷</span></button>
+              </div>
+              <div class="size-actions" aria-label="Resize selected shape">
+                <button id="shrink-feature" type="button" aria-label="Make selected shape 5 percent smaller"><span aria-hidden="true">−</span> 5% smaller</button>
+                <button id="enlarge-feature" type="button" aria-label="Make selected shape 5 percent larger"><span aria-hidden="true">+</span> 5% larger</button>
+              </div>
+              <div id="cluster-actions" class="cluster-actions" hidden>
+                <button id="merge-features" type="button">Make one cluster</button>
+                <small id="cluster-help">Selected shapes must be the same type.</small>
+              </div>
+              <div class="selected-actions">
+                <button id="duplicate-feature" type="button">Duplicate</button>
+                <button id="delete-feature" class="danger-button" type="button">Delete</button>
+              </div>
+              <p id="feature-edit-help">Drag inside the shape to move it. Drag a solid point to reshape, or a faint midpoint to add another point.</p>
+            </div>
+          </section>
+
+          <section class="ledger-section feature-ledger">
+            <header>
+              <div><span class="eyebrow">Hole layers</span><h2>Mapped features</h2></div>
+              <div class="feature-ledger-actions">
+                <strong id="feature-count" aria-label="Mapped field shape count">0</strong>
+                <button id="clear-field-shapes" type="button" disabled>Clear field shapes</button>
+              </div>
+            </header>
+            <div id="feature-list" class="feature-list"></div>
+          </section>
+
+          <section class="ledger-section measurement-ledger">
+            <header>
+              <div><span class="eyebrow">Tape</span><h2>Measurements</h2></div>
+              <button id="clear-measurements" type="button">Clear</button>
+            </header>
+            <div id="measurement-list" class="measurement-list">
+              <p class="empty-copy">Measure the white tee to the pin, then enter its scorecard yardage to set a local image's scale.</p>
+            </div>
+          </section>
+
+          <section class="export-card">
+            <span class="eyebrow">Game handoff</span>
+            <h2>Export mapped geometry</h2>
+            <p>The installed course uses its scorecard and aligned geometry to draw a matching illustrated hole map.</p>
+            <div class="export-actions">
+              <button id="preview-game-map" class="preview-game-button" type="button">Preview game map</button>
+              <button id="export-hole" type="button">Export Hole JSON</button>
+              <button id="export-package" class="accent-button" type="button">Export game package</button>
+              <button id="install-game" class="install-game-button" type="button">Install in game</button>
+            </div>
+            <p id="editor-status" class="editor-status" role="status" aria-live="polite"></p>
+          </section>
+        </aside>
+      </section>
+    </main>
+    <dialog id="scorecard-import-dialog" class="mapper-dialog">
+      <form method="dialog" class="mapper-dialog-card">
+        <header>
+          <div><span class="eyebrow">18-hole setup</span><h2>Paste the scorecard once</h2></div>
+          <button class="dialog-close" value="cancel" aria-label="Close scorecard import">×</button>
+        </header>
+        <p>Paste CSV, a spreadsheet selection, an HTML table snippet, or a copied scorecard with holes across the top.</p>
+        <textarea id="scorecard-paste" rows="13" spellcheck="false" placeholder="Hole,Par,Handicap,Blue_Yards,White_Yards,Red_Yards&#10;1,4,7,410,395,340&#10;2,3,15,180,165,140&#10;…all 18 holes"></textarea>
+        <small id="scorecard-import-status" class="dialog-status" role="status"></small>
+        <footer>
+          <button class="quiet-button" value="cancel">Cancel</button>
+          <button id="import-scorecard" class="accent-button" type="button">Fill all 18 holes</button>
+        </footer>
+      </form>
+    </dialog>
+    <dialog id="reference-image-dialog" class="mapper-dialog reference-dialog">
+      <form method="dialog" class="mapper-dialog-card">
+        <header>
+          <div><span class="eyebrow">Supplied course image</span><h2 id="reference-dialog-title">Hole reference</h2></div>
+          <button class="dialog-close" value="cancel" aria-label="Close reference image">×</button>
+        </header>
+        <img id="reference-dialog-image" alt="" />
+      </form>
+    </dialog>
+    <dialog id="game-preview-dialog" class="mapper-dialog game-preview-dialog">
+      <form method="dialog" class="mapper-dialog-card game-preview-card">
+        <header>
+          <div><span class="eyebrow">Before installation</span><h2 id="game-preview-title">Hole 1 game map</h2></div>
+          <button class="dialog-close" value="close" aria-label="Close game map preview">×</button>
+        </header>
+        <p>This uses the game’s full-hole scale. Editor-installed bunkers remain exactly the size you mapped.</p>
+        <div id="game-preview-canvas" class="game-preview-canvas"></div>
+        <footer><button class="accent-button" value="close">Return to editing</button></footer>
+      </form>
+    </dialog>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.js"></script>
+  <script type="module" src="editor.js?v=20260815-41"></script>
+  </body>
+</html>
