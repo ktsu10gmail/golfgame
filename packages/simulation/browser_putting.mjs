@@ -1,7 +1,7 @@
 // Browser port of packages/simulation/putting.py. Keep numerical changes paired.
 import { sampleCourseGreenContour } from "./browser_green_contour.mjs?v=20260807-5";
 
-export const PUTTING_ENGINE_VERSION = "putt-v3";
+export const PUTTING_ENGINE_VERSION = "putt-v4";
 
 const MASK_64 = (1n << 64n) - 1n;
 const FNV_OFFSET_64 = 0xcbf29ce484222325n;
@@ -79,6 +79,8 @@ const CONTOUR_GRAVITY_SCALE = .12;
 const PHYSICS_TIME_STEP_SECONDS = .04;
 const PHYSICS_STOP_SPEED = .035;
 const MAX_PHYSICS_STEPS = 650;
+const CUP_TOLERANCE_YARDS = .06;
+const CUP_TOLERANCE_FEET = CUP_TOLERANCE_YARDS * 3;
 
 export function rollPuttAcrossContour({
   start,
@@ -253,15 +255,18 @@ export function simulatePutt(context, { roundSeed, holeNumber, strokeIndex }) {
   const powerErrorPoints = Math.abs(context.pace_scale - requiredPower) * 100;
   const aimQuality = Math.exp(-aimErrorInches / 8);
   const paceQuality = Math.exp(-powerErrorPoints / 12);
-  const canReachCup = context.profile.putter_range_feet * context.pace_scale * slopePaceMultiplier >= context.read.feet * .97;
+  const projectedTravelFeet = context.profile.putter_range_feet * context.pace_scale * slopePaceMultiplier;
+  const canReachCup = projectedTravelFeet >= Math.max(0, context.read.feet - CUP_TOLERANCE_FEET);
   const baseProbability = baselineMakeProbability(context.read.feet, context);
   const makeProbability = canReachCup
     ? Math.max(0, Math.min(1, baseProbability * (.15 + .85 * aimQuality) * (.1 + .9 * paceQuality)))
     : 0;
   const aimCorrect = aimErrorInches <= Math.max(2, context.read.break_inches * .35);
-  const paceCorrect = powerErrorPoints <= 6;
+  const paceCorrect = canReachCup && powerErrorPoints <= 6;
   const correctDecision = aimCorrect && paceCorrect;
-  const made = rng.random() < makeProbability;
+  const sampledMake = rng.random() < makeProbability;
+  const geometricMake = Math.hypot(landing.x - context.pin.x, landing.y - context.pin.y) <= CUP_TOLERANCE_YARDS;
+  const made = geometricMake || sampledMake;
   if (made) {
     landing = { ...context.pin };
     path = [...path, { ...context.pin }];

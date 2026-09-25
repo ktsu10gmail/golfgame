@@ -1,0 +1,126 @@
+Here is the breakdown of your audit findings, categorized strictly by whether they require action (bad/needs improvement) or are effective as-is (good/pass).
+
+❌ BAD (Needs Improvement)
+High Priority — Action Immediately
+[GM-001] Technical errors shown as Game Master dialogue
+Verdict: BAD
+
+Issue: Exposes raw exception text and system terminology (legal strategy decision) directly to the player, which disrupts immersion and risks exposing internal architecture.
+
+Fix: Replace raw tracebacks with a generic, polite failure message and optional support reference code:
+
+"The shot could not be completed. Your ball and score have not changed. Please try again. If this continues, return to the hole and resume the round."
+
+[GM-002] Unexplained 0–100 decision score comparison
+Verdict: BAD
+
+Issue: Presenting YOU 11/100 · GM 70/100 first tells players their choice was terrible without providing context, leading to frustration even when accompanied by a disclaimer.
+
+Fix: Lead with evidence using a structured Result / Decision / Outcome vs Target breakdown. Hide or demote the raw 0–100 numerical grade behind a secondary "Why this grade?" toggle.
+
+[GM-003] Declaring a 0% make-chance putt as a "sound make attempt"
+Verdict: BAD
+
+Issue: Displaying 0% make chance produced a miss alongside praise for a sound read/pace sounds contradictory, obvious, and demotivating.
+
+Fix:
+
+Change probability displays near zero to state "under 1%" rather than truncating/rounding to 0%.
+
+Frame long putts around lag-putt success criteria (leave distance) rather than make rates:
+
+"The read and pace were sound for a lag putt. From this distance, the modeled make chance was under 1%; the goal was to leave a manageable next putt."
+
+[GM-004] Blending physical result with value judgment
+Verdict: BAD
+
+Issue: Prefaces like "Good shot" or "Costly miss" prematurely judge execution before separating intent, strategic risk, and physical outcome. Terms like "dispersed" reflect game engine mechanics rather than natural play.
+
+Fix: Decouple observations into four clear, neutral categories: Result, Decision, Outcome vs Target, and Caddie Review. Never diagnose physical swing errors (e.g., open face) without hard sensor/input data.
+
+Medium Priority — Plan for Next Iteration
+[GM-005] Full-shot stance briefing grammar
+Verdict: BAD
+
+Issue: Redundant wording ("The stance has a fairly level stance...").
+
+Fix: Clean up syntax to natural English:
+
+"Your stance is fairly level, and the shot plays nearly level."
+
+[GM-006] Technical jargon in fairness disclaimer
+Verdict: BAD
+
+Issue: Terms like "paired execution luck" sound like internal software parameters rather than natural caddie dialogue.
+
+Fix: Rephrase to plain language:
+
+"You and the Game Master use the same golfer profile and the same shot conditions. The comparison is designed to test the plans, not who receives the luckier result."
+
+[GM-007] Excessive message stacking post-shot
+Verdict: BAD
+
+Issue: Sending 3 to 5 separate notification bubbles after a single shot creates UI clutter, especially on mobile screens.
+
+Fix: Consolidate all post-shot feedback into a single primary summary card containing four distinct subsections. Place extended commentary behind a "More caddie detail" disclosure.
+
+[GM-008] Unconfirmed automatic target selection
+Verdict: BAD
+
+Issue: Silently selecting a target when none was specified removes player agency and confuses post-shot reviews.
+
+Fix: Require explicit player confirmation before executing the shot when a default target is populated.
+
+[GM-009] Hyper-precise distance measurements
+Verdict: BAD
+
+Issue: Expressing adjustments in hundredths of a yard (1.99 yards left, 3.95 yards right) adds irrelevant precision that doesn't mirror real golf decision-making.
+
+Fix: Round distance outputs to whole yards (or at most one decimal place when close to the target).
+
+[GM-010] Misleading accuracy reward messaging
+Verdict: BAD
+
+Issue: Stating "7 Iron accuracy improves..." implies the player's core skill profile has permanently upgraded, rather than reflecting a one-time situational modifier.
+
+Fix: Explicitly state that the adjustment applies only to the current modeled shot:
+
+"Good adjustment. For this simulated shot, the model increases 7 Iron accuracy from 72% to 78%. Your saved golfer profile is unchanged."
+
+🟡 SMALL POLISH (Minor Wording Adjustments)
+[GM-011] Putting recommendation terminology
+Verdict: MINOR POLISH
+
+Issue: "Profile make rate" sounds slightly robotic.
+
+Fix: Shift to standard golf probability phrasing: "Based on your putting profile, the modeled make chance is about 12%."
+
+[GM-012] Vague club recommendation details
+Verdict: MINOR POLISH
+
+Issue: Telling a player to favor the "safe side" without explicitly naming the direction or hazard tradeoff is not actionable.
+
+Fix: Include specific target parameters (carry requirement, directional offset relative to hazards).
+
+🟢 GOOD (Keep As-Is)
+[GM-013] Tree and recovery logic
+Verdict: GOOD (PASS)
+
+Reasoning: Clearly articulates physical environmental constraints, rules out unsafe pin lines, and provides viable 90° punch-out alternatives.
+
+[GM-014] Clarification and shot-paused workflow
+Verdict: GOOD (PASS)
+
+Reasoning: Effectively prevents unintended shots by pausing execution, confirming parsed commands, and providing actionable prompt examples.
+
+[GM-015] Penalty and unplayable ball messaging
+Verdict: GOOD (PASS)
+
+Reasoning: Maintains clear separation between physical shot result, stroke penalties, and relief options.
+
+[GM-016] AI prompt safeguards & factuality rules
+Verdict: GOOD (PASS)
+
+Reasoning: Enforces strict adherence to authoritative data and prevents the AI from inventing ungrounded swing diagnoses.
+
+Note: Adopt the recommended persistence schema to store full displayed responses and source fact IDs to enable future auditing.

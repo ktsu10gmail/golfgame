@@ -11,6 +11,7 @@ import math
 import re
 import secrets
 import sqlite3
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -70,6 +71,50 @@ def _round_is_complete(round_save: dict[str, Any]) -> bool:
         isinstance(hole, dict) and isinstance(hole.get("score"), int)
         for hole in holes
     ))
+
+
+def _validate_challenge(challenge: Any) -> dict[str, Any]:
+    if not isinstance(challenge, dict) or challenge.get("version") != "three-hole-challenge-v1":
+        raise AccountError("unsupported challenge version")
+    challenge_id = challenge.get("id")
+    if not isinstance(challenge_id, str) or not 8 <= len(challenge_id) <= 100:
+        raise AccountError("challenge ID is invalid")
+    holes = challenge.get("holes")
+    if not isinstance(holes, list) or len(holes) != 3:
+        raise AccountError("challenge must contain three holes")
+    for slot, (hole, expected_par) in enumerate(zip(holes, (3, 4, 5)), start=1):
+        if not isinstance(hole, dict) or hole.get("challenge_slot") != slot or hole.get("par") != expected_par:
+            raise AccountError("challenge hole order is invalid")
+        if not isinstance(hole.get("course_id"), str) or not isinstance(hole.get("course_version_id"), str):
+            raise AccountError("challenge course reference is invalid")
+        source_hole = hole.get("source_hole_number")
+        if not isinstance(source_hole, int) or not 1 <= source_hole <= 18:
+            raise AccountError("challenge source hole is invalid")
+    if challenge.get("status") not in {"READY", "IN_PROGRESS", "COMPLETE"}:
+        raise AccountError("challenge status is invalid")
+    return challenge
+
+
+def _compact_challenge_geometry(challenge: dict[str, Any], snapshot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    compact = deepcopy(challenge)
+    geometry = None
+    if isinstance(snapshot, dict) and isinstance(snapshot.get("simulation_surfaces"), list):
+        geometry = deepcopy(snapshot)
+        geometry.pop("simulation_surfaces", None)
+        geometry["simulation_surfaces"] = deepcopy(snapshot["simulation_surfaces"])
+    for participant_key in ("human_state", "strategist_state"):
+        participant = compact.get(participant_key)
+        for hole in participant.get("holes", []) if isinstance(participant, dict) else []:
+            for event in hole.get("events", []):
+                shot = _event_shot(event)
+                if not shot:
+                    continue
+                for request_key in ("resultRequest", "puttRequest"):
+                    request = shot.get(request_key)
+                    context = request.get("context") if isinstance(request, dict) else None
+                    if isinstance(context, dict):
+                        context.pop("surfaces", None)
+    return compact, geometry
 
 
 def _validate_round_save(round_save: Any) -> dict[str, Any]:
@@ -135,6 +180,82 @@ def _round_fingerprint(player_id: int, round_save: dict[str, Any]) -> str:
     return hashlib.sha256(f"{player_id}:".encode("utf-8") + canonical_state.encode("utf-8")).hexdigest()
 
 
+def _round_course_version(round_save: dict[str, Any]) -> str:
+    value = round_save.get("course_version_id") or round_save.get("round_state", {}).get("course_version_id")
+    return str(value or "legacy-v1")[:120]
+
+
+def _round_active_id(player_id: int, round_save: dict[str, Any]) -> str:
+    state = round_save["round_state"]
+    identity = f"{player_id}:{round_save['course_id']}:{state.get('round_seed', 'legacy')}"
+    return f"active-{hashlib.sha256(identity.encode('utf-8')).hexdigest()[:24]}"
+
+
+def _event_shot(event: Any) -> dict[str, Any] | None:
+    if not isinstance(event, dict):
+        return None
+    payload = event.get("payload")
+    if not isinstance(payload, dict):
+        return None
+    shot = payload.get("shot") if isinstance(payload.get("shot"), dict) else payload
+    return shot if event.get("event_type") == "shot_committed" else None
+
+
+def _compact_round_geometry(round_save: dict[str, Any]) -> tuple[dict[str, Any], dict[int, list[Any]]]:
+    """Remove per-shot geometry while preserving every item of replay evidence."""
+    compact = deepcopy(round_save)
+    version = _round_course_version(compact)
+    compact["course_version_id"] = version
+    compact["round_state"]["course_version_id"] = version
+    geometries: dict[int, list[Any]] = {}
+    snapshot = compact.pop("geometry_snapshot", None)
+    if isinstance(snapshot, dict):
+        snapshot_hole = snapshot.get("hole_number")
+        snapshot_surfaces = snapshot.get("simulation_surfaces")
+        if isinstance(snapshot_hole, int) and 1 <= snapshot_hole <= 18 and isinstance(snapshot_surfaces, list):
+            geometries[snapshot_hole] = deepcopy(snapshot_surfaces)
+    for index, hole in enumerate(compact["round_state"]["holes"]):
+        hole_number = int(hole.get("hole_number") or index + 1)
+        for event in hole.get("events", []):
+            shot = _event_shot(event)
+            request = shot.get("resultRequest") if shot else None
+            context = request.get("context") if isinstance(request, dict) else None
+            surfaces = context.get("surfaces") if isinstance(context, dict) else None
+            if not isinstance(surfaces, list):
+                continue
+            geometries.setdefault(hole_number, deepcopy(surfaces))
+            request["geometry_ref"] = {
+                "course_id": compact["course_id"],
+                "course_version_id": version,
+                "hole_number": hole_number,
+            }
+            del context["surfaces"]
+    return compact, geometries
+
+
+def _round_hole_index(round_id: str, round_save: dict[str, Any]) -> dict[str, Any]:
+    summary = _validated_round_summary(round_save)
+    holes = []
+    for index, hole in enumerate(round_save["round_state"]["holes"]):
+        events = hole.get("events", [])
+        holes.append({
+            "hole": index + 1,
+            "par": None,
+            "score": hole.get("score") if isinstance(hole.get("score"), int) else None,
+            "shot_count": sum(event.get("event_type") == "shot_committed" for event in events if isinstance(event, dict)),
+        })
+    return {
+        "round_id": round_id,
+        "course_id": round_save["course_id"],
+        "course_version_id": _round_course_version(round_save),
+        "score": summary["total_strokes"] if _round_is_complete(round_save) else None,
+        "status": "COMPLETED" if _round_is_complete(round_save) else "ACTIVE",
+        "current_hole_index": round_save["current_hole_index"],
+        "pin_index": round_save["pin_index"],
+        "holes": holes,
+    }
+
+
 def _validate_gps_fix(value: Any, label: str) -> None:
     if not isinstance(value, dict):
         raise AccountError(f"{label} is invalid")
@@ -198,6 +319,21 @@ def _gps_round_score(gps_round: dict[str, Any]) -> int:
         len(hole["shots"]) + hole["putts"] + int(hole["final_stroke"])
         for hole in gps_round["holes"]
     )
+
+
+def _gps_round_progress(gps_round: dict[str, Any]) -> tuple[int, int]:
+    holes = gps_round.get("holes", [])
+    holes_recorded = sum(bool(
+        hole.get("tee") is not None
+        or hole.get("shots")
+        or hole.get("putts")
+        or hole.get("final_stroke")
+        or hole.get("finished")
+    ) for hole in holes if isinstance(hole, dict))
+    holes_completed = sum(
+        hole.get("finished") is True for hole in holes if isinstance(hole, dict)
+    )
+    return holes_recorded, holes_completed
 
 
 def _validate_player_profile(profile: Any) -> dict[str, Any]:
@@ -346,6 +482,55 @@ class PlayerStore:
                 );
                 CREATE INDEX IF NOT EXISTS completed_rounds_history
                     ON completed_rounds(player_id, completed_at DESC);
+                CREATE TABLE IF NOT EXISTS round_replay_indexes (
+                    round_id TEXT PRIMARY KEY,
+                    player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    source_kind TEXT NOT NULL,
+                    course_id TEXT NOT NULL,
+                    course_version_id TEXT NOT NULL,
+                    index_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS round_replay_indexes_player
+                    ON round_replay_indexes(player_id, updated_at DESC);
+                CREATE TABLE IF NOT EXISTS round_replay_holes (
+                    round_id TEXT NOT NULL REFERENCES round_replay_indexes(round_id) ON DELETE CASCADE,
+                    hole_number INTEGER NOT NULL CHECK(hole_number BETWEEN 1 AND 18),
+                    hole_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (round_id, hole_number)
+                );
+                CREATE TABLE IF NOT EXISTS course_hole_geometries (
+                    course_id TEXT NOT NULL,
+                    course_version_id TEXT NOT NULL,
+                    hole_number INTEGER NOT NULL CHECK(hole_number BETWEEN 1 AND 18),
+                    geometry_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (course_id, course_version_id, hole_number)
+                );
+                CREATE TABLE IF NOT EXISTS player_challenges (
+                    challenge_id TEXT PRIMARY KEY,
+                    player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    player_score INTEGER,
+                    gm_score INTEGER,
+                    challenge_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS player_challenges_history
+                    ON player_challenges(player_id, updated_at DESC);
+                CREATE TABLE IF NOT EXISTS challenge_replay_holes (
+                    challenge_id TEXT NOT NULL REFERENCES player_challenges(challenge_id) ON DELETE CASCADE,
+                    challenge_slot INTEGER NOT NULL CHECK(challenge_slot BETWEEN 1 AND 3),
+                    course_id TEXT NOT NULL,
+                    course_version_id TEXT NOT NULL,
+                    source_hole_number INTEGER NOT NULL CHECK(source_hole_number BETWEEN 1 AND 18),
+                    hole_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (challenge_id, challenge_slot)
+                );
                 CREATE TABLE IF NOT EXISTS player_shot_observations (
                     id TEXT PRIMARY KEY,
                     player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -517,6 +702,8 @@ class PlayerStore:
         summary = _validated_round_summary(validated)
         updated_at = _iso(_utc_now())
         complete = _round_is_complete(validated)
+        compact, extracted_geometries = _compact_round_geometry(validated)
+        active_round_id = _round_active_id(player_id, validated)
         archived_round_id = None
         newly_archived = False
         with self._connect() as database:
@@ -549,7 +736,7 @@ class PlayerStore:
                     summary["course_name"], summary["tee"], updated_at,
                     summary["total_strokes"], summary["total_par"], summary["score_to_par"],
                     summary["strategy_score"], summary["execution_score"],
-                    summary["scored_shots"], json.dumps(validated, separators=(",", ":")),
+                    summary["scored_shots"], json.dumps(compact, separators=(",", ":")),
                 ))
                 observations = extract_round_observations(archived_round_id, validated)
                 database.execute(
@@ -580,17 +767,156 @@ class PlayerStore:
             """, (
                 player_id,
                 validated["course_id"],
-                json.dumps(validated, separators=(",", ":")),
+                json.dumps(compact, separators=(",", ":")),
                 int(complete),
                 updated_at,
             ))
+            round_id = archived_round_id if complete else active_round_id
+            if complete:
+                database.execute("DELETE FROM round_replay_indexes WHERE round_id = ?", (active_round_id,))
+            index = _round_hole_index(round_id, compact)
+            database.execute("""
+                INSERT INTO round_replay_indexes(
+                    round_id, player_id, source_kind, course_id, course_version_id,
+                    index_json, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(round_id) DO UPDATE SET
+                    source_kind = excluded.source_kind,
+                    course_id = excluded.course_id,
+                    course_version_id = excluded.course_version_id,
+                    index_json = excluded.index_json,
+                    updated_at = excluded.updated_at
+            """, (
+                round_id, player_id, "completed" if complete else "active",
+                compact["course_id"], _round_course_version(compact),
+                json.dumps(index, separators=(",", ":")), updated_at,
+            ))
+            for hole_number, hole in enumerate(compact["round_state"]["holes"], start=1):
+                database.execute("""
+                    INSERT INTO round_replay_holes(round_id, hole_number, hole_json, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(round_id, hole_number) DO UPDATE SET
+                        hole_json = excluded.hole_json,
+                        updated_at = excluded.updated_at
+                """, (round_id, hole_number, json.dumps(hole, separators=(",", ":")), updated_at))
+            for hole_number, surfaces in extracted_geometries.items():
+                database.execute("""
+                    INSERT INTO course_hole_geometries(
+                        course_id, course_version_id, hole_number, geometry_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(course_id, course_version_id, hole_number) DO NOTHING
+                """, (
+                    compact["course_id"], _round_course_version(compact), hole_number,
+                    json.dumps({"simulation_surfaces": surfaces}, separators=(",", ":")), updated_at,
+                ))
         return {
             "saved": True,
             "complete": complete,
             "updated_at": updated_at,
             "archived_round_id": archived_round_id,
             "newly_archived": newly_archived,
+            "round_id": archived_round_id if complete else active_round_id,
+            "geometry_saved": sorted(extracted_geometries),
         }
+
+    def save_challenge(self, player_id: int, challenge_value: Any, geometry_snapshot: Any = None) -> dict[str, Any]:
+        challenge = _validate_challenge(challenge_value)
+        compact, geometry = _compact_challenge_geometry(challenge, geometry_snapshot)
+        updated_at = _iso(_utc_now())
+        completed = challenge.get("status") == "COMPLETE"
+        final = challenge.get("final_result") if isinstance(challenge.get("final_result"), dict) else {}
+        with self._connect() as database:
+            owner = database.execute(
+                "SELECT player_id FROM player_challenges WHERE challenge_id = ?",
+                (challenge["id"],),
+            ).fetchone()
+            if owner is not None and owner["player_id"] != player_id:
+                raise AccountError("challenge belongs to another player")
+            database.execute("""
+                INSERT INTO player_challenges(
+                    challenge_id, player_id, status, created_at, updated_at, completed_at,
+                    player_score, gm_score, challenge_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(challenge_id) DO UPDATE SET
+                    status = excluded.status,
+                    updated_at = excluded.updated_at,
+                    completed_at = excluded.completed_at,
+                    player_score = excluded.player_score,
+                    gm_score = excluded.gm_score,
+                    challenge_json = excluded.challenge_json
+            """, (
+                challenge["id"], player_id, challenge["status"], challenge.get("created_at") or updated_at,
+                updated_at, challenge.get("completed_at") if completed else None,
+                final.get("player") if completed else None, final.get("gm") if completed else None,
+                json.dumps(compact, separators=(",", ":")),
+            ))
+            for slot, ref in enumerate(challenge["holes"], start=1):
+                human_holes = challenge.get("human_state", {}).get("holes", [])
+                gm_holes = challenge.get("strategist_state", {}).get("holes", [])
+                hole_payload = {
+                    "challenge_slot": slot,
+                    "ref": ref,
+                    "human": human_holes[slot - 1] if len(human_holes) >= slot else None,
+                    "game_master": gm_holes[slot - 1] if len(gm_holes) >= slot else None,
+                }
+                database.execute("""
+                    INSERT INTO challenge_replay_holes(
+                        challenge_id, challenge_slot, course_id, course_version_id,
+                        source_hole_number, hole_json, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(challenge_id, challenge_slot) DO UPDATE SET
+                        course_id = excluded.course_id,
+                        course_version_id = excluded.course_version_id,
+                        source_hole_number = excluded.source_hole_number,
+                        hole_json = excluded.hole_json,
+                        updated_at = excluded.updated_at
+                """, (
+                    challenge["id"], slot, ref["course_id"], ref["course_version_id"],
+                    ref["source_hole_number"], json.dumps(hole_payload, separators=(",", ":")), updated_at,
+                ))
+            if geometry is not None:
+                database.execute("""
+                    INSERT INTO course_hole_geometries(
+                        course_id, course_version_id, hole_number, geometry_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(course_id, course_version_id, hole_number) DO NOTHING
+                """, (
+                    geometry["course_id"], geometry["course_version_id"], geometry["source_hole_number"],
+                    json.dumps({"simulation_surfaces": geometry["simulation_surfaces"]}, separators=(",", ":")),
+                    updated_at,
+                ))
+        return {"saved": True, "complete": completed, "challenge_id": challenge["id"], "updated_at": updated_at}
+
+    def challenge(self, player_id: int, challenge_id: str) -> dict[str, Any] | None:
+        if not isinstance(challenge_id, str) or not 8 <= len(challenge_id) <= 100:
+            raise AccountError("challenge ID is invalid")
+        with self._connect() as database:
+            row = database.execute(
+                "SELECT challenge_json FROM player_challenges WHERE player_id = ? AND challenge_id = ?",
+                (player_id, challenge_id),
+            ).fetchone()
+        return None if row is None else json.loads(row["challenge_json"])
+
+    def challenge_history(self, player_id: int, limit: int = 50) -> list[dict[str, Any]]:
+        if not 1 <= limit <= 100:
+            raise AccountError("challenge history limit must be between 1 and 100")
+        with self._connect() as database:
+            rows = database.execute("""
+                SELECT challenge_id, status, created_at, updated_at, completed_at, player_score, gm_score,
+                       challenge_json
+                FROM player_challenges WHERE player_id = ?
+                ORDER BY updated_at DESC LIMIT ?
+            """, (player_id, limit)).fetchall()
+        result = []
+        for row in rows:
+            challenge = json.loads(row["challenge_json"])
+            result.append({
+                "challenge_id": row["challenge_id"], "status": row["status"],
+                "created_at": row["created_at"], "updated_at": row["updated_at"],
+                "completed_at": row["completed_at"], "player_score": row["player_score"],
+                "gm_score": row["gm_score"], "holes": challenge.get("holes", []),
+            })
+        return result
 
     def active_round(self, player_id: int) -> dict[str, Any] | None:
         with self._connect() as database:
@@ -600,6 +926,119 @@ class PlayerStore:
                 ORDER BY updated_at DESC LIMIT 1
             """, (player_id,)).fetchone()
         return None if row is None else json.loads(row["round_json"])
+
+    def round_replay_index(self, player_id: int, round_id: str) -> dict[str, Any] | None:
+        if not isinstance(round_id, str) or not 8 <= len(round_id) <= 100:
+            raise AccountError("round ID is invalid")
+        with self._connect() as database:
+            row = database.execute(
+                "SELECT index_json FROM round_replay_indexes WHERE player_id = ? AND round_id = ?",
+                (player_id, round_id),
+            ).fetchone()
+            if row is None:
+                archived = database.execute(
+                    "SELECT round_json, completed_at FROM completed_rounds WHERE player_id = ? AND id = ?",
+                    (player_id, round_id),
+                ).fetchone()
+                if archived is not None:
+                    original = json.loads(archived["round_json"])
+                    compact, geometries = _compact_round_geometry(original)
+                    index = _round_hole_index(round_id, compact)
+                    database.execute("""
+                        INSERT OR IGNORE INTO round_replay_indexes(
+                            round_id, player_id, source_kind, course_id, course_version_id,
+                            index_json, updated_at
+                        ) VALUES (?, ?, 'completed', ?, ?, ?, ?)
+                    """, (
+                        round_id, player_id, compact["course_id"], _round_course_version(compact),
+                        json.dumps(index, separators=(",", ":")), archived["completed_at"],
+                    ))
+                    for hole_number, hole in enumerate(compact["round_state"]["holes"], start=1):
+                        database.execute("""
+                            INSERT OR REPLACE INTO round_replay_holes(round_id, hole_number, hole_json, updated_at)
+                            VALUES (?, ?, ?, ?)
+                        """, (
+                            round_id, hole_number, json.dumps(hole, separators=(",", ":")),
+                            archived["completed_at"],
+                        ))
+                    for hole_number, surfaces in geometries.items():
+                        database.execute("""
+                            INSERT INTO course_hole_geometries(
+                                course_id, course_version_id, hole_number, geometry_json, created_at
+                            ) VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(course_id, course_version_id, hole_number) DO NOTHING
+                        """, (
+                            compact["course_id"], _round_course_version(compact), hole_number,
+                            json.dumps({"simulation_surfaces": surfaces}, separators=(",", ":")),
+                            archived["completed_at"],
+                        ))
+                    database.execute(
+                        "UPDATE completed_rounds SET round_json = ? WHERE player_id = ? AND id = ?",
+                        (json.dumps(compact, separators=(",", ":")), player_id, round_id),
+                    )
+                    row = database.execute(
+                        "SELECT index_json FROM round_replay_indexes WHERE player_id = ? AND round_id = ?",
+                        (player_id, round_id),
+                    ).fetchone()
+        return None if row is None else json.loads(row["index_json"])
+
+    def round_replay_hole(self, player_id: int, round_id: str, hole_number: int) -> dict[str, Any] | None:
+        if not isinstance(round_id, str) or not 8 <= len(round_id) <= 100:
+            raise AccountError("round ID is invalid")
+        if isinstance(hole_number, bool) or not isinstance(hole_number, int) or not 1 <= hole_number <= 18:
+            raise AccountError("hole number must be between 1 and 18")
+        # Lazily normalizes completed rounds created before hole storage existed.
+        if self.round_replay_index(player_id, round_id) is None:
+            return None
+        with self._connect() as database:
+            row = database.execute("""
+                SELECT round_replay_holes.hole_json, round_replay_indexes.course_id,
+                       round_replay_indexes.course_version_id
+                FROM round_replay_holes
+                JOIN round_replay_indexes USING(round_id)
+                WHERE round_replay_indexes.player_id = ?
+                  AND round_replay_holes.round_id = ?
+                  AND round_replay_holes.hole_number = ?
+            """, (player_id, round_id, hole_number)).fetchone()
+        if row is None:
+            return None
+        return {
+            "round_id": round_id,
+            "course_id": row["course_id"],
+            "course_version_id": row["course_version_id"],
+            "hole": json.loads(row["hole_json"]),
+        }
+
+    def course_hole_geometry(self, course_id: str, version_id: str, hole_number: int) -> dict[str, Any] | None:
+        if not course_id or not version_id or not 1 <= hole_number <= 18:
+            raise AccountError("course geometry reference is invalid")
+        with self._connect() as database:
+            row = database.execute("""
+                SELECT geometry_json FROM course_hole_geometries
+                WHERE course_id = ? AND course_version_id = ? AND hole_number = ?
+            """, (course_id, version_id, hole_number)).fetchone()
+        return None if row is None else json.loads(row["geometry_json"])
+
+    def migrate_replay_storage(self, player_id: int | None = None) -> list[dict[str, Any]]:
+        """Idempotently compact legacy monoliths and populate hole tables."""
+        with self._connect() as database:
+            if player_id is None:
+                rows = database.execute("SELECT player_id, round_json FROM player_rounds").fetchall()
+            else:
+                rows = database.execute(
+                    "SELECT player_id, round_json FROM player_rounds WHERE player_id = ?", (player_id,)
+                ).fetchall()
+        results = []
+        for row in rows:
+            before = len(row["round_json"].encode("utf-8"))
+            result = self.save_round(row["player_id"], json.loads(row["round_json"]))
+            with self._connect() as database:
+                after_row = database.execute(
+                    "SELECT length(CAST(round_json AS BLOB)) AS bytes FROM player_rounds WHERE player_id = ? AND course_id = ?",
+                    (row["player_id"], json.loads(row["round_json"])["course_id"]),
+                ).fetchone()
+            results.append({**result, "player_id": row["player_id"], "bytes_before": before, "bytes_after": after_row["bytes"]})
+        return results
 
     def save_gps_round(self, player_id: int, gps_round: Any) -> dict[str, Any]:
         validated = _validate_gps_round(gps_round)
@@ -680,11 +1119,17 @@ class PlayerStore:
         with self._connect() as database:
             rows = database.execute("""
                 SELECT round_id, course_id, started_at, updated_at, completed_at,
-                       revision, is_complete, total_strokes
+                       revision, is_complete, total_strokes, round_json
                 FROM gps_rounds WHERE player_id = ?
                 ORDER BY updated_at DESC LIMIT ?
             """, (player_id, limit)).fetchall()
-        return [dict(row) for row in rows]
+        history = []
+        for row in rows:
+            item = dict(row)
+            gps_round = json.loads(item.pop("round_json"))
+            item["holes_recorded"], item["holes_completed"] = _gps_round_progress(gps_round)
+            history.append(item)
+        return history
 
     def on_course_club_stats(self, player_id: int) -> dict[str, Any]:
         """Return accumulated, profile-relative club evidence from GPS rounds."""

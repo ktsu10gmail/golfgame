@@ -2,6 +2,22 @@ export const MAPPER_PROJECT_VERSION = "golf-course-map-v1";
 export const GAME_PACKAGE_VERSION = "golf-game-course-package-v1";
 export const EARTH_RADIUS_METERS = 6371008.8;
 export const YARDS_PER_METER = 1.09361;
+export const MAPPER_COURSE_STRUCTURES = Object.freeze({
+  STANDARD: "standard_18",
+  THREE_NINES: "three_nines"
+});
+export const MAPPER_NINE_LOOPS = Object.freeze([
+  { id: "central", name: "Central", start: 1, end: 9 },
+  { id: "north", name: "North", start: 10, end: 18 },
+  { id: "south", name: "South", start: 19, end: 27 }
+]);
+
+export function mapperNineLoops(project) {
+  return MAPPER_NINE_LOOPS.map(loop => ({
+    ...loop,
+    name: String(project?.nine_loops?.find(item => item?.id === loop.id)?.name || loop.name).trim() || loop.name
+  }));
+}
 
 const FEATURE_TYPES = new Set([
   "tee_blue",
@@ -12,6 +28,8 @@ const FEATURE_TYPES = new Set([
   "bunker",
   "green",
   "water",
+  "penalty_area_unknown",
+  "hole_outline",
   "cart_path",
   "trees",
   "out_of_bounds"
@@ -59,8 +77,11 @@ export function emptyMappedHole(holeNumber) {
 export function createMapperProject({
   courseName = "New golf course",
   courseId,
-  address = ""
+  address = "",
+  courseStructure = MAPPER_COURSE_STRUCTURES.STANDARD
 } = {}) {
+  const threeNines = courseStructure === MAPPER_COURSE_STRUCTURES.THREE_NINES;
+  const holeCount = threeNines ? 27 : 18;
   return {
     version: MAPPER_PROJECT_VERSION,
     course_name: courseName,
@@ -69,10 +90,43 @@ export function createMapperProject({
     updated_at: new Date().toISOString(),
     imagery_source: "User-selected local hole images",
     map_view: null,
+    course_structure: threeNines ? MAPPER_COURSE_STRUCTURES.THREE_NINES : MAPPER_COURSE_STRUCTURES.STANDARD,
+    nine_loops: MAPPER_NINE_LOOPS.map(loop => ({ id: loop.id, name: loop.name })),
     holes: Object.fromEntries(
-      Array.from({ length: 18 }, (_, index) => [String(index + 1), emptyMappedHole(index + 1)])
+      Array.from({ length: holeCount }, (_, index) => {
+        const holeNumber = index + 1;
+        const hole = emptyMappedHole(holeNumber);
+        if (threeNines) hole.handicap = index % 9 + 1;
+        return [String(holeNumber), hole];
+      })
     )
   };
+}
+
+export function mapperHoleCount(project) {
+  return project?.course_structure === MAPPER_COURSE_STRUCTURES.THREE_NINES ? 27 : 18;
+}
+
+export function configureMapperCourseStructure(project, structure) {
+  if (!project || typeof project !== "object") throw new Error("mapping project must be an object");
+  const normalized = structure === MAPPER_COURSE_STRUCTURES.THREE_NINES
+    ? MAPPER_COURSE_STRUCTURES.THREE_NINES
+    : MAPPER_COURSE_STRUCTURES.STANDARD;
+  project.course_structure = normalized;
+  project.nine_loops = MAPPER_NINE_LOOPS.map(loop => ({
+    id: loop.id,
+    name: project.nine_loops?.find(item => item?.id === loop.id)?.name || loop.name
+  }));
+  const holeCount = normalized === MAPPER_COURSE_STRUCTURES.THREE_NINES ? 27 : 18;
+  for (let holeNumber = 1; holeNumber <= holeCount; holeNumber += 1) {
+    if (!project.holes?.[String(holeNumber)]) {
+      project.holes ||= {};
+      const hole = emptyMappedHole(holeNumber);
+      if (normalized === MAPPER_COURSE_STRUCTURES.THREE_NINES) hole.handicap = (holeNumber - 1) % 9 + 1;
+      project.holes[String(holeNumber)] = hole;
+    }
+  }
+  return project;
 }
 
 function gamePointToLocalGps(origin, point) {
@@ -349,8 +403,15 @@ export function validateMapperProject(project) {
   if (typeof project.course_name !== "string" || !project.course_name.trim()) {
     throw new Error("course name is required");
   }
+  configureMapperCourseStructure(project, project.course_structure);
+  if (project.course_structure === MAPPER_COURSE_STRUCTURES.THREE_NINES) {
+    const loopNames = mapperNineLoops(project).map(loop => loop.name.toLocaleLowerCase());
+    if (new Set(loopNames).size !== loopNames.length) {
+      throw new Error("the three nine-hole courses must have different names");
+    }
+  }
   if (!project.holes || typeof project.holes !== "object") throw new Error("project holes are missing");
-  for (let holeNumber = 1; holeNumber <= 18; holeNumber += 1) {
+  for (let holeNumber = 1; holeNumber <= mapperHoleCount(project); holeNumber += 1) {
     const hole = project.holes[String(holeNumber)];
     if (!hole || typeof hole !== "object") throw new Error(`Hole ${holeNumber} is missing`);
     if (!Array.isArray(hole.features) || !Array.isArray(hole.route_points)) {
@@ -788,6 +849,44 @@ export function createEngineTransform(whiteTee, pin) {
   };
 }
 
+export function uprightHoleViewTarget(hole) {
+  return hole?.route_points?.[0] || hole?.markers?.pin || null;
+}
+
+export function createUprightGpsViewTransform(whiteTee, orientationTarget) {
+  const tee = finiteCoordinate(whiteTee, "upright view white tee");
+  const target = finiteCoordinate(orientationTarget, "upright view first-leg target");
+  const forwardDelta = gpsDeltaMeters(tee, target);
+  const length = Math.hypot(forwardDelta.east, forwardDelta.north);
+  if (length < 1) throw new Error("white tee and first-leg target must be at least one meter apart");
+  const forward = {
+    east: forwardDelta.east / length,
+    north: forwardDelta.north / length
+  };
+  const right = { east: forward.north, north: -forward.east };
+  const toView = point => {
+    const delta = gpsDeltaMeters(tee, finiteCoordinate(point, "upright view point"));
+    return offsetGpsPoint(
+      tee,
+      delta.east * right.east + delta.north * right.north,
+      delta.east * forward.east + delta.north * forward.north
+    );
+  };
+  const fromView = point => {
+    const delta = gpsDeltaMeters(tee, finiteCoordinate(point, "upright display point"));
+    return offsetGpsPoint(
+      tee,
+      delta.east * right.east + delta.north * forward.east,
+      delta.east * right.north + delta.north * forward.north
+    );
+  };
+  return {
+    bearing_degrees: Math.atan2(forward.east, forward.north) * 180 / Math.PI,
+    toView,
+    fromView
+  };
+}
+
 function routeDistance(points) {
   return points.slice(1).reduce(
     (total, point, index) => total + Math.hypot(
@@ -813,6 +912,8 @@ function featureDescription(feature) {
     bunker: "Mapped sand bunker.",
     green: "Mapped putting green.",
     water: "Mapped water hazard.",
+    penalty_area_unknown: "Imported penalty area awaiting classification.",
+    hole_outline: "Mapped hole outline.",
     trees: "Mapped wooded area.",
     out_of_bounds: "Mapped out-of-bounds area."
   }[feature.type];
@@ -880,6 +981,9 @@ function mappedHoleValidation(project, holeNumber) {
   if (!Number(hole.yardages.blue)) problems.push("enter blue tee yardage");
   if (!Number(hole.yardages.white)) problems.push("enter white tee yardage");
   if (!Number(hole.yardages.forward)) problems.push("enter forward tee yardage");
+  if (featuresOf(hole, "penalty_area_unknown").length) {
+    problems.push("classify each imported penalty area as water or remove it");
+  }
 
   for (const tee of ["blue", "white", "forward"]) {
     const marker = hole.markers[`${tee}_tee`];
@@ -903,8 +1007,9 @@ export function holeMappingStatus(project, holeNumber) {
 
 export function buildGameHoleJson(project, holeNumber) {
   validateMapperProject(project);
-  if (!Number.isInteger(holeNumber) || holeNumber < 1 || holeNumber > 18) {
-    throw new Error("holeNumber must be between 1 and 18");
+  const holeCount = mapperHoleCount(project);
+  if (!Number.isInteger(holeNumber) || holeNumber < 1 || holeNumber > holeCount) {
+    throw new Error(`holeNumber must be between 1 and ${holeCount}`);
   }
   const hole = project.holes[String(holeNumber)];
   const problems = mappedHoleValidation(project, holeNumber);
@@ -929,6 +1034,8 @@ export function buildGameHoleJson(project, holeNumber) {
   const rough = featuresOf(hole, "rough");
   const bunkers = featuresOf(hole, "bunker");
   const waters = featuresOf(hole, "water");
+  const unknownPenaltyAreas = featuresOf(hole, "penalty_area_unknown");
+  const holeOutlines = featuresOf(hole, "hole_outline");
   const cartPaths = featuresOf(hole, "cart_path");
   const trees = featuresOf(hole, "trees");
   const green = featuresOf(hole, "green")[0];
@@ -1021,8 +1128,20 @@ export function buildGameHoleJson(project, holeNumber) {
           lie_catalog_id: "lie_hazard_water",
           polygon: polygon(feature, transform),
           description: featureDescription(feature)
+        })),
+        ...unknownPenaltyAreas.map((feature, index) => ({
+          id: `penalty_unknown_h${holeNumber}_${index + 1}`,
+          lie_catalog_id: "lie_hazard_water",
+          polygon: polygon(feature, transform),
+          description: featureDescription(feature),
+          requires_review: true
         }))
       ],
+      hole_bounds: holeOutlines.map((feature, index) => ({
+        id: `hole_bounds_h${holeNumber}_${index + 1}`,
+        polygon: polygon(feature, transform),
+        description: featureDescription(feature)
+      })),
       green_complex: {
         id: `green_primary_h${holeNumber}`,
         lie_catalog_id: "lie_green",
@@ -1109,12 +1228,13 @@ function columnKind(value) {
   return Object.entries(SCORECARD_COLUMNS).find(([, aliases]) => aliases.has(key))?.[0] || null;
 }
 
-function validateScorecardRows(rows) {
-  if (rows.length !== 18) throw new Error(`found ${rows.length} holes; exactly 18 are required`);
+function validateScorecardRows(rows, holeCount = 18) {
+  if (![9, 18].includes(holeCount)) throw new Error("scorecard hole count must be 9 or 18");
+  if (rows.length !== holeCount) throw new Error(`found ${rows.length} holes; exactly ${holeCount} are required`);
   const byHole = new Map();
   rows.forEach(row => {
     const hole = Number(row.hole);
-    if (!Number.isInteger(hole) || hole < 1 || hole > 18) throw new Error(`invalid hole number: ${row.hole}`);
+    if (!Number.isInteger(hole) || hole < 1 || hole > holeCount) throw new Error(`invalid hole number: ${row.hole}`);
     if (byHole.has(hole)) throw new Error(`hole ${hole} appears more than once`);
     const par = Number(row.par);
     const handicap = Number(row.handicap);
@@ -1126,13 +1246,13 @@ function validateScorecardRows(rows) {
     }
     byHole.set(hole, { hole, par, handicap, blue: Number(row.blue), white: Number(row.white), forward: Number(row.forward) });
   });
-  for (let hole = 1; hole <= 18; hole += 1) {
+  for (let hole = 1; hole <= holeCount; hole += 1) {
     if (!byHole.has(hole)) throw new Error(`hole ${hole} is missing`);
   }
   return [...byHole.values()].sort((first, second) => first.hole - second.hole);
 }
 
-function parseScorecardColumns(lines) {
+function parseScorecardColumns(lines, holeCount) {
   const headerIndex = lines.findIndex(line => {
     const kinds = new Set(scorecardCells(line).map(columnKind).filter(Boolean));
     return ["hole", "par", "handicap", "blue", "white", "forward"].every(kind => kinds.has(kind));
@@ -1145,12 +1265,12 @@ function parseScorecardColumns(lines) {
     const cells = scorecardCells(line);
     if (!cells.length) continue;
     const hole = scorecardNumber(cells[indexes.hole]);
-    if (!Number.isInteger(hole) || hole < 1 || hole > 18) continue;
+    if (!Number.isInteger(hole) || hole < 1 || hole > holeCount) continue;
     rows.push(Object.fromEntries(
       ["hole", "par", "handicap", "blue", "white", "forward"].map(kind => [kind, scorecardNumber(cells[indexes[kind]])])
     ));
   }
-  return validateScorecardRows(rows);
+  return validateScorecardRows(rows, holeCount);
 }
 
 function findScorecardMatrixRow(lines, wantedKind) {
@@ -1162,17 +1282,17 @@ function findScorecardMatrixRow(lines, wantedKind) {
   return null;
 }
 
-function parseScorecardMatrix(lines) {
+function parseScorecardMatrix(lines, holeCount) {
   const holeRow = findScorecardMatrixRow(lines, "hole");
   if (!holeRow) return null;
   const positions = [];
   holeRow.cells.forEach((cell, index) => {
     const hole = scorecardNumber(cell);
-    if (Number.isInteger(hole) && hole >= 1 && hole <= 18 && !positions.some(entry => entry.hole === hole)) {
+    if (Number.isInteger(hole) && hole >= 1 && hole <= holeCount && !positions.some(entry => entry.hole === hole)) {
       positions.push({ hole, index });
     }
   });
-  if (positions.length !== 18) return null;
+  if (positions.length !== holeCount) return null;
 
   const matrixRows = Object.fromEntries(
     ["par", "handicap", "blue", "white", "forward"].map(kind => [kind, findScorecardMatrixRow(lines, kind)])
@@ -1186,43 +1306,109 @@ function parseScorecardMatrix(lines) {
     }
     return result;
   });
-  return validateScorecardRows(rows);
+  return validateScorecardRows(rows, holeCount);
 }
 
-export function parseScorecardText(text) {
+export function parseScorecardText(text, { holeCount = 18 } = {}) {
+  const expectedHoleCount = Number(holeCount);
+  if (![9, 18].includes(expectedHoleCount)) throw new Error("scorecard hole count must be 9 or 18");
   const lines = normalizedScorecardText(text).split("\n").map(line => line.trim()).filter(Boolean);
   if (!lines.length) throw new Error("paste a scorecard first");
   try {
-    const columns = parseScorecardColumns(lines);
+    const columns = parseScorecardColumns(lines, expectedHoleCount);
     if (columns) return columns;
   } catch (error) {
     throw error;
   }
-  const matrix = parseScorecardMatrix(lines);
+  const matrix = parseScorecardMatrix(lines, expectedHoleCount);
   if (matrix) return matrix;
   throw new Error("could not identify Hole, Par, Handicap, Blue, White, and Red/Gold/Forward values");
 }
 
 export function buildGameCoursePackage(project) {
   validateMapperProject(project);
+  return buildRoutedGameCoursePackage(project, {
+    courseId: cleanId(project.course_id),
+    courseName: project.course_name,
+    sourceHoles: Array.from({ length: 18 }, (_, index) => index + 1),
+    exportedAt: new Date().toISOString()
+  });
+}
+
+function routedScorecardCsv(project, sourceHoles) {
+  const rows = ["Hole,Par,Handicap,Yards_Blue,Yards_White,Yards_Red"];
+  sourceHoles.forEach((sourceHoleNumber, index) => {
+    const hole = project.holes[String(sourceHoleNumber)];
+    rows.push([
+      index + 1,
+      Number(hole.par) || 4,
+      Number(hole.handicap) || index + 1,
+      Number(hole.yardages.blue) || 0,
+      Number(hole.yardages.white) || 0,
+      Number(hole.yardages.forward) || 0
+    ].join(","));
+  });
+  return `${rows.join("\n")}\n`;
+}
+
+function buildRoutedGameCoursePackage(project, { courseId, courseName, sourceHoles, exportedAt }) {
   const holes = {};
   const errors = {};
-  for (let holeNumber = 1; holeNumber <= 18; holeNumber += 1) {
+  sourceHoles.forEach((sourceHoleNumber, index) => {
+    const gameHoleNumber = index + 1;
     try {
-      holes[String(holeNumber)] = buildGameHoleJson(project, holeNumber);
+      const gameHole = buildGameHoleJson(project, sourceHoleNumber);
+      gameHole.hole_metadata = {
+        ...gameHole.hole_metadata,
+        course_name: courseName,
+        hole_number: gameHoleNumber,
+        facility_hole_number: sourceHoleNumber
+      };
+      holes[String(gameHoleNumber)] = gameHole;
     } catch (error) {
-      errors[String(holeNumber)] = error.message;
+      errors[String(gameHoleNumber)] = error.message;
     }
-  }
+  });
   if (!Object.keys(holes).length) throw new Error("No holes are ready to export");
   return {
     version: GAME_PACKAGE_VERSION,
-    course_id: cleanId(project.course_id),
-    course_name: project.course_name,
-    exported_at: new Date().toISOString(),
-    scorecard_csv: buildScorecardCsv(project),
+    course_id: cleanId(courseId),
+    course_name: courseName,
+    facility_id: cleanId(project.course_id),
+    exported_at: exportedAt,
+    scorecard_csv: routedScorecardCsv(project, sourceHoles),
     holes,
     gps_calibrated_holes: Object.values(holes).filter(hole => hole.hole_metadata?.gps_calibration).length,
-    incomplete_holes: errors
+    incomplete_holes: errors,
+    source_holes: [...sourceHoles]
   };
+}
+
+function routedCourseId(baseId, firstId, secondId) {
+  const suffix = `-${firstId}-${secondId}`;
+  const base = cleanId(baseId).slice(0, Math.max(1, 63 - suffix.length)).replace(/-+$/g, "");
+  return `${base}${suffix}`;
+}
+
+export function buildGameCoursePackages(project) {
+  validateMapperProject(project);
+  if (project.course_structure !== MAPPER_COURSE_STRUCTURES.THREE_NINES) {
+    return [buildGameCoursePackage(project)];
+  }
+  const exportedAt = new Date().toISOString();
+  const loops = mapperNineLoops(project);
+  const combinations = loops.flatMap(first => loops
+    .filter(second => second.id !== first.id)
+    .map(second => [first, second]));
+  return combinations.map(([first, second]) => {
+    const sourceHoles = [first, second].flatMap(loop =>
+      Array.from({ length: 9 }, (_, index) => loop.start + index)
+    );
+    return buildRoutedGameCoursePackage(project, {
+      courseId: routedCourseId(project.course_id, first.id, second.id),
+      courseName: `${project.course_name} · ${first.name} + ${second.name}`,
+      sourceHoles,
+      exportedAt
+    });
+  });
 }

@@ -69,6 +69,29 @@ test("appendHoleEvent stores normalized hole events and updates hole score", () 
   assert.equal(next.holes[0].score, null);
 });
 
+test("Game Master response audit events do not alter scoring or ball state", () => {
+  let round = createRoundState({ courseId: "meadows", roundSeed: 73 });
+  round = appendHoleEvent(round, 0, {
+    event_type: "shot_committed",
+    stroke_index: 1,
+    stroke_count_delta: 1,
+    remaining_distance_yards: 120,
+    resolved_lie: "Fairway",
+    resolved_ball: [10, 20],
+    payload: { shot: { start: [0, 0], landing: [10, 20], club: "7 Iron" } }
+  });
+  round = appendHoleEvent(round, 0, {
+    event_type: "gm_response_recorded",
+    stroke_index: 1,
+    payload: { responses: [{ source: "deterministic", text: "Sound plan." }] }
+  });
+  const state = buildHoleBrowserState(round, 0, { ball: [0, 0], lie: "Tee" });
+  assert.equal(state.strokes, 1);
+  assert.equal(state.penalty_strokes, 0);
+  assert.deepEqual(state.ball, [10, 20]);
+  assert.equal(state.shots.length, 1);
+});
+
 test("reduceHoleState reconstructs transactional ball and scoring state", () => {
   const reduced = reduceHoleState([
     {
@@ -304,13 +327,32 @@ test("buildHoleBrowserState preserves replay identity payload for recorded shots
         landing: [142, -1],
         resolvedBall: [142, -1],
         resultPacket: packet,
-        resultRequest: request
+        resultRequest: request,
+        aimType: "landing_target",
+        landingTargetPlan: {
+          landing_target_coordinate: { x: 136, y: 0 },
+          landing_target_distance: 16,
+          selected_club: "Sand Wedge",
+          auto_calculated_power: 32,
+          expected_carry: 16,
+          expected_roll: 4,
+          expected_finish: 20,
+          candidate_clubs: [{ club_name: "Sand Wedge", power_percent: 32 }],
+          rule_of_12_candidate: "Sand Wedge",
+          recommended_choice: "Sand Wedge",
+          evaluator_version: "multi-run-v1",
+          seed: 914,
+          sample_count: 120
+        }
       }
     }
   });
   const browserState = buildHoleBrowserState(round, 3, { ball: [100, 0] });
   assert.deepEqual(browserState.shots[0].resultRequest, request);
   assert.deepEqual(browserState.shots[0].resultPacket, packet);
+  assert.equal(browserState.shots[0].aimType, "landing_target");
+  assert.equal(browserState.shots[0].landingTargetPlan.auto_calculated_power, 32);
+  assert.equal(browserState.shots[0].landingTargetPlan.sample_count, 120);
 });
 
 test("buildRoundBrowserState reflects replay reset and full round reset recovery", () => {

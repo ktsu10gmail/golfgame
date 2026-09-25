@@ -74,6 +74,21 @@ test("portable save is detached from live round and profile objects", () => {
   assert.equal(save.player_profile.name, "90+ player");
 });
 
+test("portable save preserves a frozen post-round report", () => {
+  const report = {
+    schema_version: "2.0", report_version: "2.0",
+    round: { status: "completed" },
+    narrative: { status: "deterministic_fallback" }
+  };
+  const save = createRoundSave({
+    roundState: playedRound(), currentHoleIndex: 0, pinIndex: 2,
+    playerProfile: PROFILE, postRoundReport: report
+  });
+  report.narrative.status = "available";
+  assert.equal(save.post_round_report.narrative.status, "deterministic_fallback");
+  assert.equal(parseRoundSave(JSON.stringify(save)).post_round_report.report_version, "2.0");
+});
+
 test("portable save rejects unsupported and malformed files", () => {
   assert.throws(() => parseRoundSave("not json"), /not valid JSON/);
   assert.throws(

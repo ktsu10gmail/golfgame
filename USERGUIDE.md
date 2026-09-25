@@ -1,43 +1,53 @@
 # Player's Guide
 
-> Think → Choose → Commit → Learn
+> This is a golf strategy game, not a swing simulator.
 
-## What this game is for
+The goal is to make Course Management thinking automatic: read the situation, recognize trouble, understand your ability, choose a useful target, and learn from the decision.
 
-This is a golf strategy game, not a swing simulator. Its purpose is to help you make a deliberate decision before every shot.
+A lucky result does not make a poor decision correct, and normal shot dispersion does not make a sound decision wrong.
 
-Your simulated stroke score makes the round feel like golf, but Course Management is the more important learning measure. It evaluates decisions such as:
+## Part I — Learn to Play
 
-- Reading the lie, stance, slope, elevation, and ball position
-- Choosing a club and swing that fit your player profile
-- Selecting a sensible target and preferred miss
-- Respecting bunkers, water, out of bounds, trees, and recovery situations
-- Recognizing when a safe advance is better than a low-percentage hero shot
-- Responding intelligently when the previous shot does not go as planned
+### 5-Minute Quick Start
 
-A high Course Management score means you managed the course well using the information available and the abilities recorded in your profile. A lucky result does not make a poor decision correct, and normal shot dispersion does not make a sound decision wrong.
+You can begin a round with this simple routine:
 
-The habit to build is simple: think before you swing.
+1. Create or select an accurate Player Profile.
+2. Read the Game Master before every shot.
+3. Identify trouble and decide where a useful miss should be.
+4. Select Club, Swing, Aim Mode, and Target. Check the automatic Shot Type or choose your own.
+5. Open Caddie Choices when a second opinion would help.
+6. Select Play shot.
+7. Judge Decision Quality separately from the result.
+8. Continue from the new lie.
 
-## 1. Sign in and resume on any device
+The game is not only asking, **“Did I hit a good shot?”**
 
-Create an account with your player name, email address, and password. Confirm your email if requested. Use the same account on your computer and phone.
+It is also asking, **“Did I make a good decision before I hit the shot?”**
 
-The game automatically saves an unfinished simulator round to your account. When you sign in on another device, the same round, hole, score, ball position, and player profile can be restored.
+### Quick 3-Hole Match
 
-If you forget your password, select Forgot password? on the sign-in screen. Follow the link in the email and enter a new password when the game reopens.
+Open **Game mode** in the header and select **3-hole match** for a short Player-vs-Game-Master contest. The game builds one Par 3, one Par 4, and one Par 5 from installed courses, in that order. Choose a tee, golfer profile, announcer setting, and audio levels, then select **Start challenge**. Select **18-hole match** from the same menu for a full-round contest, or **18-hole round** for solo play.
 
-Your account menu provides access to:
+You and the Game Master use the same physical golfer profile, but make separate decisions and receive independent simulated shot results. The official lead changes only after both sides finish the current hole. The progress ribbon shows each posted score and the match ends after the Par 5 with a concise result recap.
 
-- Your playing profile and personal statistics
-- Completed simulator round history
-- Player Learning summaries
-- The Top 10 rank board
-- Sign out
+Select **Play again** to generate a fresh challenge immediately with the same setup preferences, or **Exit** to return to the course you were playing. Signed-in players synchronize compact challenge records to their account; guest challenge history is not guaranteed after browser data is cleared.
 
-## 2. Create an accurate player profile
+### The Core Gameplay Loop
 
-Choose the built-in profile closest to your current ability, then select Enter my statistics or Edit statistics to create your personal profile.
+> READ → THINK → PLAN → AIM → PLAY → REVIEW → LEARN
+
+- **READ:** Lie, stance, slope, distance, and elevation.
+- **THINK:** Hazards, trouble, preferred miss, and the next-shot position.
+- **PLAN:** Club, swing, and Shot Type.
+- **AIM:** Direction Target or Landing Target.
+- **PLAY:** Commit the shot.
+- **REVIEW:** Separate Decision Quality from Execution Quality.
+- **LEARN:** Decide what to repeat or change.
+
+### Create an Accurate Player Profile
+
+Choose the built-in profile closest to your current ability, then select **Enter my statistics** or **Edit statistics** to create your personal profile.
 
 Enter:
 
@@ -45,100 +55,281 @@ Enter:
 - Accuracy percentage for each club
 - Putting make percentages from 3, 6, and 10 feet
 
-The profile uses your player name instead of retaining a generic label such as “90+ player.” Your profile follows your account to every device.
+Profile accuracy matters. Club selection, shot dispersion, putting probability, and Caddie Choices use this information. Update it when your real golf changes.
 
-Profile accuracy matters. Club selection, shot dispersion, putting probability, and caddie recommendations all use this information. Update it when your real golf changes.
+The profile uses your player name and follows your account to every device. The game never changes your permanent profile silently.
 
-Simulator-generated shot distances are not treated as proof of your real club distance. Real on-course evidence remains clearly distinguished from simulated outcomes.
+### Choose a Course, Tee, and Pin
 
-The statistics editor shows accumulated on-course evidence beside each club in your saved profile. Because phone GPS records the total distance between ball locations rather than airborne carry, the game estimates carry as 90% of the measured distance. Only normal full swings finishing within 20% of the club's established distance contribute to that carry average. Eligible mishits are excluded from the carry average but still count against on-course accuracy. Poor GPS fixes, recovery shots, severe lies, putts, and partial swings are excluded from this comparison.
+Select an installed course, then choose Blue, White, or Forward tee. The course book shows par, handicap, and tee yardage.
 
-The evidence card shows the number of attempts, successful shots, rounds, and its confidence level. After at least three successful shots, select **Use values** to copy the observed carry and accuracy into the editable fields. Review the change, then select **Save profile**; the game never updates a player's profile silently.
+Installed maps may include tee boxes, fairway, rough, greens, bunkers, water, trees, recovery areas, cart paths, streams, and out-of-bounds areas. The pin rotates to create different strategic situations. The map update date identifies the installed mapping version.
 
-## 3. Choose a course, tee, and pin
+Changing course during an unfinished simulator round asks for confirmation and saves the current round first.
 
-Select an installed course from the course menu, then choose Blue, White, or Forward tee. The course book shows the hole’s par, handicap, and tee yardage.
+### Read the Game Master
 
-Installed course maps may contain:
+The Game Master answers: **“What is happening right now?”**
 
-- Tee boxes
-- Fairway and rough
-- Greens and contour models
-- Bunkers and water
-- Trees and recovery areas
-- Cart paths, streams, and out-of-bounds areas
-
-The pin location rotates to provide different strategic situations. The hole map’s update date helps identify the installed mapping version.
-
-Changing course while a simulator round is in progress asks for confirmation. The unfinished round is saved before the new course opens.
-
-## 4. Understand the two map modes
-
-The map has two clearly separated modes.
-
-### Simulator
-
-Simulator is the normal strategy game. You choose a club, swing, target, and adjustment; the shot engine produces a realistic probabilistic result. These shots count toward the simulator score, Course Management review, and completed simulator history.
-
-Normal play uses realistic randomness based on the player profile, club, lie, and shot conditions. Recorded seed information makes the same shot reproducible for replay and debugging; it does not make every new attempt produce the same result.
-
-### On Course Live
-
-On Course Live is a read-only view of the latest GPS round recorded for the selected course under the same player account.
-
-It shows:
-
-- The recorded tee position
-- Numbered real-shot lines
-- The latest recorded ball position
-- Current lie and distance to the pin
-- GPS accuracy
-- Total recorded strokes and current-hole strokes
-- The latest club or strategy record
-- How recently the server copy was updated
-
-The view refreshes from the server approximately every five seconds. Select Refresh to return to the hole with the newest GPS activity. You can also use Previous and Next to inspect another hole without being forced back automatically.
-
-On Course Live never adds GPS shots to the simulator, changes the simulator score, or treats measured GPS travel as simulated club carry.
-
-## 5. Read the Game Master before choosing a shot
-
-The Game Master provides the calculated facts for the ball’s current situation. Depending on the shot, this may include:
+Read it before choosing a shot. Depending on the situation, it reports authoritative calculated facts such as:
 
 - Distance to the pin or cup
 - Current lie
 - Ball above, below, or level with your feet
 - Uphill, downhill, or nearly level slope
 - Expected sidehill movement
-- Tree blockage and the available recovery direction
-- Distance to the useful end of the fairway in a recovery situation
+- Tree blockage and recovery direction
+- Distance to a useful recovery target
 
-Read this message first. It describes the problem you need to solve.
+On desktop, Game Master voice can announce the result and next situation when Voice is enabled.
 
-On the desktop, Game Master voice can announce the result and next situation when Voice is enabled.
+### Plan and Play a Simulator Shot
 
-## 6. Plan a simulator shot manually
+For a normal shot:
 
-For a normal full shot:
+1. Read the lie, distance, and trouble.
+2. Choose an Aim Mode.
+3. Select a club.
+4. Set Swing manually for Direction Target, or let Landing Target calculate Auto Power.
+5. Select **Aim at pin** or click/tap the map to fix a target.
+6. Check the target distance, expected finish, and next shot being left.
+7. Accept the automatic Shot Type or choose your own.
+8. Record a Lie Adjustment when needed.
+9. Add an optional coaching note if you want Review to remember your thinking.
+10. Select **Play shot**.
 
-1. Select a club.
-2. Select a quarter, half, three-quarter, or full swing.
-3. Move the pointer over the map to preview distance from the ball.
-4. Choose Selected target and click or tap the intended target. You may do these in either order.
-5. Check the target distance and projected distance remaining to the pin.
-6. Complete the Aim and Lie Adjustment controls when needed.
-7. Add an optional coaching note if you want the review to remember your thinking.
-8. Select Play shot.
+The shot is not committed until you select Play shot. Moving the pointer only previews yardage; clicking or tapping fixes the marker.
 
-Changing club or swing updates the calculated carry shown beside the club. A manually selected club and swing also create a target preview before you commit.
+### Aim Mode: Direction Target vs Landing Target
 
-On the green, putter pace remains a fine percentage because small pace changes matter more than quarter-swing labels.
+Aim Mode tells the game what the map marker means. It is separate from Shot Type.
 
-The shot is not committed until you select Play shot. Moving the pointer only previews yardage; clicking or tapping fixes the target.
+| Feature | Direction Target | Landing Target |
+|---|---|---|
+| Marker represents | Starting direction | Intended first landing point |
+| Player controls | Direction and Swing power | Landing point and club |
+| Game calculates | Result from selected power | Required Auto Power |
+| Useful for | Driving, Lay up, Recovery, deliberate partial shots | Approach, Chip and run, short Bunker shots |
+| Main question | “Which direction and how hard?” | “Where do I want the ball to land?” |
 
-### Mobile shot controls
+**Direction Target** sets the starting line. Your club and manual Swing percentage determine intended carry.
 
-On a phone, the compact movable panel contains five sections:
+**Landing Target** sets intended carry: the place where you want the ball to first touch down. Choose the marker and club; the game calculates continuous Auto Power from your profile carry, lie, and elevation. It then shows expected carry, normal rollout, and expected finish.
+
+Landing Target is available at any distance when the ball is off the green and a non-Putter club is selected. It does not guarantee that the ball will land on the marker. Normal player-profile dispersion still applies, so identical choices can produce different results.
+
+### Choose a Shot Type
+
+Shot Type describes the golf decision you intend to play. Leave it on **Auto** to let the game use the lie, distance to pin, selected club, and target. Auto displays its current choice, such as **Approach — Auto**. You may override it when your strategy is different.
+
+- **Driving:** A long advancing shot, normally from the tee with Driver, wood, or hybrid.
+- **Lay up:** Stops short of the green or trouble to leave a preferred next distance.
+- **Approach:** Attacks or advances toward the green using normal full-flight carry and rollout.
+- **Chip and run:** A low greenside shot with a landing target no longer than 30 yards.
+- **Bunker shot:** An intentional shot from sand; short bunker shots can use the greenside landing model.
+- **Recovery:** Escapes trees or another restricted position before returning to normal play.
+- **Putting:** Rolls the ball from the green with the Putter.
+
+Shot Type does not replace Aim Mode. Decide whether the marker is a direction line or landing point, then accept Auto or choose your Shot Type. The game blocks combinations that do not fit the rules and explains what to select instead.
+
+### Use Caddie Choices for a Second Opinion
+
+Caddie Choices answers: **“What are my reasonable strategic options?”**
+
+Imagine 175 yards to the green with water protecting the right side and your normal dispersion bringing that water into play:
+
+- **Aggressive:** Attack the green or pin for a stronger scoring opportunity while accepting more hazard exposure.
+- **Safe & Smart:** Choose a safer target or layup that reduces penalty risk and leaves a manageable next shot.
+
+Neither plan predicts the exact finish. The Caddie compares scoring opportunity, playable outcomes, remaining distance, dispersion, and hazard exposure using your Player Profile.
+
+When two genuinely different plans exist, the game can show Aggressive and Safe & Smart. If only one honest plan exists, it may show one instead of inventing a duplicate.
+
+Open the question-mark explanation to see the club, swing, target, expected finish, hazards, and risk/reward evidence. Selecting a choice prepares the shot but does not play it. Caddie Choices are recommendations, not commands.
+
+For the technical comparison, the strategy engine runs hundreds of paired outcomes through the same authoritative shot engine. Every candidate receives the same test conditions, allowing a fair comparison. AI may explain the evidence, but it does not invent or replace the calculated ranking.
+
+### Putting Basics
+
+On the green, Putter pace uses a fine percentage because small changes matter. Select a target line, adjust pace, and play. The generated contour is a simulator exercise—not the physical green at the selected golf course.
+
+### On-Course GPS Quick Start
+
+Use this short sequence on your phone during a real round.
+
+**At the Tee**
+
+Tee location → Select Club → Select Swing → Consider Caddie choices → Record strategy/target → Hit the real shot
+
+Tee location establishes the start and does not add a stroke.
+
+**At the Ball**
+
+Walk to the ball → Ball location → Verify/correct lie → Record Ball/Hill/Rough conditions → Select Club and Swing → Consider strategy → Hit
+
+Ball location completes the previous shot and adds that stroke.
+
+**On the Green**
+
+On Green → **+1 Putt** for every putt that stays out → **Holed Out** for the final putt
+
+Holed Out records the final stroke and completes the hole.
+
+## Part II — Learn to Think Like a Golfer
+
+### Course Management and the Preferred Miss
+
+Course Management means choosing a plan that fits the situation and your actual ability—not merely choosing the club that can travel farthest.
+
+Before selecting a club, ask:
+
+- Where is the major trouble?
+- Which miss still leaves a playable next shot?
+- What distance and angle do I want next?
+- Is safe advancement better than a low-percentage hero shot?
+- Is accepting bogey protecting against a much worse score?
+
+A preferred miss is not planning to hit a bad shot. It is choosing a target so normal dispersion is more likely to leave the ball in a useful place.
+
+### Decision Quality vs Execution Quality
+
+The game grades what you knew and chose before the random result separately from how the simulated shot finished.
+
+**Good Decision, Poor Result**
+
+Water is on the right. You choose a suitable club and a safe target left of the water. Normal dispersion sends the ball into rough.
+
+- Decision Quality: Good
+- Execution/Outcome: Poor
+- Lesson: One unfavorable result does not make the safe strategy wrong.
+
+**Poor Decision, Lucky Result**
+
+A safer route exists, but you attempt a low-percentage hero shot over a major hazard. The random result happens to finish on the green.
+
+- Decision Quality: Poor
+- Outcome: Excellent
+- Lesson: A lucky result does not convert a poor Course Management decision into a good one.
+
+### Landing Target and the Rule of 12
+
+For an Approach longer than 30 yards, Landing Target uses normal full-flight physics and the club's normal rollout.
+
+For Chip and run or a short Bunker shot with a landing target of 30 yards or less, the greenside model can use Rule of 12 guidance. The Rule of 12 is an explainable starting point; lie, dispersion, slope, rollout, and hazards can change the final recommendation.
+
+**Example: LAND → ROLL → FINISH**
+
+- Ball to landing point: 5 yards
+- Landing point to cup: 15 yards
+- Total ball-to-cup distance: 20 yards
+
+The objective is not necessarily to carry the ball all 20 yards. Place Landing Target 5 yards away, then consider a club whose expected release fits the remaining 15 yards. One club may fly lower and roll farther; another may carry farther and stop sooner. Changing clubs recalculates Auto Power while the landing marker stays fixed.
+
+Chip and run cannot use a landing target longer than 30 yards. Choose Approach for a longer shot.
+
+### Recovery Strategy
+
+Mapped geometry—not AI wording—determines whether the ball is in fairway, rough, bunker, water, trees, or out of bounds.
+
+In trees, the Game Master reports whether the pin line is blocked and may place a gold **PUNCH** target inside the mapped safe fairway interval. It gives target distance, direction, and available margin. The marker is guidance, not an automatic shot. Select it, then choose a Recovery club and swing that fit the canopy and available room.
+
+Tree restrictions do not apply from a mapped tee box. Water, out of bounds, and unplayable situations use authoritative penalty and relief rules.
+
+### Three Different Sources of Help
+
+**Game Master — “What is happening right now?”**
+
+Reports authoritative calculated facts: distance, lie, slope, ball position, tree blockage, recovery direction, and relevant shot conditions.
+
+**Caddie Choices — “What are my reasonable strategic options?”**
+
+Compares Aggressive and Safe & Smart plans, including club, swing, target, and risk/reward evidence. These are recommendations.
+
+**AI Caddie — “What can I learn from what happened?”**
+
+Explains verified shot facts, recognizes good decisions, identifies improvement opportunities, and teaches strategy concepts. AI Caddie is separate from authoritative shot calculation. The game remains playable and scoreable when AI is unavailable.
+
+### Review and Player Learning
+
+Review can show the hole situation, recorded decision, Decision Quality versus Execution Quality, lie recognition, adjustment credit, preferred miss, hazard evidence, one useful improvement, and replay.
+
+Player Learning summarizes verified patterns only after enough reliable completed-round evidence exists. It does not treat one lucky or unlucky simulated result as a permanent tendency.
+
+### What GPS Knows vs What You Know
+
+> GPS tells the game where you are. You tell the game what the ball actually looks like from where you are standing.
+
+The system can estimate position and mapped surface from GPS, course geometry, and calibrated course data. Confirm or correct what you can see:
+
+- Fairway, Rough, Bunker, or Recovery
+- Ball Above Feet, Ball Below Feet, or Level
+- Uphill, Downhill, or Level
+- Rough severity
+- Club used
+- Swing used
+
+GPS cannot reliably see the physical lie, grass depth, stance, or slope from coordinates alone.
+
+### How This Game Can Make You a Better Golfer
+
+The game is designed to help you practice transferable thinking:
+
+- Recognize trouble before selecting a club.
+- Choose a preferred miss.
+- Plan backward from the desired next shot.
+- Understand personal dispersion.
+- Recognize when safe advancement is better than a hero shot.
+- Accept bogey when it protects against a much worse score.
+- Choose useful landing points around the green.
+- Separate good decisions from lucky outcomes.
+- Learn real club tendencies from accumulated GPS evidence.
+- Make Course Management thinking automatic.
+
+The simulator does not prove that real-world performance improved. It provides a structured place to practice decisions; real GPS evidence remains separately identified.
+
+### Real On-Course Evidence and Your Profile
+
+Phone GPS records total travel between ball locations, not airborne carry. The game estimates carry as 90% of measured travel when evaluating eligible shots. That measurement can include roll, GPS error, and movement between fixes.
+
+Only normal full swings finishing within 20% of the club's established distance contribute to the observed carry average. Eligible mishits can count against on-course accuracy without entering the carry average. Poor GPS fixes, recovery shots, severe lies, putts, and partial swings are excluded.
+
+The profile editor shows attempts, successful shots, rounds, and confidence. After at least three successful shots, **Use values** can copy observed values into editable fields. You must review and select **Save profile**; evidence never changes your profile silently.
+
+Simulator-generated distances are not evidence of real club distance.
+
+## Part III — Reference
+
+### Account, Sign-In, and Synchronization
+
+Create an account with player name, email, and password. Confirm your email if requested. Use the same account on computer and phone.
+
+An unfinished simulator round saves automatically. Another device can restore the course, hole, score, ball position, and Player Profile. Use **Forgot password?** on the sign-in screen when needed.
+
+The Account menu provides Player Profile, completed simulator Round History, On-course replays, Player Learning, Top 10, Feedback Center, and Sign out.
+
+### Simulator and On Course Live
+
+**Simulator** is the strategy game. You select club, swing, Aim Mode, target, Shot Type, and adjustment; the authoritative engine produces a probabilistic result. Simulator shots count toward score, Course Management review, and simulator history.
+
+Normal randomness uses the Player Profile, club, lie, and shot conditions. Recorded seed information supports replay and debugging; it does not make separate attempts produce the same result.
+
+**On Course Live** is a read-only view of the latest synchronized GPS round for the selected course. It can show the tee, numbered shot lines, latest ball position, lie, pin distance, GPS accuracy, strokes, latest strategy, and update time.
+
+It refreshes from the server approximately every five seconds. **Refresh** returns to the newest GPS activity; Previous and Next inspect other holes.
+
+On Course Live never adds GPS shots to the simulator, changes simulator score, or treats GPS travel as simulated carry.
+
+### Structured Shot Controls and Adjustments
+
+Use Aim Mode, the map target, and Shot Type instead of relying on a sentence to change the actual setup. The optional message is a coaching note only.
+
+Lie Adjustment choices are None, Aim left, and Aim right. When left or right is selected, choose the offset in yards. For putting, select the cup or an offset from it.
+
+A correct adjustment can temporarily improve effective accuracy for that shot, subject to a cap. It never changes permanent profile accuracy.
+
+### Mobile Shot Controls
+
+The movable phone panel contains:
 
 1. Shot Plan
 2. Game Master
@@ -146,128 +337,31 @@ On a phone, the compact movable panel contains five sections:
 4. Caddie Choices
 5. Adjustment and Play
 
-Use the up and down controls to move through the sections. Select Move to dock the panel at the top or bottom of the map. Moving the panel never moves a target that has already been selected.
+Use the up/down controls to move between sections. **Move** docks the panel at the top or bottom. Moving the panel never moves a selected target.
 
-## 7. Use Caddie Choices when you need a second opinion
+### Shot Result, Animation, and Replay
 
-The game offers up to two distinct plans when two meaningful choices exist:
+Shot Result appears immediately without waiting for AI. It reports finish, remaining distance, and position left or right of the intended pin line. A result such as “42 yards left” describes geometry; it does not by itself prove slice, hook, pull, or push.
 
-- Aggressive: pursues the strongest scoring opportunity while accepting more exposure or dispersion.
-- Safe & Smart: selects the best practical course-management option for the current lie, mapped hazards, and player profile.
+Full shots show separate carry and roll. Putting shows a slower contour-aware roll. The final position always comes from the authoritative result, not an animation frame.
 
-If only one honest plan exists, the game may show one recommendation instead of inventing a duplicate choice.
+Open Review and use **Replay every shot** or **Replay this shot**. Replay adds no stroke. **Reset & replay Hole** and **Reset hole** ask for confirmation before removing hole progress.
 
-Open Caddie Choices and select the question-mark explanation to see why a plan was offered. The explanation can include intended carry, expected finish, remaining distance, mapped hazards, likely dispersion, and the reason the plan is aggressive or safer.
+### Simulator Putting and Green Reading
 
-The strategy engine compares choices by running hundreds of paired outcomes through the same authoritative shot engine. Each candidate receives the same test conditions, allowing the game to compare playable finishes, hazards, dispersion, and remaining distance fairly. AI may explain this evidence, but it does not invent or replace the calculated ranking.
+The putting green is generated by the game. It is **not a replica, scan, or survey of the physical course green**. Use it to practice a repeatable process, not to choose a real-world putting line.
 
-Selecting a caddie choice prepares its club, swing, and fixed target. It does not play automatically. Selecting Play shot confirms the choice.
+When the simulated ball reaches the green, the game opens a close putting view. **Enlarge Green** provides Top view, 3D view, zoom from 1× to 5×, Ball-to-pin view, quarter-turn rotation, and Close enlarged view.
 
-Caddie choices are recommendations, not commands. You can always return to your own club, swing, and target.
+You can select a target in Top or 3D view. **Caddie Read** demonstrates a starting line and pace window for the generated contour shown on screen. It is not a promise that the putt will be holed.
 
-## 8. Record your adjustment with the structured controls
+The ball follows that same displayed contour. Long putts become less precise from 15 feet onward; downhill and heavily breaking putts receive additional dispersion. A putt finishing within two feet is a gimme.
 
-The game no longer depends on interpreting a sentence to decide the actual shot setup. Use the dropdown controls so your intention is unambiguous.
+Practice reading high and low areas, choosing a start line, matching pace to break, and leaving a simpler next putt. On a physical course, read the real green, grain, moisture, speed, and cup yourself.
 
-Aim options include:
+### Detailed GPS Operation
 
-- Pin
-- Selected target
-
-Lie Adjustment options include:
-
-- None
-- Aim left
-- Aim right
-
-When left or right is selected, choose the offset in yards. For putting, use the putting aim controls for the cup or an offset from the cup.
-
-The optional message box is a coaching note. It records additional thinking for later analysis, but it cannot silently change the selected club, swing, or target.
-
-A correct adjustment can temporarily improve the effective accuracy of that shot. For example, correctly compensating for a verified sidehill lie can earn an accuracy bonus, subject to a cap. The permanent club accuracy in your profile does not change from one simulated decision.
-
-## 9. Know what each feedback area means
-
-### Game Master
-
-The Game Master reports authoritative calculated conditions, confirms the setup, and reports the next lie after the shot. After a non-putting shot, the mobile shot controls return to the Game Master section so the new lie is visible immediately.
-
-### Shot Result
-
-The result appears immediately without waiting for AI. It shows where the ball finished, the remaining distance, and how far it is left or right of the pin line.
-
-“42 yards left of the pin line” describes the final location relative to the intended pin line. It does not by itself prove that the swing was a slice, hook, pull, or push.
-
-### AI Caddie
-
-AI commentary is separate from the authoritative result. It can arrive afterward without delaying play. It uses verified shot facts and available golf guidance to explain what you recognized, what deserved credit, and what could improve.
-
-AI is coaching support, not the shot calculator. If AI is unavailable, the deterministic result, scoring, and review evidence remain complete.
-
-## 10. Watch the shot and replay it
-
-Full shots display a visible ball flight and landing sequence. Carry and roll are represented separately, and the final ball position comes from the authoritative shot result rather than the animation frame.
-
-Putting displays a slower contour-aware roll so you can see the route to the finishing point.
-
-Open Review and use Replay every shot or Replay this shot to watch a recorded simulator shot again. Replaying the animation does not add another stroke.
-
-Reset & replay Hole clears that hole after confirmation and lets you test a different strategy. Reset hole also asks for confirmation before removing the current hole’s progress.
-
-## 11. Handle trees, hazards, and recovery situations
-
-Mapped geometry—not AI wording—determines whether the ball is in fairway, rough, bunker, water, trees, or out of bounds.
-
-When the ball is in trees, the Game Master selects from verified recovery conditions. It reports whether the pin line is blocked and places a gold **PUNCH** target near the middle of the mapped safe fairway interval. The message gives the target distance, angle left or right of the pin line, clock direction when facing the pin, and the available margin before and beyond the target.
-
-The recovery marker is guidance, not an automatic shot selection. Tap or click the gold marker to use that line, then choose a club and swing that fit the reported canopy and swing-room restriction.
-
-Tree restrictions do not apply to a ball on a mapped tee box.
-
-Water, out of bounds, and unplayable situations use authoritative penalty and relief rules. Bunker and water calculations use the invisible geometry installed with the course, even when decorative artwork extends beyond it.
-
-## 12. Practice green reading in the simulator
-
-Putting mode is a procedural mini-game and green-reading exercise. Its green is generated by the game; it is **not a replica, scan, or survey of the physical green at the selected golf course**. Use the exercise to practice a repeatable reading process inside the simulator, not to choose a real-world putting line.
-
-When the simulated ball reaches the green, the game changes to a close putting view. Pointer hover on the top view reports distance from the simulated ball and from the cup.
-
-Select Enlarge Green for a more detailed view. The enlarged-green toolbar provides:
-
-- Top view
-- 3D view
-- Green zoom from 1× through 5×
-- Ball-to-pin view
-- Quarter-turn rotation
-- Close enlarged view
-
-At every zoom level, the view keeps the ball and cup as the focus. You can click or tap a target in Top or 3D view. The putting controls let you select the target, adjust pace, and play without leaving the enlarged view.
-
-Select Caddie Read to see how a starting line and pace window can be derived from the **generated contour currently shown on screen**. The line is correct only for that simulated contour. It is an example of the reasoning process—not a read of the corresponding real green and not a promise that the simulated putt will be holed.
-
-The simulated ball follows the same generic contour field shown by the colors and slope arrows. The top and 3D views are two presentations of that same elevation model.
-
-Long putts become progressively less precise from 15 feet onward. Downhill and heavily breaking putts receive additional dispersion, while stronger putting profiles remain more consistent. A putt finishing within two feet is a gimme and triggers the gimme completion message.
-
-## 13. Know what the putting exercise can teach
-
-The generated green changes orientation, shape, contour, and pin position to create varied practice problems. The transferable lesson is the decision process; the exact aim point, break amount, pace percentage, and ball path apply only to the on-screen exercise.
-
-Use it to practice:
-
-- Reading high and low areas
-- Choosing a start line
-- Matching pace to break and slope
-- Planning an approach that leaves a simpler next putt
-- Accepting realistic three-putt pressure on long putts
-
-On a physical course, read the actual green, grain, moisture, speed, and cup location yourself. Do not carry the simulator's displayed line or pace percentage into GPS play as though it described that course's real putting surface.
-
-## 14. Record a real round with GPS Mode
-
-GPS Mode is designed for use at a calibrated installed course on your phone.
-
-For at-home interface testing, use the **Page preview** menu at the top of GPS Mode. It can display Tee setup, Shot page, Green page, or Hole Review without requesting a location or changing the saved round. Preview controls are intentionally read-only. Return to **Current round** before recording real play.
+GPS Mode is intended for a calibrated installed course on a phone. **Page preview** can show Tee setup, Shot page, Green page, or Hole Review without requesting location or changing the round. Return to **Current round** before recording play.
 
 Before starting:
 
@@ -275,118 +369,66 @@ Before starting:
 2. Select the course you are physically playing.
 3. Open the correct hole.
 4. Select GPS.
-5. Allow precise location access in the browser.
+5. Allow precise browser location.
 
-At the white tee, select Tee location. This establishes the starting position and does not add a stroke.
+At the white tee, select **Tee location**. It establishes the start and adds no stroke.
 
-Before hitting, choose your own club and quarter, half, three-quarter, or full swing. If you want help, select **Caddie choices** to reveal the Aggressive and Safe & Smart plans.
+Before hitting, select your club and quarter, half, three-quarter, or full Swing. Caddie choices can record an Aggressive or Safe & Smart plan. GPS Mode records the decision; it does not swing or simulate the real shot.
 
-The selection records the decision you considered. GPS Mode does not swing the club or simulate the shot.
+At the next ball, select **Ball location**. This completes the previous shot, records the ending GPS position, and adds one stroke. Repeat at each location.
 
-When you reach the ball, select Ball location. This completes the previous shot, records the ending GPS position, and adds one stroke. Repeat at each new ball location.
+Correct the estimated lie when necessary with Fairway, Rough, Bunker, or Recovery. Record Ball as TBD, Level, Above feet, or Below feet; Hill as TBD, Level, Uphill, or Downhill; and Rough as TBD, Light, Mild, or Deep. Practical defaults are Level ball, Level hill, and Light rough when the system cannot determine them. Correct anything that does not match the physical lie.
 
-The map estimates the surface lie. Correct it when necessary by selecting Fairway, Rough, Bunker, or Recovery. Then record:
+On reaching the green, select **On Green**. Select **+1 Putt** for each putt that stays out, then **Holed Out** for the final putt. Holed Out adds that stroke, completes the hole, and opens the next hole.
 
-- Ball: TBD, Level, Above feet, or Below feet
-- Hill: TBD, Level, Uphill, or Downhill
-- Rough: TBD, Light, Mild, or Deep when applicable
+**Hole review** lists shots, club, distance, GIR, putts, and score. You can correct a missing or incorrect club and Swing. **Undo last** reverses a mistaken location, putt, or completion.
 
-When GPS and the mapped course data cannot determine these conditions, the practical defaults are **Level** ball position, **Level** hill, and **Light** rough. Correct any default that does not match the actual lie before choosing your shot.
+### GPS Saving and Synchronization
 
-On the green, select **+1 putt after every putt**, including the putt that goes in. Then select the **next-hole arrow (→)** to finish the current hole and continue. Finishing the hole does not add another stroke. Select **Hole review** to see every recorded shot with its club and distance, GIR status, putts, and final score. Use Undo last if you record a location, putt, or hole completion incorrectly.
+Every GPS action saves to the phone first, then synchronizes a versioned copy to the signed-in account.
 
-Phone GPS measures travel between two recorded ball locations. That number includes carry, roll, measurement error, and the route between fixes. It must not be interpreted automatically as exact airborne club carry.
+The header can report Saved on phone, Syncing, Synced, Offline, or Server unavailable. If disconnected, continue recording; the phone copy remains usable and synchronization retries later. An older phone copy cannot overwrite a newer server revision.
 
-## 15. GPS saving and synchronization
+Leaving GPS Mode opens On Course Live. On another signed-in device, select the same course and On Course Live.
 
-Every GPS action saves to the phone first, then synchronizes a versioned copy to the signed-in account on the game server.
+GPS records and simulator records remain separate. Open **Player account → On-course replays** for synchronized GPS rounds. Replay separates Result, Decision, and Outcome vs target. Older shots without a target show **Target not recorded** rather than receiving an invented comparison.
 
-The GPS header reports states such as:
+### Scorecard, Round Card, and Review
 
-- Saved on phone
-- Syncing
-- Synced
-- Offline
-- Server unavailable
+The Scorecard uses a circle for birdie, double circle for eagle or better, square for bogey, filled square for double bogey or worse, and a plain score for par.
 
-If the connection is interrupted, continue recording. The phone copy remains available and later edits or reconnecting will retry synchronization. A newer server revision cannot be overwritten by an older phone copy.
+The compact Round Card provides hole navigation and progress. On mobile, select the current-hole control to open it.
 
-After leaving GPS Mode, the game opens On Course Live so the recorded path is immediately visible on the installed course map. On another signed-in device, select the same course and then On Course Live.
+**Save round file** and **Load round file** provide optional portable backup. Account synchronization is the normal cross-device method. A round file contains the profile, score, current position, and replayable simulator history.
 
-Current simulator history and GPS records remain separate. Combined simulator-versus-on-course history and reflective on-course replay are future features; the live map does not pretend they already exist.
+Review focuses on holes with useful learning evidence instead of filling the report with routine holes.
 
-## 16. Read the scorecard, Round Card, and review
+### Round History, Player Learning, and Top 10
 
-The Scorecard uses traditional visual notation:
+Round History stores completed simulator rounds. Player Learning waits for enough reliable evidence before presenting a trend. Simulated approach distances are not treated as measured proof of real-world performance.
 
-- Circle for birdie
-- Double circle for eagle or better
-- Square for bogey
-- Filled square for double bogey or worse
-- Plain score for par
+Top 10 uses each player's best completed Course Management score; lower stroke score breaks a tie. Course Management is the ranking measure because the game rewards thinking rather than one favorable random outcome.
 
-The compact Round Card is for hole navigation and progress. Select the current-hole control on mobile to open it.
+### Feedback Center
 
-The Scorecard also provides Save round file and Load round file. Account synchronization is the normal way to resume on another device; a round file is an optional portable backup that includes the player profile, scores, current position, and replayable shot history.
+Open **Account → Feedback Center** without changing the shot being planned. Send a 1–5 star rating or a private Bug, Suggestion, Feature request, Course or map, AI Caddie, or Other message. A screenshot is optional.
 
-Review focuses on meaningful learning holes instead of filling the report with routine holes. A selected hole can include:
+The game includes useful context such as course, hole, mode, lie, screen size, and browser, but not exact GPS coordinates. **My feedback** shows status and private developer replies.
 
-- Hole par, tee yardage, handicap, and score
-- The recorded player decision
-- Decision quality versus execution quality
-- Correct lie recognition and adjustment credit
-- Preferred miss and hazard evidence
-- One useful improvement for next time
-- AI Caddie insight when available
-- Shot replay and Reset & replay Hole
+### Important System Boundaries
 
-Different review colors help identify strong holes, neutral holes, and holes with a useful improvement opportunity.
+- Simulator outcomes are not real-world evidence.
+- GPS travel distance is not automatically airborne carry.
+- Simulator putting contours do not represent the physical course green.
+- AI does not determine authoritative shot results or replace deterministic scoring.
+- Caddie Choices are recommendations.
+- Landing Target represents intended carry, not guaranteed landing position.
+- Observed evidence never changes the Player Profile silently.
+- GPS and simulator records remain logically separate.
 
-## 17. Use Round History, Player Learning, and the rank board correctly
+## The Golf-Domain Habit
 
-Round History stores completed simulator rounds under your account. It shows course, score, and Course Management information without mixing in an unfinished round.
-
-Player Learning summarizes verified strategic patterns from completed rounds. It needs enough reliable evidence before presenting a trend. Simulated approach distances are not treated as measured proof that your real golf is better from one distance band than another.
-
-The Top 10 rank board uses each player’s best completed Course Management score. Lower stroke score is the tiebreaker when Course Management scores are equal.
-
-Course Management is the ranking measure because the game is designed to reward thinking, not merely a favorable random simulated outcome.
-
-## 18. Send feedback or read a developer reply
-
-Open **Account → Feedback Center**. This does not pause, reset, or change the
-shot you are planning.
-
-Use **Send feedback** to update your 1–5 star rating or send a private message.
-Choose Bug, Suggestion, Feature request, Course or map, AI Caddie, or Other.
-Add a short title and enough detail for the developer to understand what
-happened. An optional screenshot can make a map or display problem easier to
-identify.
-
-The game automatically includes useful technical context such as the course,
-hole, play mode, lie, screen size, and browser. It does not include your exact
-GPS coordinates. Your screenshot and message are visible only to your account
-and the developer.
-
-Use **My feedback** to see whether a report is Received, Under review, Planned,
-Implemented, or Closed. A number on Feedback Center means that a developer has
-replied. Open the message to read the reply and continue the conversation.
-
-## 19. A useful routine for every shot
-
-1. Read the lie and location.
-2. Identify the trouble and the safest useful miss.
-3. Choose your own club and swing first.
-4. Use Caddie Choices if you want a comparison.
-5. Fix the target on the map.
-6. Record the necessary lie adjustment.
-7. Commit with Play shot.
-8. Separate decision quality from execution quality.
-9. Continue from the new lie.
-
-## The questions to ask yourself
-
-Do not judge a decision only by whether one simulated ball finished close to the pin. Ask:
+Before judging a shot, ask:
 
 1. Did I read the condition correctly?
 2. Did my club, swing, and target fit that condition?
@@ -395,4 +437,4 @@ Do not judge a decision only by whether one simulated ball finished close to the
 5. Was the outcome caused by my decision, normal dispersion, or both?
 6. What should I repeat or change next time?
 
-When that thought process becomes natural, the game has done its job.
+> When that thought process becomes natural, the game has done its job.

@@ -58,6 +58,37 @@ test("expired sessions refresh once and rotate the refresh token", async () => {
   assert.equal(JSON.parse(storage.getItem(SESSION_KEY)).refresh_token, "new-refresh");
 });
 
+test("a transient refresh failure keeps the local session for a later retry", async () => {
+  const storage = memoryStorage();
+  storage.setItem(SESSION_KEY, JSON.stringify({ access_token: "old", refresh_token: "keep-refresh", expires_at: 1 }));
+  const auth = createSupabaseAuth(
+    { url: "https://project.supabase.co", anon_key: "public-key" },
+    { storage, now: () => 2_000_000, fetchImpl: async () => { throw new Error("network unavailable"); } }
+  );
+
+  await assert.rejects(() => auth.getAccessToken(), /network unavailable/);
+  assert.equal(JSON.parse(storage.getItem(SESSION_KEY)).refresh_token, "keep-refresh");
+});
+
+test("a refresh-token race adopts the session rotated by another tab", async () => {
+  const storage = memoryStorage();
+  storage.setItem(SESSION_KEY, JSON.stringify({ access_token: "old", refresh_token: "old-refresh", expires_at: 1 }));
+  const auth = createSupabaseAuth(
+    { url: "https://project.supabase.co", anon_key: "public-key" },
+    {
+      storage,
+      now: () => 2_000_000,
+      fetchImpl: async () => {
+        storage.setItem(SESSION_KEY, JSON.stringify({ access_token: "other-tab-access", refresh_token: "other-tab-refresh", expires_at: 9_999_999 }));
+        return response({ error: "Refresh Token Not Found" }, false, 400);
+      }
+    }
+  );
+
+  assert.equal(await auth.getAccessToken(), "other-tab-access");
+  assert.equal(JSON.parse(storage.getItem(SESSION_KEY)).refresh_token, "other-tab-refresh");
+});
+
 test("signup reports email-confirmation state when no session is returned", async () => {
   const auth = createSupabaseAuth(
     { url: "https://project.supabase.co", anon_key: "public-key" },

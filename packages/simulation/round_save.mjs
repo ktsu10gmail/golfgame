@@ -45,6 +45,21 @@ function validateRoundSummary(summary) {
   return summary;
 }
 
+function validatePostRoundReport(report) {
+  if (report == null) return null;
+  if (!report || typeof report !== "object" || Array.isArray(report)) throw new Error("post-round report must be an object");
+  if (report.schema_version !== "2.0" || report.report_version !== "2.0") {
+    throw new Error("post-round report version is unsupported");
+  }
+  if (!report.round || !["completed", "in_progress"].includes(report.round.status)) {
+    throw new Error("post-round report status is invalid");
+  }
+  if (!report.narrative || !["pending", "available", "deterministic_fallback", "unavailable"].includes(report.narrative.status)) {
+    throw new Error("post-round narrative status is invalid");
+  }
+  return report;
+}
+
 export function validateRoundSave(save) {
   if (!save || typeof save !== "object") throw new Error("save file must contain an object");
   if (save.version !== ROUND_SAVE_VERSION) {
@@ -58,6 +73,7 @@ export function validateRoundSave(save) {
   assertIndex(save.pin_index, "pin_index", 20);
   validateProfile(save.player_profile);
   validateRoundSummary(save.round_summary);
+  validatePostRoundReport(save.post_round_report);
   return save;
 }
 
@@ -67,6 +83,7 @@ export function createRoundSave({
   pinIndex,
   playerProfile,
   roundSummary = null,
+  postRoundReport = null,
   savedAt = new Date().toISOString()
 }) {
   const save = {
@@ -78,6 +95,7 @@ export function createRoundSave({
     pin_index: pinIndex,
     player_profile: structuredClone(playerProfile),
     ...(roundSummary ? { round_summary: structuredClone(roundSummary) } : {}),
+    ...(postRoundReport ? { post_round_report: structuredClone(postRoundReport) } : {}),
     round_state: structuredClone(roundState)
   };
   return validateRoundSave(save);

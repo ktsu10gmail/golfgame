@@ -14,10 +14,12 @@ from .advice_library import guidance_text
 from .prompts import (
     COMPETITION_DECISION_RESPONSE_SCHEMA,
     GPS_HOLE_REVIEW_RESPONSE_SCHEMA,
+    REPLAY_INTERPRETATION_RESPONSE_SCHEMA,
     ROUND_RESPONSE_SCHEMA,
     SHOT_RESPONSE_SCHEMA,
     STRATEGY_RESPONSE_SCHEMA,
     build_gps_hole_review_prompt,
+    build_replay_interpretation_prompt,
     build_competition_decision_prompt,
     build_round_prompt,
     build_shot_prompt,
@@ -31,8 +33,8 @@ DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
 DEFAULT_OLLAMA_TIMEOUT_SECONDS = 60
 DEFAULT_OLLAMA_CONTEXT_TOKENS = 4096
 DEFAULT_OLLAMA_TEMPERATURE = 0.3
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
-DEFAULT_GEMINI_TIMEOUT_SECONDS = 8
+DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
+DEFAULT_GEMINI_TIMEOUT_SECONDS = 15
 
 ACTION_ADVICE_KEYS = {
     "favor_safe_side", "favor_center_green", "prioritize_solid_contact",
@@ -48,6 +50,8 @@ UNSUPPORTED_GPS_INFERENCES = (
     "good shot", "bad shot", "successful", "unsuccessful", "poor shot",
     "poor approach", "good approach", "correct club", "wrong club",
 )
+CONTRADICTS_SOUND_DECISION = ("bad decision", "poor decision", "wrong decision", "bad plan", "poor plan", "wrong plan")
+CONTRADICTS_ON_PLAN_EXECUTION = ("poor execution", "bad execution", "failed execution", "execution missed", "missed execution")
 
 
 class AiProviderError(RuntimeError):
@@ -299,7 +303,7 @@ class GeminiProvider:
         except urllib.error.HTTPError as error:
             detail = error.read().decode("utf-8", errors="replace")
             raise GeminiProviderError(f"Gemini HTTP {error.code}: {detail}") from error
-        except urllib.error.URLError as error:
+        except (urllib.error.URLError, TimeoutError) as error:
             raise GeminiProviderError(f"Gemini network error: {error}") from error
         candidate = (payload.get("candidates") or [{}])[0]
         parts = (((candidate.get("content") or {}).get("parts")) or [])
@@ -348,6 +352,51 @@ class AiService:
             "provider": self.provider.name,
             "model": self.provider.model,
             "summary": summary,
+        }
+
+    def interpret_replay(self, payload: dict) -> dict:
+        if self.provider is None:
+            raise AiProviderError(self.disabled_reason)
+        authoritative = payload.get("authoritative_assessment") if isinstance(payload, dict) else None
+        if not isinstance(authoritative, dict):
+            raise AiProviderError("authoritative replay assessment is missing")
+        decision = str(authoritative.get("decision", "")).strip()
+        result = str(authoritative.get("result", "")).strip()
+        execution = str(authoritative.get("execution", "")).strip()
+        if not result or not decision or not execution:
+            raise AiProviderError("authoritative replay grades are missing")
+        response = self.provider.generate_json(
+            build_replay_interpretation_prompt(payload), REPLAY_INTERPRETATION_RESPONSE_SCHEMA
+        )
+        interpretation = str(response.get("interpretation", "")).strip()
+        next_time = str(response.get("next_time", "")).strip()
+        if not interpretation or not next_time or _has_unsupported_swing_diagnosis(interpretation, next_time):
+            raise AiProviderError("AI did not return a supported replay interpretation")
+        combined = f"{interpretation} {next_time}".lower()
+        shot = payload.get("shot") if isinstance(payload.get("shot"), dict) else {}
+        canonical = shot.get("canonical_assessment") if isinstance(shot.get("canonical_assessment"), dict) else {}
+        outcome = canonical.get("outcome_vs_target") if isinstance(canonical.get("outcome_vs_target"), dict) else {}
+        target_kind = str(outcome.get("target_kind", "")).upper()
+        if target_kind == "DIRECTION_TARGET" and any(
+            phrase in combined for phrase in ("target spot", "landing point", "landing target")
+        ):
+            raise AiProviderError("AI contradicted Direction Target semantics")
+        if target_kind == "PUTTING_LINE" and "carry point" in combined:
+            raise AiProviderError("AI contradicted putting target semantics")
+        if any(grade in decision.lower() for grade in ("sound", "preferred", "competitive")) and any(
+            term in combined for term in CONTRADICTS_SOUND_DECISION
+        ):
+            raise AiProviderError("AI contradicted the authoritative decision grade")
+        if "on plan" in execution.lower() and any(term in combined for term in CONTRADICTS_ON_PLAN_EXECUTION):
+            raise AiProviderError("AI contradicted the authoritative execution grade")
+        return {
+            "provider": self.provider.name,
+            "model": self.provider.model,
+            "result": result,
+            "decision": decision,
+            "execution": execution,
+            "interpretation": interpretation,
+            "next_time": next_time,
         }
 
     def review_round(self, payload: dict) -> dict:

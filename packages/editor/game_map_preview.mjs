@@ -1,4 +1,12 @@
-const FRAME = { left: 100, right: 900, top: 50, bottom: 950 };
+import { uprightHoleCameraBounds } from "./map_projection.mjs";
+
+const FRAME = { left: 125, right: 875, top: 125, bottom: 875 };
+
+function playingLinePoints(hole) {
+  return (hole.centerline_waypoints || [])
+    .map(item => item.point)
+    .filter(point => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite));
+}
 
 function allGeometryPoints(hole) {
   const geometries = hole.geometries;
@@ -16,6 +24,10 @@ function allGeometryPoints(hole) {
 }
 
 export function gamePreviewBounds(hole) {
+  const playingLine = playingLinePoints(hole);
+  if (playingLine.length >= 2) {
+    return uprightHoleCameraBounds(playingLine, FRAME);
+  }
   const points = allGeometryPoints(hole);
   if (!points.length) throw new Error("The hole does not contain previewable geometry");
   const xs = points.map(point => point[0]);
@@ -169,6 +181,6 @@ export function renderGameMapPreview(hole) {
     ${teeArtwork}
     ${routePoints ? `<polyline class="preview-route" points="${routePoints}"/>` : ""}
     ${tee ? `<g class="preview-ball" transform="translate(${tee[0]},${tee[1]})"><circle r="10"/><circle class="preview-ball-shine" cx="-3" cy="-3" r="3"/></g>` : ""}
-    ${pin ? `<g class="preview-pin" transform="translate(${pin[0]},${pin[1]})"><ellipse rx="9" ry="4"/><path d="M0 0V-62"/><path class="flag" d="M1-62l34 11-34 12z"/></g>` : ""}
+    ${pin ? `<g class="preview-pin" transform="translate(${pin[0]},${pin[1]})"><ellipse rx="9" ry="4"/><path d="M0 0V-48"/><path class="flag" d="M1-48l34 11-34 12z"/></g>` : ""}
   </svg>`;
 }

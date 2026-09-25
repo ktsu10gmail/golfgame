@@ -3,16 +3,21 @@ import assert from "node:assert/strict";
 
 import {
   buildGameCoursePackage,
+  buildGameCoursePackages,
   buildGameHoleJson,
   buildHoleGpsCalibration,
   buildAutoDraft,
   alignSecondaryTeesFromWhite,
   buildTreeBrushPolygon,
+  createUprightGpsViewTransform,
   createEngineTransform,
   createMapperProject,
+  configureMapperCourseStructure,
   distanceMeters,
   gpsDeltaMeters,
   holeMappingStatus,
+  mapperHoleCount,
+  MAPPER_COURSE_STRUCTURES,
   offsetGpsPoint,
   coursePointToGps,
   parseGpsCoordinatePair,
@@ -26,7 +31,9 @@ import {
   resampleGpsPolygon,
   rotateGpsPolygon,
   scaleGpsPolygon,
-  scaleGpsPointAround
+  scaleGpsPointAround,
+  uprightHoleViewTarget,
+  validateMapperProject
 } from "../packages/editor/course_mapper.mjs";
 import { gamePreviewBounds, gamePreviewProjector, renderGameMapPreview } from "../packages/editor/game_map_preview.mjs";
 
@@ -82,6 +89,35 @@ test("GPS transform creates golfer-relative forward and right axes", () => {
   assert.ok(Math.abs(right[0] - 25) < .01);
   assert.ok(Math.abs(right[1] - 100) < .01);
   assert.ok(Math.abs(distanceMeters(ORIGIN, pin) - 300) < .01);
+});
+
+test("upright editor view places the pin directly north of the tee and round-trips GPS edits", () => {
+  const tee = ORIGIN;
+  const pin = offsetGpsPoint(tee, 310, 95);
+  const bunker = offsetGpsPoint(tee, 80, 170);
+  const transform = createUprightGpsViewTransform(tee, pin);
+  const displayedPin = transform.toView(pin);
+  const displayedDelta = gpsDeltaMeters(tee, displayedPin);
+  assert.ok(Math.abs(displayedDelta.east) < .01);
+  assert.ok(displayedDelta.north > 320);
+  const restoredBunker = transform.fromView(transform.toView(bunker));
+  assert.ok(distanceMeters(restoredBunker, bunker) < .01);
+});
+
+test("dogleg editor orientation uses the first route point instead of the pin", () => {
+  const tee = ORIGIN;
+  const firstTurn = offsetGpsPoint(tee, 25, 180);
+  const pin = offsetGpsPoint(tee, -120, 310);
+  const hole = { markers: { white_tee: tee, pin }, route_points: [firstTurn] };
+  const target = uprightHoleViewTarget(hole);
+  const transform = createUprightGpsViewTransform(tee, target);
+  const displayedTurn = gpsDeltaMeters(tee, transform.toView(firstTurn));
+  const displayedPin = gpsDeltaMeters(tee, transform.toView(pin));
+
+  assert.equal(target, firstTurn);
+  assert.ok(Math.abs(displayedTurn.east) < .01);
+  assert.ok(displayedTurn.north > 180);
+  assert.ok(displayedPin.east < -100);
 });
 
 test("secondary tee boxes align from the white tee shape and scorecard yardages", () => {
@@ -376,6 +412,26 @@ test("game preview preserves one physical scale in both directions", () => {
   assert.ok(Math.abs(Math.abs(east[0] - origin[0]) - Math.abs(north[1] - origin[1])) < 1e-9);
 });
 
+test("game preview frames tee to green instead of distant water", () => {
+  const gameHole = buildGameHoleJson(mappedProject(), 1);
+  const expectedBounds = gamePreviewBounds(gameHole);
+  gameHole.geometries.hazards.push({
+    id: "remote-water",
+    lie_catalog_id: "lie_hazard_water",
+    polygon: [[-900, 40], [-850, 40], [-850, 90], [-900, 90]]
+  });
+
+  const bounds = gamePreviewBounds(gameHole);
+  const project = gamePreviewProjector(bounds);
+  const tee = project(gameHole.centerline_waypoints[0].point);
+  const pin = project(gameHole.centerline_waypoints.at(-1).point);
+
+  assert.deepEqual(bounds, expectedBounds);
+  assert.ok(Math.abs(tee[1] - 875) < 1e-9);
+  assert.ok(Math.abs(pin[1] - 125) < 1e-9);
+  assert.ok(Math.abs((bounds.minX + bounds.maxX) / 2) < 100);
+});
+
 test("par-three export and preview contain no fairway or synthetic approach", () => {
   const project = mappedProject();
   project.holes["1"].par = 3;
@@ -442,6 +498,23 @@ test("mapped markers must sit inside their matching playing surfaces", () => {
   assert.match(status.problems.join(" "), /pin inside the green/);
 });
 
+test("unknown imported penalty areas must be classified before export", () => {
+  const project = mappedProject();
+  project.holes["1"].features.push({
+    id: "gi-unknown-penalty",
+    type: "penalty_area_unknown",
+    label: "Imported penalty area",
+    source: "golf_intelligence",
+    manual_override: false,
+    points: rectangle(offsetGpsPoint(ORIGIN, 28, 210), 7, 22)
+  });
+
+  const status = holeMappingStatus(project, 1);
+  assert.equal(status.ready, false);
+  assert.match(status.problems.join(" "), /classify each imported penalty area/);
+  assert.throws(() => buildGameHoleJson(project, 1), /classify each imported penalty area/);
+});
+
 test("game package includes every ready hole and reports unfinished holes", () => {
   const project = mappedProject();
   const payload = buildGameCoursePackage(project);
@@ -449,6 +522,73 @@ test("game package includes every ready hole and reports unfinished holes", () =
   assert.deepEqual(Object.keys(payload.holes), ["1"]);
   assert.match(payload.scorecard_csv, /Hole,Par,Handicap/);
   assert.match(payload.incomplete_holes["2"], /mark the white tee/);
+});
+
+test("three-nine facility creates Central, North, and South editor holes", () => {
+  const project = createMapperProject({ courseStructure: MAPPER_COURSE_STRUCTURES.THREE_NINES });
+  assert.equal(mapperHoleCount(project), 27);
+  assert.equal(project.holes["1"].handicap, 1);
+  assert.equal(project.holes["10"].handicap, 1);
+  assert.equal(project.holes["19"].handicap, 1);
+  assert.equal(project.holes["27"].handicap, 9);
+
+  configureMapperCourseStructure(project, MAPPER_COURSE_STRUCTURES.STANDARD);
+  assert.equal(mapperHoleCount(project), 18);
+  assert.ok(project.holes["27"], "switching layouts preserves South-nine work");
+});
+
+test("three-nine facility assembles all six ordered two-loop routes with custom names", () => {
+  const source = mappedProject();
+  configureMapperCourseStructure(source, MAPPER_COURSE_STRUCTURES.THREE_NINES);
+  for (let holeNumber = 1; holeNumber <= 27; holeNumber += 1) {
+    const hole = structuredClone(source.holes["1"]);
+    hole.hole_number = holeNumber;
+    hole.handicap = (holeNumber - 1) % 9 + 1;
+    hole.yardages.white = 390 + holeNumber;
+    source.holes[String(holeNumber)] = hole;
+  }
+  source.nine_loops = [
+    { id: "central", name: "Lake" },
+    { id: "north", name: "Ridge" },
+    { id: "south", name: "Mountain" }
+  ];
+
+  const packages = buildGameCoursePackages(source);
+  assert.deepEqual(packages.map(payload => payload.course_id), [
+    "test-links-central-north",
+    "test-links-central-south",
+    "test-links-north-central",
+    "test-links-north-south",
+    "test-links-south-central",
+    "test-links-south-north"
+  ]);
+  assert.deepEqual(packages.map(payload => payload.course_name), [
+    "Test Links · Lake + Ridge",
+    "Test Links · Lake + Mountain",
+    "Test Links · Ridge + Lake",
+    "Test Links · Ridge + Mountain",
+    "Test Links · Mountain + Lake",
+    "Test Links · Mountain + Ridge"
+  ]);
+  assert.ok(packages.every(payload => Object.keys(payload.holes).length === 18));
+  assert.deepEqual(packages[0].source_holes, Array.from({ length: 18 }, (_, index) => index + 1));
+  assert.deepEqual(packages[1].source_holes, [
+    ...Array.from({ length: 9 }, (_, index) => index + 1),
+    ...Array.from({ length: 9 }, (_, index) => index + 19)
+  ]);
+  assert.equal(packages[1].holes["10"].hole_metadata.facility_hole_number, 19);
+  assert.equal(packages[1].holes["10"].hole_metadata.hole_number, 10);
+  assert.match(packages[1].scorecard_csv.split("\n")[10], /^10,4,1,/);
+  assert.deepEqual(packages[2].source_holes, [
+    ...Array.from({ length: 9 }, (_, index) => index + 10),
+    ...Array.from({ length: 9 }, (_, index) => index + 1)
+  ]);
+});
+
+test("three-nine facility rejects duplicate loop names", () => {
+  const project = createMapperProject({ courseStructure: MAPPER_COURSE_STRUCTURES.THREE_NINES });
+  project.nine_loops[1].name = "central";
+  assert.throws(() => validateMapperProject(project), /must have different names/);
 });
 
 test("auto draft builds editable playing surfaces from tee, route, and pin", () => {
@@ -504,6 +644,25 @@ test("scorecard paste parses the canonical 18-hole CSV snippet", () => {
   assert.deepEqual(rows[0], { hole: 1, par: 4, handicap: 1, blue: 429, white: 409, forward: 359 });
 });
 
+test("scorecard paste accepts a selected nine-hole CSV", () => {
+  const lines = ["Hole,Par,Handicap,Blue_Yards,White_Yards,Red_Yards"];
+  for (let hole = 1; hole <= 9; hole += 1) {
+    lines.push(`${hole},${hole % 4 === 0 ? 3 : 4},${hole},${430 - hole},${410 - hole},${360 - hole}`);
+  }
+  const rows = parseScorecardText(lines.join("\n"), { holeCount: 9 });
+  assert.equal(rows.length, 9);
+  assert.deepEqual(rows.at(-1), { hole: 9, par: 4, handicap: 9, blue: 421, white: 401, forward: 351 });
+});
+
+test("nine-hole scorecard selection rejects an incomplete card", () => {
+  const lines = ["Hole,Par,Handicap,Blue_Yards,White_Yards,Red_Yards"];
+  for (let hole = 1; hole <= 8; hole += 1) lines.push(`${hole},4,${hole},420,400,350`);
+  assert.throws(
+    () => parseScorecardText(lines.join("\n"), { holeCount: 9 }),
+    /found 8 holes; exactly 9 are required/
+  );
+});
+
 test("scorecard paste parses a copied across-the-card table and ignores totals", () => {
   const holes = Array.from({ length: 18 }, (_, index) => index + 1);
   const withTotals = values => [...values.slice(0, 9), values.slice(0, 9).reduce((a, b) => a + b), ...values.slice(9), values.slice(9).reduce((a, b) => a + b)];
@@ -521,4 +680,21 @@ test("scorecard paste parses a copied across-the-card table and ignores totals",
   assert.equal(rows[9].hole, 10);
   assert.equal(rows[9].blue, 430);
   assert.equal(rows[9].forward, 350);
+});
+
+test("scorecard paste accepts a copied nine-hole matrix", () => {
+  const holes = Array.from({ length: 9 }, (_, index) => index + 1);
+  const line = (label, values) => [label, ...values].join("\t");
+  const text = [
+    line("Hole", holes),
+    line("Blue", holes.map(hole => 440 - hole)),
+    line("White", holes.map(hole => 420 - hole)),
+    line("Gold", holes.map(hole => 360 - hole)),
+    line("Par", holes.map(hole => hole % 4 === 0 ? 3 : 4)),
+    line("Handicap", holes)
+  ].join("\n");
+  const rows = parseScorecardText(text, { holeCount: 9 });
+  assert.equal(rows.length, 9);
+  assert.equal(rows.at(-1).hole, 9);
+  assert.equal(rows.at(-1).white, 411);
 });

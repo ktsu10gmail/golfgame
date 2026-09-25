@@ -65,6 +65,39 @@ def gps_round(round_id="gps-round-1234", course="warrenbrook", revision=1, compl
     }
 
 
+def challenge_save(status="IN_PROGRESS"):
+    holes = [
+        {
+            "challenge_slot": index + 1,
+            "course_id": f"course-{index + 1}",
+            "course_version_id": f"v{index + 1}",
+            "source_hole_number": index + 3,
+            "par": par,
+            "tee_id": "White",
+            "status": "COMPLETE" if status == "COMPLETE" else "IN_PROGRESS" if index == 0 else "READY",
+            "player_score": par if status == "COMPLETE" else None,
+            "gm_score": par + 1 if status == "COMPLETE" else None,
+        }
+        for index, par in enumerate((3, 4, 5))
+    ]
+    participant = {"version": "challenge-participant-v1", "holes": [
+        {"hole_number": index + 1, "score": holes[index]["player_score"], "events": []}
+        for index in range(3)
+    ]}
+    return {
+        "version": "three-hole-challenge-v1", "id": "challenge-test-123", "type": "RANDOM_3",
+        "status": status, "current_slot": 2 if status == "COMPLETE" else 0,
+        "created_at": "2026-09-16T00:00:00Z", "updated_at": "2026-09-16T00:05:00Z",
+        "completed_at": "2026-09-16T00:05:00Z" if status == "COMPLETE" else None,
+        "holes": holes, "human_state": participant,
+        "strategist_state": {**participant, "holes": [
+            {"hole_number": index + 1, "score": holes[index]["gm_score"], "events": []}
+            for index in range(3)
+        ]},
+        "final_result": {"player": 12, "gm": 15, "leader": "PLAYER", "margin": 3} if status == "COMPLETE" else None,
+    }
+
+
 class PlayerStoreTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -128,6 +161,90 @@ class PlayerStoreTests(unittest.TestCase):
         self.assertEqual({item["course_id"] for item in history}, {"cranbury", "meadows"})
         self.assertNotEqual(history[0]["id"], history[1]["id"])
 
+    def test_round_replay_is_split_by_hole_and_geometry_is_deduplicated(self):
+        player = self.store.create_player("Replay Golfer", "1234")
+        saved = round_save()
+        saved["course_version_id"] = "course-v12"
+        saved["geometry_snapshot"] = {
+            "hole_number": 2,
+            "simulation_surfaces": [{"surface": "green", "polygon": [[2, 2], [3, 2], [3, 3]]}],
+        }
+        saved["round_state"]["holes"][0]["events"] = [{
+            "event_type": "shot_committed",
+            "payload": {"resultRequest": {"context": {
+                "lie": {"lie_type": "tee_standard"},
+                "surfaces": [{"surface": "fairway", "polygon": [[0, 0], [1, 0], [1, 1]]}],
+            }}},
+        }]
+
+        result = self.store.save_round(player["id"], saved)
+        self.assertEqual(result["geometry_saved"], [1, 2])
+        restored = self.store.active_round(player["id"])
+        self.assertNotIn("geometry_snapshot", restored)
+        request = restored["round_state"]["holes"][0]["events"][0]["payload"]["resultRequest"]
+        self.assertNotIn("surfaces", request["context"])
+        self.assertEqual(request["geometry_ref"]["course_version_id"], "course-v12")
+
+        index = self.store.round_replay_index(player["id"], result["round_id"])
+        self.assertEqual(len(index["holes"]), 18)
+        self.assertEqual(index["holes"][0]["shot_count"], 1)
+        package = self.store.round_replay_hole(player["id"], result["round_id"], 1)
+        self.assertEqual(package["hole"]["hole_number"], 1)
+        geometry = self.store.course_hole_geometry("cranbury", "course-v12", 1)
+        self.assertEqual(len(geometry["simulation_surfaces"]), 1)
+        self.assertEqual(
+            self.store.course_hole_geometry("cranbury", "course-v12", 2)["simulation_surfaces"][0]["surface"],
+            "green",
+        )
+
+        self.store.save_round(player["id"], saved)
+        with self.store._connect() as database:
+            copies = database.execute(
+                "SELECT COUNT(*) AS count FROM course_hole_geometries WHERE course_id = ? AND course_version_id = ?",
+                ("cranbury", "course-v12"),
+            ).fetchone()["count"]
+        self.assertEqual(copies, 2)
+
+    def test_round_replay_is_player_scoped(self):
+        owner = self.store.create_player("Replay Owner", "1234")
+        stranger = self.store.create_player("Replay Stranger", "1234")
+        result = self.store.save_round(owner["id"], round_save())
+        self.assertIsNone(self.store.round_replay_index(stranger["id"], result["round_id"]))
+        self.assertIsNone(self.store.round_replay_hole(stranger["id"], result["round_id"], 1))
+
+    def test_challenge_history_preserves_cross_course_slots_and_deduplicates_geometry(self):
+        player = self.store.create_player("Challenge Golfer", "1234")
+        challenge = challenge_save("COMPLETE")
+        snapshot = {
+            "challenge_slot": 1, "course_id": "course-1", "course_version_id": "v1",
+            "source_hole_number": 3,
+            "simulation_surfaces": [{"surface": "green", "polygon": [[0, 0], [1, 0], [1, 1]]}],
+        }
+        result = self.store.save_challenge(player["id"], challenge, snapshot)
+        self.assertTrue(result["complete"])
+        restored = self.store.challenge(player["id"], challenge["id"])
+        self.assertEqual([hole["course_id"] for hole in restored["holes"]], ["course-1", "course-2", "course-3"])
+        history = self.store.challenge_history(player["id"])
+        self.assertEqual(history[0]["player_score"], 12)
+        self.assertEqual(len(history[0]["holes"]), 3)
+        geometry = self.store.course_hole_geometry("course-1", "v1", 3)
+        self.assertEqual(geometry["simulation_surfaces"][0]["surface"], "green")
+        self.store.save_challenge(player["id"], challenge, snapshot)
+        with self.store._connect() as database:
+            copies = database.execute(
+                "SELECT COUNT(*) AS count FROM course_hole_geometries WHERE course_id = 'course-1' AND course_version_id = 'v1' AND hole_number = 3"
+            ).fetchone()["count"]
+        self.assertEqual(copies, 1)
+
+    def test_challenge_records_are_player_scoped(self):
+        owner = self.store.create_player("Challenge Owner", "1234")
+        stranger = self.store.create_player("Challenge Stranger", "1234")
+        challenge = challenge_save("COMPLETE")
+        self.store.save_challenge(owner["id"], challenge)
+        self.assertIsNone(self.store.challenge(stranger["id"], challenge["id"]))
+        with self.assertRaises(AccountError):
+            self.store.save_challenge(stranger["id"], challenge)
+
     def test_gps_round_sync_is_scoped_to_player_and_course(self):
         player = self.store.create_player("GPS Golfer", "1234")
         another = self.store.create_player("Other GPS Golfer", "1234")
@@ -159,6 +276,22 @@ class PlayerStoreTests(unittest.TestCase):
         self.assertEqual(history[0]["round_id"], "gps-round-1234")
         self.assertEqual(history[0]["is_complete"], 1)
         self.assertEqual(history[0]["total_strokes"], 18)
+        self.assertEqual(history[0]["holes_recorded"], 18)
+        self.assertEqual(history[0]["holes_completed"], 18)
+
+    def test_in_progress_gps_round_history_reports_recorded_holes(self):
+        player = self.store.create_player("GPS Progress Golfer", "1234")
+        saved_round = gps_round()
+        saved_round["holes"][0]["tee"] = {"lat": 40.3, "lng": -74.6}
+        saved_round["holes"][0]["finished"] = True
+        saved_round["holes"][1]["tee"] = {"lat": 40.31, "lng": -74.61}
+        self.store.save_gps_round(player["id"], saved_round)
+
+        history = self.store.gps_round_history(player["id"])
+
+        self.assertEqual(history[0]["is_complete"], 0)
+        self.assertEqual(history[0]["holes_recorded"], 2)
+        self.assertEqual(history[0]["holes_completed"], 1)
 
     def test_on_course_club_stats_accumulate_saved_gps_rounds(self):
         player = self.store.create_player("Club Evidence Golfer", "1234")

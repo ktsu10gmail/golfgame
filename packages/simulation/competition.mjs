@@ -93,9 +93,25 @@ export function pairedStrokeSeed(roundSeed, holeNumber, pairedStrokeIndex) {
   return mix32(roundSeed ^ Math.imul(holeNumber, 0x9e3779b1) ^ Math.imul(pairedStrokeIndex, 0x85ebca6b)) || 1;
 }
 
-export function createPairedExecutionSample(roundSeed, holeNumber, pairedStrokeIndex) {
+export function participantExecutionSeed(roundSeed, holeNumber, pairedStrokeIndex, participantType) {
+  if (![ParticipantType.HUMAN, ParticipantType.AI_STRATEGIST].includes(participantType)) {
+    throw new Error("unknown participant type");
+  }
   const pairedSeed = pairedStrokeSeed(roundSeed, holeNumber, pairedStrokeIndex);
-  let state = pairedSeed;
+  const participantSalt = participantType === ParticipantType.HUMAN ? 0x243f6a88 : 0xb7e15162;
+  return mix32(pairedSeed ^ participantSalt) || 1;
+}
+
+export function competitionExecutionIdentity(roundSeed, holeNumber, pairedStrokeIndex, participantType) {
+  return {
+    roundSeed: participantExecutionSeed(roundSeed, holeNumber, pairedStrokeIndex, participantType),
+    holeNumber,
+    strokeIndex: pairedStrokeIndex
+  };
+}
+
+function createExecutionSample(seed) {
+  let state = seed;
   const random = () => {
     state = (state + 0x6d2b79f5) >>> 0;
     let value = state;
@@ -108,16 +124,29 @@ export function createPairedExecutionSample(roundSeed, holeNumber, pairedStrokeI
     return Math.sqrt(-2 * Math.log(first)) * Math.cos(2 * Math.PI * random());
   };
   return Object.freeze({
-    id: `pair-${holeNumber}-${pairedStrokeIndex}-${pairedSeed.toString(16)}`,
-    paired_seed: pairedSeed,
-    hole_number: holeNumber,
-    paired_stroke_index: pairedStrokeIndex,
     contact_quantile: random(),
     distance_error_z: gaussian(),
     lateral_error_z: gaussian(),
     mishit_roll: random(),
     putting_read_z: gaussian(),
     putting_pace_z: gaussian()
+  });
+}
+
+export function createPairedExecutionSample(roundSeed, holeNumber, pairedStrokeIndex) {
+  const pairedSeed = pairedStrokeSeed(roundSeed, holeNumber, pairedStrokeIndex);
+  const humanSeed = participantExecutionSeed(roundSeed, holeNumber, pairedStrokeIndex, ParticipantType.HUMAN);
+  const strategistSeed = participantExecutionSeed(roundSeed, holeNumber, pairedStrokeIndex, ParticipantType.AI_STRATEGIST);
+  return Object.freeze({
+    id: `pair-${holeNumber}-${pairedStrokeIndex}-${pairedSeed.toString(16)}`,
+    paired_seed: pairedSeed,
+    randomness: "independent_per_participant",
+    human_execution_seed: humanSeed,
+    strategist_execution_seed: strategistSeed,
+    hole_number: holeNumber,
+    paired_stroke_index: pairedStrokeIndex,
+    human_sample: createExecutionSample(humanSeed),
+    strategist_sample: createExecutionSample(strategistSeed)
   });
 }
 
@@ -259,6 +288,8 @@ export function resolveCompetitionTurn(competition, { humanResult, strategistRes
   const sample = createPairedExecutionSample(next.round_seed, turn.hole_number, turn.paired_stroke_index);
   turn.execution_sample_id = sample.id;
   turn.paired_seed = sample.paired_seed;
+  turn.human_execution_seed = sample.human_execution_seed;
+  turn.strategist_execution_seed = sample.strategist_execution_seed;
   turn.simulation_started_at = now;
   turn.human_result = structuredClone(humanResult);
   turn.strategist_result = structuredClone(strategistResult);
@@ -332,6 +363,21 @@ export function competitionTotals(scores, pars) {
   return { strokes, relative_to_par: strokes - par, holes_completed: completed };
 }
 
+export function competitionPairedTotals(competition, pars) {
+  const humanScores = competition?.human_round?.holes?.map(hole => hole.score ?? null) || [];
+  const strategistScores = competition?.strategist_round?.holes?.map(hole => hole.score ?? null) || [];
+  const pairedHumanScores = humanScores.map((score, index) =>
+    Number.isInteger(score) && Number.isInteger(strategistScores[index]) ? score : null
+  );
+  const pairedStrategistScores = strategistScores.map((score, index) =>
+    Number.isInteger(score) && Number.isInteger(humanScores[index]) ? score : null
+  );
+  return {
+    human: competitionTotals(pairedHumanScores, pars),
+    strategist: competitionTotals(pairedStrategistScores, pars)
+  };
+}
+
 function average(values) {
   const finite = values.filter(Number.isFinite);
   return finite.length ? Math.round(finite.reduce((sum, value) => sum + value, 0) / finite.length) : null;
@@ -388,8 +434,7 @@ export function competitionRoundSummary(competition, pars) {
   const summaries = (competition.hole_summaries || []).filter(Boolean);
   const expected = summaries.map(summary => summary.expected_strategy_difference).filter(Number.isFinite);
   return {
-    human: competitionTotals(humanScores, pars),
-    strategist: competitionTotals(strategistScores, pars),
+    ...competitionPairedTotals(competition, pars),
     holes_completed: summaries.length,
     expected_strategy_difference: expected.length
       ? Math.round(expected.reduce((sum, value) => sum + value, 0) * 100) / 100

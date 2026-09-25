@@ -4,11 +4,14 @@ import {
   CompetitionPhase,
   ParticipantType,
   cloneStrategistProfile,
+  competitionExecutionIdentity,
+  competitionPairedTotals,
   competitionRoundSummary,
   continueCompetition,
   createCompetitionRound,
   createPairedExecutionSample,
   lockCompetitionDecision,
+  participantExecutionSeed,
   recoverInterruptedCompetition,
   recordCompetitionHoleSummary,
   resolveCompetitionTurn,
@@ -41,6 +44,23 @@ test("paired execution samples are reproducible and change per paired stroke", (
   const first = createPairedExecutionSample(90210, 6, 2);
   assert.deepEqual(first, createPairedExecutionSample(90210, 6, 2));
   assert.notDeepEqual(first, createPairedExecutionSample(90210, 6, 3));
+  assert.notEqual(first.human_execution_seed, first.strategist_execution_seed);
+  assert.notDeepEqual(first.human_sample, first.strategist_sample);
+  assert.equal(first.randomness, "independent_per_participant");
+});
+
+test("human and Game Master receive independent reproducible execution identities", () => {
+  const human = competitionExecutionIdentity(90210, 6, 2, ParticipantType.HUMAN);
+  const strategist = competitionExecutionIdentity(90210, 6, 2, ParticipantType.AI_STRATEGIST);
+  assert.deepEqual(human, competitionExecutionIdentity(90210, 6, 2, ParticipantType.HUMAN));
+  assert.equal(human.holeNumber, strategist.holeNumber);
+  assert.equal(human.strokeIndex, strategist.strokeIndex);
+  assert.notEqual(human.roundSeed, strategist.roundSeed);
+  assert.notEqual(
+    participantExecutionSeed(90210, 6, 2, ParticipantType.HUMAN),
+    participantExecutionSeed(90210, 6, 2, ParticipantType.AI_STRATEGIST)
+  );
+  assert.throws(() => participantExecutionSeed(90210, 6, 2, "spectator"), /unknown participant type/);
 });
 
 test("decision locking prevents the strategist seeing future execution", () => {
@@ -54,6 +74,7 @@ test("decision locking prevents the strategist seeing future execution", () => {
   round = resolveCompetitionTurn(round, { humanResult: { yards: 144 }, strategistResult: { yards: 144 } });
   assert.equal(round.phase, CompetitionPhase.COMPARISON_READY);
   assert.equal(round.turns[0].human_result.yards, round.turns[0].strategist_result.yards);
+  assert.notEqual(round.turns[0].human_execution_seed, round.turns[0].strategist_execution_seed);
   assert.equal(continueCompetition(round).phase, CompetitionPhase.READY_FOR_HUMAN);
 });
 
@@ -88,6 +109,21 @@ test("completed holes persist decision and score summaries", () => {
   assert.equal(summary.holes_completed, 1);
   assert.equal(summary.expected_strategy_difference, .6);
   assert.deepEqual(summary.key_holes, [1]);
+});
+
+test("18-hole scoreboard totals only completed paired holes", () => {
+  const round = createCompetitionRound({ courseId: "meadows", tee: "White", roundSeed: 74, humanProfile: profile });
+  round.human_round = structuredClone(round.strategist_round);
+  round.human_round.holes[0].score = 4;
+  round.strategist_round.holes[0].score = 4;
+  round.human_round.holes[1].score = 5;
+  round.strategist_round.holes[1].score = 4;
+  // The player may finish a hole before the Game Master. It is not on the
+  // shared score bar until both results are recorded.
+  round.human_round.holes[2].score = 3;
+  const totals = competitionPairedTotals(round, [3, 4, 5]);
+  assert.deepEqual(totals.human, { strokes: 9, relative_to_par: 2, holes_completed: 2 });
+  assert.deepEqual(totals.strategist, { strokes: 8, relative_to_par: 1, holes_completed: 2 });
 });
 
 test("an interrupted paired turn is archived and returned to a playable state", () => {

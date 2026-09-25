@@ -1,6 +1,6 @@
 import { simulateFullShot } from "./browser_engine.mjs?v=20260815-4";
 import { simulateGreensideShot } from "./browser_greenside.mjs";
-import { evaluateShotCandidates } from "./browser_multi_run_evaluator.mjs";
+import { evaluateShotCandidates } from "./browser_multi_run_evaluator.mjs?v=20260921-1";
 
 self.addEventListener("message", event => {
   const { requestId, candidates, sampleCount, analysisSeed, holeNumber } = event.data || {};

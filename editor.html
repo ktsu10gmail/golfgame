@@ -10,7 +10,7 @@
     <title>Course Mapper — Middlesex Strategy Round</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.css" />
-    <link rel="stylesheet" href="editor.css?v=20260815-11" />
+    <link rel="stylesheet" href="editor.css?v=20260829-2" />
   </head>
   <body>
     <main class="mapper-shell">
@@ -23,19 +23,38 @@
           <span>Course</span>
           <input id="course-name" value="New golf course" maxlength="80" />
         </label>
+        <label class="course-structure-field">
+          <span>Course layout</span>
+          <select id="course-structure" aria-label="Course layout">
+            <option value="standard_18">Standard 18</option>
+            <option value="three_nines">Three named 9s</option>
+          </select>
+        </label>
         <label class="hole-switcher">
           <span>Hole</span>
           <select id="hole-number" aria-label="Hole number"></select>
         </label>
         <div class="header-actions">
+          <output id="autosave-status" class="autosave-indicator" data-state="ready" role="status" aria-live="polite">Autosave ready</output>
           <button id="undo-editor" class="undo-button" type="button" disabled title="Nothing to undo"><span aria-hidden="true">↶</span> Undo</button>
           <button id="new-project" class="quiet-button" type="button">New</button>
           <button id="load-project" class="quiet-button" type="button">Load project</button>
+          <button id="open-course-import" class="course-import-button" type="button">Import course</button>
           <button id="open-scorecard-import" class="quiet-button" type="button">Import scorecard</button>
           <button id="save-project" class="accent-button" type="button">Save project</button>
           <input id="project-file" type="file" accept=".golfmap,application/json" hidden />
         </div>
       </header>
+
+      <section id="nine-loop-names" class="nine-loop-names" aria-labelledby="nine-loop-names-title" hidden>
+        <div>
+          <strong id="nine-loop-names-title">Nine-hole names</strong>
+          <small>Name each loop as golfers know it. Route order is preserved.</small>
+        </div>
+        <label><span>First nine</span><input data-nine-loop-id="central" maxlength="40" autocomplete="off" /></label>
+        <label><span>Second nine</span><input data-nine-loop-id="north" maxlength="40" autocomplete="off" /></label>
+        <label><span>Third nine</span><input data-nine-loop-id="south" maxlength="40" autocomplete="off" /></label>
+      </section>
 
       <section class="mapper-workspace">
         <aside class="tool-panel">
@@ -204,6 +223,23 @@
             <div id="selected-empty" class="empty-copy">Select a shape to edit it. Hold Shift while clicking to select several shapes.</div>
             <div id="selected-controls" hidden>
               <label>Feature label<input id="feature-label" maxlength="100" /></label>
+              <label>Feature type
+                <select id="feature-type">
+                  <option value="tee_blue">Blue tee box</option>
+                  <option value="tee_white">White tee box</option>
+                  <option value="tee_forward">Forward tee box</option>
+                  <option value="fairway">Fairway</option>
+                  <option value="rough">Rough</option>
+                  <option value="bunker">Sand bunker</option>
+                  <option value="green">Green</option>
+                  <option value="water">Water / penalty area</option>
+                  <option value="penalty_area_unknown">Penalty area — needs review</option>
+                  <option value="hole_outline">Hole outline</option>
+                  <option value="cart_path">Cart path</option>
+                  <option value="trees">Trees</option>
+                  <option value="out_of_bounds">Out of bounds</option>
+                </select>
+              </label>
               <dl class="feature-metrics">
                 <div><dt>Points</dt><dd id="feature-points">—</dd></div>
                 <div><dt>Area</dt><dd id="feature-area">—</dd></div>
@@ -271,16 +307,99 @@
     <dialog id="scorecard-import-dialog" class="mapper-dialog">
       <form method="dialog" class="mapper-dialog-card">
         <header>
-          <div><span class="eyebrow">18-hole setup</span><h2>Paste the scorecard once</h2></div>
+          <div><span id="scorecard-import-eyebrow" class="eyebrow">18-hole setup</span><h2 id="scorecard-import-title">Paste the scorecard once</h2></div>
           <button class="dialog-close" value="cancel" aria-label="Close scorecard import">×</button>
         </header>
-        <p>Paste CSV, a spreadsheet selection, an HTML table snippet, or a copied scorecard with holes across the top.</p>
+        <fieldset class="scorecard-hole-count">
+          <legend>Scorecard length</legend>
+          <label><input type="radio" name="scorecard-hole-count" value="9" /><span><strong>9 holes</strong><small>Fill Holes 1–9</small></span></label>
+          <label><input type="radio" name="scorecard-hole-count" value="18" checked /><span><strong>18 holes</strong><small>Fill Holes 1–18</small></span></label>
+        </fieldset>
+        <label id="scorecard-nine-destination" class="scorecard-nine-destination" hidden>
+          <span>Import this scorecard into</span>
+          <select id="scorecard-nine-target" aria-label="Nine-hole scorecard destination"></select>
+        </label>
+        <p id="scorecard-import-copy">Paste CSV, a spreadsheet selection, an HTML table snippet, or a copied scorecard with holes across the top.</p>
         <textarea id="scorecard-paste" rows="13" spellcheck="false" placeholder="Hole,Par,Handicap,Blue_Yards,White_Yards,Red_Yards&#10;1,4,7,410,395,340&#10;2,3,15,180,165,140&#10;…all 18 holes"></textarea>
         <small id="scorecard-import-status" class="dialog-status" role="status"></small>
         <footer>
           <button class="quiet-button" value="cancel">Cancel</button>
           <button id="import-scorecard" class="accent-button" type="button">Fill all 18 holes</button>
         </footer>
+      </form>
+    </dialog>
+    <dialog id="course-import-dialog" class="mapper-dialog course-import-dialog">
+      <form id="course-import-shell" method="dialog" class="mapper-dialog-card course-import-card">
+        <header>
+          <div><span class="eyebrow">External course desk</span><h2>Import from Golf Intelligence</h2></div>
+          <button class="dialog-close" value="cancel" aria-label="Close course import">×</button>
+        </header>
+        <p class="course-import-intro">Search is free. Course data is downloaded only after you choose one result and confirm the estimated credits.</p>
+        <section class="course-import-guard" aria-labelledby="course-import-guard-title">
+          <div>
+            <span class="import-ledger-key">Provider access</span>
+            <strong id="course-import-guard-title">Checking server configuration…</strong>
+            <small id="course-import-provider-note">The game never uses this connection.</small>
+          </div>
+          <label class="paid-call-switch">
+            <input id="course-import-paid-toggle" type="checkbox" role="switch" />
+            <span><strong>Allow paid API calls</strong><small>Starts OFF after every server restart</small></span>
+          </label>
+        </section>
+        <section class="course-import-search-section" aria-labelledby="course-import-search-title">
+          <div class="course-import-section-heading">
+            <div><span class="import-ledger-key">Free lookup</span><h3 id="course-import-search-title">Find a course</h3></div>
+            <span class="free-call-stamp">0 credits</span>
+          </div>
+          <div class="course-import-search-row">
+            <label><span>Course or facility name</span><input id="course-import-query" autocomplete="off" maxlength="120" placeholder="Warrenbrook Golf Course" /></label>
+            <button id="search-external-course" class="accent-button" type="button">Search</button>
+          </div>
+          <p id="course-import-status" class="dialog-status course-import-status" role="status" aria-live="polite"></p>
+          <div id="course-import-results" class="course-import-results" aria-live="polite"></div>
+        </section>
+        <section id="course-import-confirm" class="course-import-confirm" aria-labelledby="course-import-confirm-title" hidden>
+          <div>
+            <span class="import-ledger-key">Selected course</span>
+            <h3 id="course-import-confirm-title">Course name</h3>
+            <p id="course-import-confirm-location"></p>
+          </div>
+          <div class="credit-receipt">
+            <span>Estimated provider cost</span>
+            <strong id="course-import-credit-cost">3 credits</strong>
+            <small id="course-import-cache-note">Full scorecard + GPS geometry</small>
+          </div>
+          <footer>
+            <button id="cancel-external-selection" class="quiet-button" type="button">Cancel</button>
+            <button id="continue-external-import" class="accent-button" type="button">Continue to preview</button>
+          </footer>
+          <aside id="course-import-gps-recovery" class="course-import-gps-recovery" hidden>
+            <div>
+              <span class="import-ledger-key">Warrenbrook recovery</span>
+              <strong>Use installed scorecard + provider GPS</strong>
+              <small>Skips the incomplete Full Detail response. One GPS-only request.</small>
+            </div>
+            <div class="gps-recovery-action">
+              <span><b id="course-import-gps-credit-cost">2 credits</b> estimated</span>
+              <button id="continue-gps-only-import" class="accent-button" type="button">Download GPS only</button>
+            </div>
+          </aside>
+        </section>
+        <section id="course-import-preview" class="course-import-preview" aria-labelledby="course-import-preview-title" hidden>
+          <div class="course-import-section-heading">
+            <div><span class="import-ledger-key">Downloaded record</span><h3 id="course-import-preview-title">Import preview</h3></div>
+            <strong id="course-import-completeness">—</strong>
+          </div>
+          <dl id="course-import-checks" class="course-import-checks"></dl>
+          <details id="course-import-warnings" class="course-import-warnings" hidden>
+            <summary>Review warnings</summary>
+            <ul></ul>
+          </details>
+          <footer>
+            <button id="discard-external-preview" class="quiet-button" type="button">Keep current project</button>
+            <button id="commit-external-import" class="accent-button" type="button">Open in Course Mapper</button>
+          </footer>
+        </section>
       </form>
     </dialog>
     <dialog id="reference-image-dialog" class="mapper-dialog reference-dialog">
@@ -305,6 +424,6 @@
     </dialog>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.js"></script>
-  <script type="module" src="editor.js?v=20260815-41"></script>
+  <script type="module" src="editor.js?v=20260829-3"></script>
   </body>
 </html>

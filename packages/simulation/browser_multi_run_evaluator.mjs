@@ -71,12 +71,22 @@ function summarize(candidate, packets) {
     if (landingSurface === "water") counts.water += 1;
     if (landingSurface === "out_of_bounds") counts.out_of_bounds += 1;
     const point = resolvedPoint(packet);
+    const leaveFeet = Number(packet?.remaining_distance_yards) * 3;
+    if (surface === "green" && Number.isFinite(leaveFeet)) {
+      if (leaveFeet <= 3) counts.inside_3ft = (counts.inside_3ft || 0) + 1;
+      if (leaveFeet <= 6) counts.inside_6ft = (counts.inside_6ft || 0) + 1;
+      if (leaveFeet <= 8) counts.inside_8ft = (counts.inside_8ft || 0) + 1;
+      if (leaveFeet <= 15) counts.inside_15ft = (counts.inside_15ft || 0) + 1;
+    }
     const targetHit = candidate.successSurface === "green"
       ? surface === "green"
       : finitePoint(point) && finitePoint(candidate.target) &&
         distance(point, candidate.target) <= candidate.targetRadiusYards;
     if (targetHit) counts.target += 1;
-    counts[missDirection(packet, candidate)] += 1;
+    const direction = missDirection(packet, candidate);
+    counts[direction] += 1;
+    if (surface !== "green" && direction === "short") counts.short_off_green = (counts.short_off_green || 0) + 1;
+    if (surface !== "green" && direction === "long") counts.long_off_green = (counts.long_off_green || 0) + 1;
     const leave = Number(packet?.remaining_distance_yards);
     if (Number.isFinite(leave)) leaves.push(leave);
   }
@@ -99,7 +109,15 @@ function summarize(candidate, packets) {
     median_leave_yards: Math.round(percentile(leaves, .5)),
     leave_p10_yards: Math.round(percentile(leaves, .1)),
     leave_p90_yards: Math.round(percentile(leaves, .9)),
-    common_miss: commonMiss
+    common_miss: commonMiss,
+    inside_3ft_percent: percent(counts.inside_3ft || 0, packets.length),
+    inside_6ft_percent: percent(counts.inside_6ft || 0, packets.length),
+    inside_8ft_percent: percent(counts.inside_8ft || 0, packets.length),
+    inside_15ft_percent: percent(counts.inside_15ft || 0, packets.length),
+    expected_leave_feet: Math.round((leaves.reduce((sum, value) => sum + value, 0) / Math.max(1, leaves.length)) * 3 * 10) / 10,
+    median_leave_feet: Math.round(percentile(leaves, .5) * 3 * 10) / 10,
+    short_off_green_percent: percent(counts.short_off_green || 0, packets.length),
+    long_off_green_percent: percent(counts.long_off_green || 0, packets.length)
   };
 }
 

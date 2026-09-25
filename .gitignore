@@ -7,4 +7,9 @@ htmlcov/
 .tools/
 .playwright-cli/
 data/player_accounts.sqlite3*
+data/course_imports.sqlite3*
+data/backups/
+output/
+*.iso
+apikey.md
 .env

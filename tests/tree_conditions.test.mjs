@@ -71,5 +71,24 @@ test("Game Master wording is assembled from verified tree facts", () => {
   assert.deepEqual(condition.recovery_target, [1, 20.5]);
   assert.equal(condition.recovery_angle_degrees, -90);
   assert.equal(condition.recovery_clock, 9);
-  assert.equal(message, "You have 164 yards to the pin. Your ball is at the edge of the trees in light rough. The direct line to the pin is partially blocked by higher branches. You have room for approximately a three-quarter swing. Punch out toward the marked recovery target about 16 yards from your ball, 90° left of the pin line—about 9 o'clock when facing the pin. The fairway begins at about 6 yards and its far edge is about 25 yards away, leaving roughly 10 yards before the target and 9 yards beyond it.");
+  assert.match(message, /recovery cards compare a safer punch-out 90° left/);
+  assert.match(message, /viable forward-progress alternatives/);
+});
+
+test("a blocked pin line describes mapped cover without inventing a solid branch wall", () => {
+  const message = treeConditionMessage({
+    remaining_yards: 171,
+    tree_position: "deep_in_trees",
+    ball_surface: "deep_rough",
+    pin_line: "blocked",
+    canopy: "low_branches",
+    swing_room: "punch_only",
+    escape_direction: "right",
+    escape_destination: "fairway",
+    recovery_target_yards: 46,
+    recovery_angle_degrees: 90
+  });
+  assert.match(message, /significant mapped tree cover/);
+  assert.match(message, /recovery cards compare a safer punch-out 90° right/);
+  assert.doesNotMatch(message, /wall directly between/);
 });

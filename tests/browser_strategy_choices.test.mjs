@@ -2,10 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildAcademyStrategyChoices,
   buildStrategyChoices,
+  buildTreeRecoveryChoices,
   choicesMeaningfullyDifferent,
   STRATEGY_CHOICES_VERSION
 } from "../packages/simulation/browser_strategy_choices.mjs";
+import { resolveTreeRecoveryOutcome } from "../packages/simulation/browser_tree_recovery.mjs";
 
 const rectangle = (left, bottom, right, top) => [
   { x: left, y: bottom }, { x: right, y: bottom }, { x: right, y: top }, { x: left, y: top }
@@ -193,6 +196,26 @@ test("long holes produce one aggressive and one practical safe-smart plan", () =
   assert.ok(choices.every(choice => /two player-facing plans/i.test(choice.reasons[0])));
 });
 
+test("Academy retains three genuine long-hole plans without changing normal caddie choices", () => {
+  const input = fixture();
+  input.pin = { x: 0, y: 510 };
+  input.centerline = [{ x: 0, y: 0 }, { x: 0, y: 510 }];
+  input.fairways = [rectangle(-30, 20, 30, 460)];
+  input.surfaces = [
+    { surface: "green", priority: 70, polygon: rectangle(-14, 495, 14, 525) },
+    { surface: "fairway", priority: 40, polygon: rectangle(-30, 20, 30, 460) },
+    { surface: "rough", priority: 20, polygon: rectangle(-60, -10, 60, 530) }
+  ];
+
+  const academy = buildAcademyStrategyChoices(input);
+  const normal = buildStrategyChoices(input);
+
+  assert.deepEqual(academy.map(choice => choice.id), ["attack", "safe", "smart"]);
+  assert.equal(new Set(academy.map(choice => choice.clubName)).size, 3);
+  assert.ok(academy.every(choice => !/ranks|calculated recommendation among/i.test(choice.reasons.join(" "))));
+  assert.deepEqual(normal.map(choice => choice.id), ["aggressive", "safe_smart"]);
+});
+
 test("borderline 227-yard fairway shot keeps two honest and distinct choices", () => {
   const input = fixture();
   input.pin = { x: 10, y: 227 };
@@ -340,6 +363,23 @@ test("recovery situations still provide aggressive and safe-smart recovery choic
   assert.ok(["escape", "position"].includes(choices[1].sourcePlanId));
   assert.ok(choices.every(choice => choice.mode === "recovery"));
   assert.ok(choices.every(choice => !choice.clubName.includes("Wood")));
+});
+
+test("tree recovery offers honest risk contracts and a seeded outcome", () => {
+  const input = fixture();
+  const choices = buildTreeRecoveryChoices({
+    ...input,
+    lieMultiplier: .65,
+    treeCondition: { tree_position: "under_canopy", pin_line: "partially_blocked" }
+  });
+  assert.ok(choices.length >= 1 && choices.length <= 2);
+  for (const choice of choices) {
+    const probability = choice.treeRecovery.probabilities;
+    assert.equal(Math.round((probability.clean_escape + probability.branch_clip + probability.major_tree_contact) * 1000), 1000);
+    assert.ok(choice.treeRecovery.reward.overall_expected_leave_yards >= choice.treeRecovery.reward.expected_leave_if_clean_yards);
+  }
+  const first = resolveTreeRecoveryOutcome(choices[0].treeRecovery.probabilities, "round:1:2:tree");
+  assert.deepEqual(first, resolveTreeRecoveryOutcome(choices[0].treeRecovery.probabilities, "round:1:2:tree"));
 });
 
 test("meaningful difference requires a material club, power, target, result, or risk change", () => {

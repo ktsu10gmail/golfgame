@@ -80,6 +80,21 @@ GPS_HOLE_REVIEW_RESPONSE_SCHEMA = {
     "required": ["summary"],
 }
 
+REPLAY_INTERPRETATION_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "interpretation": {
+            "type": "string",
+            "description": "Two concise sentences interpreting the verified shot assessment.",
+        },
+        "next_time": {
+            "type": "string",
+            "description": "One specific, evidence-supported action for the next similar shot.",
+        },
+    },
+    "required": ["interpretation", "next_time"],
+}
+
 STRATEGY_RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -154,6 +169,7 @@ def _compact_shot_payload(payload: dict) -> dict:
     decision = strategy.get("decision", {}) if isinstance(strategy, dict) else {}
     advice_keys = decision.get("advice_keys", []) if isinstance(decision, dict) else []
     return {
+        "report_narrative_packet": payload.get("report_narrative_packet"),
         "course": _selected(payload.get("course"), ("id", "name")),
         "hole": _selected(payload.get("hole"), ("number", "par", "handicap", "layout_type")),
         "player": _selected(payload.get("player"), ("profile_id", "profile_name")),
@@ -290,6 +306,26 @@ def _compact_strategy_payload(payload: dict) -> dict:
     }
 
 
+def _compact_replay_payload(payload: dict) -> dict:
+    return {
+        "course": _selected(payload.get("course"), ("id", "name")),
+        "hole": _selected(payload.get("hole"), ("number", "par")),
+        "shot": _selected(
+            payload.get("shot"),
+            (
+                "number", "club", "power_percent", "distance_yards", "start_lie",
+                "finish_lie", "remaining_yards", "shot_type", "target_comparison",
+                "putt_analysis", "decision_reasons", "execution_detail",
+                "canonical_assessment",
+            ),
+        ),
+        "authoritative_assessment": _selected(
+            payload.get("authoritative_assessment"),
+            ("title", "result", "decision", "execution", "summary", "deterministic_advice"),
+        ),
+    }
+
+
 def build_shot_prompt(payload: dict) -> str:
     return (
         "You are the Game Master for a deterministic golf strategy game.\n"
@@ -298,6 +334,8 @@ def build_shot_prompt(payload: dict) -> str:
         f"{_dump(SHOT_RESPONSE_SCHEMA)}\n\n"
         "Decision assessment means whether the strategic choice was sound.\n"
         "Execution assessment means whether the shot outcome matched the intended plan.\n"
+        "When an intended target and actual finish are supplied, describe their objective difference as outcome versus target. "
+        "Do not turn a directional or distance miss into a swing diagnosis or invented cause.\n"
         "When approved_guidance is present, use its wording and intent as the coaching source. Use at most one lie, "
         "one local-situation, one hazard, and one outcome phrase; do not contradict the authoritative shot facts.\n"
         "Treat adjustment_reward as the authoritative deterministic grade. Credit a positive accuracy_bonus, state "
@@ -314,6 +352,10 @@ def build_round_prompt(payload: dict) -> str:
         "Use only the supplied authoritative round facts. Do not invent scores, misses, or coaching points.\n"
         "Treat strategy_analysis as the authoritative deterministic coaching result. Preserve its distinction "
         "between decision quality and execution quality, and do not replace its priority or patterns with guesses.\n"
+        "When report_narrative_packet is present, use it as the complete authoritative report context. Its learning "
+        "moments are already selected and ranked: never add, remove, or reorder them. Use its explicit metric "
+        "denominators, verified patterns, evidence_refs, and next-round priorities without recalculating them. "
+        "Write verdict as the 2-4 sentence Round Story for the whole packet, not merely the first meaningful hole.\n"
         "Write hole_reviews only for the supplied meaningful_holes, with exactly one entry per supplied hole. "
         "Do not review routine holes. Use the supplied scorecard, shot assessments, penalties, and lessons only.\n"
         "Treat prompt_ready_review_guidance and each shot's approved_guidance as binding constraints. Prefer their "
@@ -354,6 +396,32 @@ def build_gps_hole_review_prompt(payload: dict) -> str:
         f"{_dump(GPS_HOLE_REVIEW_RESPONSE_SCHEMA)}\n\n"
         "Authoritative GPS hole record:\n"
         f"{_dump(payload)}\n"
+    )
+
+
+def build_replay_interpretation_prompt(payload: dict) -> str:
+    return (
+        "You are the Replay Coach interpreting one completed golf shot.\n"
+        "The canonical assessment layer has already graded result, decision, outcome versus target, and execution. "
+        "You are an interpreter, not a grader. Preserve authoritative_assessment.title, result, decision, and execution "
+        "exactly in meaning. Never upgrade or "
+        "downgrade them because of the final result.\n"
+        "Use only supplied facts. Do not invent a cause, swing fault, contact quality, distance, probability, hazard, "
+        "club recommendation, or target. Do not say poor strike, mishit, or bad contact.\n"
+        "Respect canonical_assessment.outcome_vs_target.target_kind. For DIRECTION_TARGET, describe lateral error from "
+        "the selected line and depth error from modeled carry distance; never call it a target spot, landing point, or "
+        "landing target. For LANDING_TARGET, comparison to the selected landing point is allowed.\n"
+        "For a lag putt, the goal is a manageable leave rather than holing a low-probability putt. If execution_detail "
+        "says slight_miss or manageable_leave, describe it as an acceptable result with a small refinement—not failed "
+        "execution. Use putting language such as roll endpoint, line, pace, and distance from the cup; never say carry point.\n"
+        "PREFERRED_PLAN and COMPETITIVE_PLAN are strategically reasonable. HIGHER_RISK_PLAN needs review. "
+        "When a preferred or competitive decision has missed execution, keep the plan and coach only the verified target "
+        "difference. When a higher-risk decision has a favorable result, explain that one result does not validate the plan.\n"
+        "Write directly to a recreational golfer. Make interpretation two short sentences and next_time one practical sentence.\n"
+        "Return strict JSON with this schema:\n"
+        f"{_dump(REPLAY_INTERPRETATION_RESPONSE_SCHEMA)}\n\n"
+        "Verified replay evidence:\n"
+        f"{_dump(_compact_replay_payload(payload))}\n"
     )
 
 

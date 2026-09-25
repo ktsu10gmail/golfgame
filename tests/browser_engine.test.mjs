@@ -15,6 +15,10 @@ import {
   simulatePutt
 } from "../packages/simulation/browser_putting.mjs";
 import { sampleCourseGreenContour } from "../packages/simulation/browser_green_contour.mjs";
+import {
+  ParticipantType,
+  competitionExecutionIdentity
+} from "../packages/simulation/competition.mjs";
 
 const METERS_TO_YARDS = 1.09361;
 const rectangle = (x1, y1, x2, y2) => [
@@ -103,6 +107,16 @@ test("recorded seed identity replays the same complete packet", () => {
   assert.deepEqual(simulateFullShot(baseContext(), identity), simulateFullShot(baseContext(), identity));
 });
 
+test("matching competition shots use independent participant rolls", () => {
+  const humanIdentity = competitionExecutionIdentity(90210, 4, 2, ParticipantType.HUMAN);
+  const strategistIdentity = competitionExecutionIdentity(90210, 4, 2, ParticipantType.AI_STRATEGIST);
+  const human = simulateFullShot(baseContext(), humanIdentity);
+  const strategist = simulateFullShot(baseContext(), strategistIdentity);
+  assert.deepEqual(human, simulateFullShot(baseContext(), humanIdentity));
+  assert.deepEqual(strategist, simulateFullShot(baseContext(), strategistIdentity));
+  assert.notDeepEqual(human.landing, strategist.landing);
+});
+
 test("full shots cap carry at 108 percent while keeping roll separate", () => {
   const club = {
     club_id: "3_wood", carry_mean: 200, carry_sd: 40, roll_mean: 12,
@@ -136,8 +150,8 @@ test("authoritative putt packet exactly matches the Python golden result", () =>
     decision_risk: null,
     risk_label: null
   });
-  assert.deepEqual(packet.landing, { x: -0.7087, y: 9.4976 });
-  assert.equal(packet.remaining_distance_yards, 2.6);
+  assert.deepEqual(packet.landing, { x: -0.7965, y: 11.7134 });
+  assert.equal(packet.remaining_distance_yards, .85);
   assert.equal(packet.made, false);
   assert.equal(packet.make_probability, 0);
 });
@@ -145,6 +159,18 @@ test("authoritative putt packet exactly matches the Python golden result", () =>
 test("recorded putt seed identity replays the same complete packet", () => {
   const identity = { roundSeed: 7319, holeNumber: 12, strokeIndex: 3 };
   assert.deepEqual(simulatePutt(puttContext(), identity), simulatePutt(puttContext(), identity));
+});
+
+test("a short putt reaching the cup radius retains a nonzero make chance", () => {
+  const packet = simulatePutt(puttContext({
+    target: { x: 0, y: 1.25 },
+    pin: { x: 0, y: 1.25 },
+    read: { feet: 3.75, direction: "right", start_direction: "right", break_inches: 0 },
+    pace_scale: .06
+  }), { roundSeed: 19, holeNumber: 10, strokeIndex: 3 });
+  assert.ok(packet.make_probability > 0);
+  assert.equal(packet.pace_correct, true);
+  assert.equal(packet.correct_decision, true);
 });
 
 test("putting read is graded relative to the player-to-cup line on a rotated green", () => {
@@ -222,11 +248,11 @@ test("authoritative contour putt exposes the replayable curved path", () => {
     profile_version: "contour-test"
   });
   const packet = simulatePutt(context, { roundSeed: 90210, holeNumber: 1, strokeIndex: 1 });
-  assert.deepEqual(packet.landing, { x: .0825, y: 3.3345 });
-  assert.equal(packet.path.length, 21);
+  assert.deepEqual(packet.landing, { x: .097, y: 4.4586 });
+  assert.equal(packet.path.length, 23);
   assert.deepEqual(packet.path.at(-1), packet.landing);
   assert.equal(packet.audit.contour_physics, true);
-  assert.equal(packet.audit.physics_steps, 80);
+  assert.equal(packet.audit.physics_steps, 87);
 });
 
 test("authoritative putt uses the course-specific contour key", () => {

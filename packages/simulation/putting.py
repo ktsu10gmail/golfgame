@@ -8,7 +8,7 @@ from packages.golf_domain import PuttAudit, PuttContext, PuttResultPacket, Resul
 from packages.simulation.green_contour import sample_course_green_contour
 
 
-PUTTING_ENGINE_VERSION = "putt-v3"
+PUTTING_ENGINE_VERSION = "putt-v4"
 
 _MASK_64 = (1 << 64) - 1
 _FNV_OFFSET_64 = 0xCBF29CE484222325
@@ -20,6 +20,8 @@ _CONTOUR_GRAVITY_SCALE = 0.12
 _PHYSICS_TIME_STEP = 0.04
 _PHYSICS_STOP_SPEED = 0.035
 _MAX_PHYSICS_STEPS = 650
+_CUP_TOLERANCE_YARDS = 0.06
+_CUP_TOLERANCE_FEET = _CUP_TOLERANCE_YARDS * 3
 
 
 class _DeterministicRandom:
@@ -205,7 +207,8 @@ def simulate_putt(context: PuttContext, *, round_seed: int, hole_number: int, st
     power_error_points = abs(context.pace_scale - required_power) * 100
     aim_quality = math.exp(-aim_error_inches / 8)
     pace_quality = math.exp(-power_error_points / 12)
-    can_reach_cup = context.profile.putter_range_feet * context.pace_scale * slope_pace_multiplier >= context.read.feet * 0.97
+    projected_travel_feet = context.profile.putter_range_feet * context.pace_scale * slope_pace_multiplier
+    can_reach_cup = projected_travel_feet >= max(0, context.read.feet - _CUP_TOLERANCE_FEET)
     baseline_probability = _baseline_make_probability(context.read.feet, context)
     make_probability = (
         max(0, min(1, baseline_probability * (0.15 + 0.85 * aim_quality) * (0.1 + 0.9 * pace_quality)))
@@ -213,9 +216,11 @@ def simulate_putt(context: PuttContext, *, round_seed: int, hole_number: int, st
         else 0
     )
     aim_correct = aim_error_inches <= max(2, context.read.break_inches * 0.35)
-    pace_correct = power_error_points <= 6
+    pace_correct = can_reach_cup and power_error_points <= 6
     correct_decision = aim_correct and pace_correct
-    made = rng.random() < make_probability
+    sampled_make = rng.random() < make_probability
+    geometric_make = landing.distance_to(context.pin) <= _CUP_TOLERANCE_YARDS
+    made = geometric_make or sampled_make
     if made:
         landing = context.pin
         path = (*path, context.pin)

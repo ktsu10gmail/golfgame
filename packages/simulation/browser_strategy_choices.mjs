@@ -1,4 +1,5 @@
-export const STRATEGY_CHOICES_VERSION = "strategy-choices-v10";
+export const STRATEGY_CHOICES_VERSION = "strategy-choices-v11";
+export const TREE_RECOVERY_MODEL_VERSION = "tree-recovery-v1";
 
 const SWING_LEVELS = [.25, .5, .75, 1];
 
@@ -636,4 +637,94 @@ export function buildStrategyChoices({
     ...choice,
     adviceKeys: planAdviceKeys(choice, normalizedSurface)
   }));
+}
+
+// Academy keeps the honest underlying plans instead of collapsing them into
+// the normal caddie's two-button Aggressive / Safe & smart presentation.
+// Physics inputs and deterministic ranking remain shared with normal play.
+export function buildAcademyStrategyChoices({
+  start, pin, centerline, fairways, surfaces, clubs, lieMultiplier = 1,
+  preferredApproachYards, startSurface = "fairway", recoveryRequired = false
+}) {
+  if (!start || !pin || !Array.isArray(centerline) || centerline.length < 2) {
+    throw new Error("academy strategy choices require start, pin, and a centerline");
+  }
+  if (!Array.isArray(clubs) || !clubs.some(club => !club.name.toLowerCase().includes("putter"))) {
+    throw new Error("academy strategy choices require at least one full-shot club");
+  }
+  const preferred = Number.isFinite(preferredApproachYards) && preferredApproachYards > 20
+    ? preferredApproachYards
+    : 90;
+  const normalizedSurface = String(startSurface).toLowerCase().replaceAll(" ", "_");
+  const fullShotClubs = filteredClubs(clubs, lieMultiplier, normalizedSurface);
+  if (!fullShotClubs.length) throw new Error("no club is suitable for the current lie");
+  const context = {
+    start, pin, centerline, fairways, surfaces, lieMultiplier,
+    preferred, clubs: fullShotClubs
+  };
+  const recovery = recoveryRequired || ["bunker", "native", "heavy_rough"].includes(normalizedSurface);
+  const remaining = distance(start, pin);
+  const reachable = remaining <= fullShotClubs[0].effectiveCarry + 2;
+  const plans = recovery
+    ? recoveryChoices(context)
+    : reachable
+      ? approachChoices(context)
+      : longChoices(context);
+  return finalizeChoices(plans).slice(0, 3).map(choice => ({
+    ...choice,
+    reasons: withoutInternalRankingReasons(choice.reasons),
+    adviceKeys: planAdviceKeys(choice, normalizedSurface)
+  }));
+}
+
+// Tree canopies describe an obstruction field, not individual trunks or
+// branch openings.  Build ordinary geometry-safe recovery targets first, then
+// attach an honest, versioned interference model to 1–3 distinct choices.
+export function buildTreeRecoveryChoices({ treeCondition, ...input }) {
+  if (!treeCondition) throw new Error("tree recovery requires a tree condition");
+  const base = buildAcademyStrategyChoices({ ...input, startSurface: "trees", recoveryRequired: true });
+  const depth = treeCondition.tree_position;
+  const limit = depth === "deep_in_trees" ? 1 : depth === "under_canopy" ? 2 : 3;
+  const maxDistance = Math.max(distance(input.start, input.pin), 1);
+  const depthRisk = depth === "deep_in_trees" ? .36 : depth === "under_canopy" ? .21 : .09;
+  const forward = { x: (input.pin.x - input.start.x) / maxDistance, y: (input.pin.y - input.start.y) / maxDistance };
+  const decorated = base.map(choice => {
+    const attempted = distance(input.start, choice.target);
+    const dx = choice.target.x - input.start.x, dy = choice.target.y - input.start.y;
+    const progress = (dx * forward.x + dy * forward.y) / Math.max(attempted, 1);
+    const directionRisk = progress > .7 ? .16 : progress > .2 ? .08 : progress < -.1 ? -.05 : 0;
+    const distanceRisk = Math.min(.18, attempted / maxDistance * .18);
+    const accuracyRisk = Math.max(0, 100 - (input.clubs.find(club => club.clubIndex === choice.clubIndex)?.accuracy || 70)) / 100 * .1;
+    const major = bounded(.015 + depthRisk * .42 + directionRisk * .5 + distanceRisk * .32 + accuracyRisk * .22, .01, .48);
+    const clip = bounded(.035 + depthRisk * .72 + directionRisk * .62 + distanceRisk * .48 + accuracyRisk * .35, .03, .58 - major);
+    const clean = Math.round((1 - clip - major) * 1000) / 1000;
+    const normalizedClip = Math.round(clip * 1000) / 1000;
+    const normalizedMajor = Math.round((1 - clean - normalizedClip) * 1000) / 1000;
+    const cleanLeave = Math.round(choice.leavesYards);
+    const clipLeave = Math.round(cleanLeave + Math.max(10, attempted * .34));
+    const majorLeave = Math.round(cleanLeave + Math.max(25, attempted * .76));
+    const overallLeave = Math.round(clean * cleanLeave + normalizedClip * clipLeave + normalizedMajor * majorLeave);
+    const directionClass = progress > .7 ? "FORWARD" : progress > .15 ? "FORWARD_DIAGONAL" : progress < -.15 ? "BACKWARD" : "LATERAL";
+    const safety = clean >= .8 ? "Safe Punch" : clean >= .58 ? "Forward Punch" : "Aggressive Punch";
+    return {
+      ...choice,
+      id: `tree-${choice.id}`,
+      title: safety,
+      objective: clean >= .8 ? "Highest clean escape" : clean >= .58 ? "More progress, more tree risk" : "Maximum progress, high tree risk",
+      treeRecovery: {
+        version: TREE_RECOVERY_MODEL_VERSION,
+        tree_depth: depth,
+        direction_class: directionClass,
+        intended_distance_yards: Math.round(attempted),
+        probabilities: { clean_escape: clean, branch_clip: normalizedClip, major_tree_contact: normalizedMajor },
+        reward: { expected_leave_if_clean_yards: cleanLeave, clip_leave_yards: clipLeave, major_leave_yards: majorLeave, overall_expected_leave_yards: overallLeave },
+        remaining_in_trees_on_major: depth === "deep_in_trees" ? .78 : depth === "under_canopy" ? .61 : .42,
+        hazard_exposure: choice.hazards?.length ? .08 : 0
+      },
+      // Used by the GM's tree-specific comparison before the general evaluator
+      // has a physical branch model.
+      scoringIndex: overallLeave + normalizedMajor * 35 + normalizedClip * 12
+    };
+  }).sort((a, b) => a.scoringIndex - b.scoringIndex);
+  return decorated.slice(0, limit);
 }

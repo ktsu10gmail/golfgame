@@ -74,7 +74,10 @@ with **Undo**.
 ## Save, export, and install
 
 **Save project** downloads one `.golfmap` containing all 18 working holes and
-their local image references. The browser also maintains an autosave.
+their local image references. When you switch holes, the editor autosaves the
+departing hole and the full project in the browser, then confirms the saved hole
+and time in the header. If browser storage is full, it keeps the current hole
+open so you can use **Save project** to download a copy.
 
 **Export Hole JSON** exports only the current calculation geometry for review.
 

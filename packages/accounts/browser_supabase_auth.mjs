@@ -1,7 +1,9 @@
 const SESSION_KEY = "golfgame-supabase-session";
 
 function apiError(payload, status) {
-  return new Error(payload?.msg || payload?.message || payload?.error_description || payload?.error || `Authentication failed (${status})`);
+  const error = new Error(payload?.msg || payload?.message || payload?.error_description || payload?.error || `Authentication failed (${status})`);
+  error.status = status;
+  return error;
 }
 
 function normalizeSession(payload, nowSeconds) {
@@ -54,11 +56,17 @@ export function createSupabaseAuth(config, options = {}) {
     if (refreshPromise) return refreshPromise;
     const current = loadSession();
     if (!current?.refresh_token) return null;
+    const attemptedRefreshToken = current.refresh_token;
     refreshPromise = request("/token?grant_type=refresh_token", {
-      body: { refresh_token: current.refresh_token }
+      body: { refresh_token: attemptedRefreshToken }
     }).then(payload => saveSession(normalizeSession(payload, Math.floor(now() / 1000))))
       .catch(error => {
-        saveSession(null);
+        // A second tab may have already rotated this one-use refresh token.
+        // Keep and use that newer session instead of deleting it.
+        const latest = loadSession();
+        if (latest?.refresh_token && latest.refresh_token !== attemptedRefreshToken) return latest;
+        // Network and service errors are retryable and must not sign the player out.
+        if (error?.status === 400 || error?.status === 401) saveSession(null);
         throw error;
       })
       .finally(() => { refreshPromise = null; });

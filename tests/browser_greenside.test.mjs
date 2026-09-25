@@ -64,6 +64,11 @@ test("browser greenside packet exactly matches the Python golden result", () => 
   assert.equal(packet.resolved_surface, "green");
   assert.equal(packet.remaining_distance_yards, 2.74);
   assert.equal(packet.assessment.execution_assessment, "on_plan");
+  assert.doesNotThrow(() => structuredClone(packet));
+  assert.equal(
+    packet.audit.modifiers.find(modifier => modifier.name === "greenside_roll_ratio")?.value,
+    1
+  );
 });
 
 test("recorded greenside seed identity replays the complete packet", () => {
@@ -76,6 +81,34 @@ test("recorded greenside seed identity replays the complete packet", () => {
     simulateGreensideShot(context(), identity),
     simulateGreensideShot(context(), { ...identity, strokeIndex: 4 })
   );
+});
+
+test("landing-target nominal carry remains probabilistic and club rollout remains distinct", () => {
+  const identity = { roundSeed: 7319, holeNumber: 12, strokeIndex: 3 };
+  const sandWedge = simulateGreensideShot(context({
+    target: { x: 16, y: 0 },
+    nominal_carry_yards: 16,
+    power: .32
+  }), identity);
+  const nineIron = simulateGreensideShot(context({
+    target: { x: 16, y: 0 },
+    nominal_carry_yards: 16,
+    power: .14,
+    club_id: "9_iron"
+  }), identity);
+  assert.notEqual(sandWedge.carry_yards, 16);
+  assert.ok(sandWedge.carry_yards > 12 && sandWedge.carry_yards < 20);
+  assert.equal(sandWedge.audit.nominal_carry_yards, 16);
+  assert.equal(nineIron.carry_yards, sandWedge.carry_yards);
+  assert.ok(nineIron.roll_yards > sandWedge.roll_yards);
+});
+
+test("landing-target carry reuses lie-specific greenside variability", () => {
+  const identity = { roundSeed: 1804, holeNumber: 8, strokeIndex: 2 };
+  const fairway = simulateGreensideShot(context({ nominal_carry_yards: 16, lie_type: "fairway_clean" }), identity);
+  const bunker = simulateGreensideShot(context({ nominal_carry_yards: 16, lie_type: "bunker_greenside" }), identity);
+  assert.notEqual(bunker.carry_yards, fairway.carry_yards);
+  assert.ok(Math.abs(bunker.carry_yards - 16) > Math.abs(fairway.carry_yards - 16));
 });
 
 test("greenside roll into water receives authoritative relief", () => {

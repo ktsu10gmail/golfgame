@@ -60,7 +60,7 @@ function assertFinitePoint(point, label) {
   }
 }
 
-function rollRatio(clubId) {
+export function greensideRollRatio(clubId) {
   const name = clubId.toLowerCase().replaceAll("_", " ");
   if (name.includes("lob wedge")) return 0.8;
   if (name.includes("sand wedge")) return 1;
@@ -74,6 +74,7 @@ function rollRatio(clubId) {
 }
 
 function lieSpread(lieType) {
+  if (["bunker", "bunker_greenside", "bunker_fairway"].includes(lieType)) return [0.09, 0.045];
   if (lieType === "rough_deep") return [0.08, 0.05];
   if (["rough_light", "rough_medium", "rough_flyer"].includes(lieType)) return [0.05, 0.03];
   return [0.03, 0.01];
@@ -129,13 +130,17 @@ export function simulateGreensideShot(context, { roundSeed, holeNumber, strokeIn
   const shotSeed = deriveGreensideSeed(roundSeed, holeNumber, strokeIndex);
   const rng = new DeterministicRandom(shotSeed);
   const carryTarget = Math.hypot(context.target.x - context.start.x, context.target.y - context.start.y);
+  const nominalCarry = Number.isFinite(context.nominal_carry_yards) && context.nominal_carry_yards > 0
+    ? context.nominal_carry_yards
+    : null;
   const [carryLieSpread, lateralLieSpread] = lieSpread(context.lie_type);
   const carryBias = 0.82 + context.power * 0.2;
   const carrySd = Math.max(
     0.4,
     carryTarget * (0.05 + (1 - context.accuracy) * 0.12 + carryLieSpread)
   );
-  const actualCarry = Math.max(0.5, rng.gauss(carryTarget * carryBias, carrySd));
+  const expectedCarry = nominalCarry ?? carryTarget * carryBias;
+  const actualCarry = Math.max(0.5, rng.gauss(expectedCarry, carrySd));
   const lateralSd = Math.max(
     0.15,
     carryTarget * (0.015 + (1 - context.accuracy) * 0.06 + lateralLieSpread)
@@ -148,11 +153,11 @@ export function simulateGreensideShot(context, { roundSeed, holeNumber, strokeIn
 
   const feetToPin = Math.hypot(carryPoint.x - context.pin.x, carryPoint.y - context.pin.y) * 3;
   const readBreakInches = breakInches(feetToPin, context.contour_modifier);
-  const greensideRollRatio = rollRatio(context.club_id);
+  const clubRollRatio = greensideRollRatio(context.club_id);
   const surfaceFactor = landingSurface === "green" ? 1 : 0.65;
   const rollYards = Math.max(
     0,
-    actualCarry * greensideRollRatio * context.roll_slope_factor * surfaceFactor
+    actualCarry * clubRollRatio * context.roll_slope_factor * surfaceFactor
   );
   const distanceToPin = Math.hypot(carryPoint.x - context.pin.x, carryPoint.y - context.pin.y);
   const breakScale = Math.min(1.3, rollYards / Math.max(distanceToPin, 1));
@@ -232,10 +237,11 @@ export function simulateGreensideShot(context, { roundSeed, holeNumber, strokeIn
       profile_version: context.profile_version,
       lie_version: context.lie_version,
       sampled_carry_yards: roundTo(actualCarry, 4),
+      nominal_carry_yards: nominalCarry === null ? null : roundTo(nominalCarry, 4),
       sampled_lateral_yards: roundTo(lateralYards, 4),
       mishit_probability: roundTo(1 - context.accuracy, 3),
       modifiers: [
-        { name: "greenside_roll_ratio", value: greensideRollRatio },
+        { name: "greenside_roll_ratio", value: clubRollRatio },
         { name: "greenside_slope_factor", value: context.roll_slope_factor },
         { name: "intent_distance", value: context.power },
         { name: "contour_modifier", value: context.contour_modifier }

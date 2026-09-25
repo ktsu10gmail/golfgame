@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -13,7 +14,7 @@ from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,12 +47,26 @@ from packages.accounts import (
     SupabaseConfig,
     attach_verified_learning_context,
 )
+from packages.course_import import (
+    CourseImportError,
+    CourseImportService,
+    CourseImportStore,
+    GolfIntelligenceConfig,
+)
 from scripts.import_mapped_course import install_package, validate_package
 
 AI_SERVICE = create_ai_service()
 PLAYER_STORE = PlayerStore(os.getenv("GOLFGAME_PLAYER_DB", ROOT / "data" / "player_accounts.sqlite3"))
 SUPABASE_CONFIG = SupabaseConfig.from_values(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_ANON_KEY"))
 SUPABASE_AUTH = SupabaseAuth(SUPABASE_CONFIG) if SUPABASE_CONFIG else None
+GOLF_INTELLIGENCE_CONFIG = GolfIntelligenceConfig.from_env()
+COURSE_IMPORT_STORE = CourseImportStore(
+    os.getenv("GOLFGAME_COURSE_IMPORT_DB", ROOT / "data" / "course_imports.sqlite3")
+)
+COURSE_IMPORT_SERVICE = CourseImportService(GOLF_INTELLIGENCE_CONFIG, COURSE_IMPORT_STORE)
+GPS_RECOVERY_SCORECARDS = {
+    "53FZ3QDT": ROOT / "data" / "the-warrenbrook-golf-course" / "scorecard.csv",
+}
 SESSION_COOKIE = "golfgame_session"
 CENSUS_GEOCODER_URL = (
     "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
@@ -85,6 +100,25 @@ class AppHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/ai/health":
             self._json_response(HTTPStatus.OK, AI_SERVICE.status())
+            return
+        if parsed.path == "/api/v1/course-import/golf-intelligence/status":
+            player = self._require_developer()
+            if player is not None:
+                status = COURSE_IMPORT_SERVICE.status()
+                status["gps_only_recovery_public_ids"] = sorted(GPS_RECOVERY_SCORECARDS)
+                self._json_response(HTTPStatus.OK, status)
+            return
+        if parsed.path.startswith("/api/v1/course-import/jobs/"):
+            player = self._require_developer()
+            if player is None:
+                return
+            job_id = parsed.path.removeprefix("/api/v1/course-import/jobs/").strip("/")
+            try:
+                result = COURSE_IMPORT_SERVICE.job(job_id, str(player["id"]))
+            except CourseImportError as error:
+                self._json_response(HTTPStatus(error.status), {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, result)
             return
         if parsed.path == "/api/geocode":
             self._handle_geocode(parsed.query)
@@ -154,6 +188,72 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
             self._json_response(HTTPStatus.OK, {"rounds": rounds})
             return
+        if parsed.path == "/api/player/challenge-history":
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                limit = int(parse_qs(parsed.query).get("limit", ["50"])[0])
+                challenges = PLAYER_STORE.challenge_history(player["id"], limit)
+            except (AccountError, TypeError, ValueError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, {"challenges": challenges})
+            return
+        challenge_match = re.fullmatch(r"/api/player/challenges/([^/]+)", parsed.path)
+        if challenge_match:
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                challenge = PLAYER_STORE.challenge(player["id"], unquote(challenge_match.group(1)))
+            except AccountError as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            if challenge is None:
+                self._json_response(HTTPStatus.NOT_FOUND, {"error": "challenge was not found"})
+                return
+            self._json_response(HTTPStatus.OK, {"challenge": challenge})
+            return
+        replay_match = re.fullmatch(r"/api/player/rounds/([^/]+)(?:/holes/(\d+))?", parsed.path)
+        if replay_match:
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                round_id = unquote(replay_match.group(1))
+                hole_number = replay_match.group(2)
+                payload = PLAYER_STORE.round_replay_hole(player["id"], round_id, int(hole_number)) \
+                    if hole_number else PLAYER_STORE.round_replay_index(player["id"], round_id)
+            except (AccountError, TypeError, ValueError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            if payload is None:
+                self._json_response(HTTPStatus.NOT_FOUND, {"error": "round replay was not found"})
+                return
+            self._json_response(HTTPStatus.OK, payload)
+            return
+        geometry_match = re.fullmatch(r"/api/courses/([^/]+)/versions/([^/]+)/holes/(\d+)", parsed.path)
+        if geometry_match:
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                course_id, version_id, raw_hole = geometry_match.groups()
+                course_id, version_id = unquote(course_id), unquote(version_id)
+                payload = PLAYER_STORE.course_hole_geometry(course_id, version_id, int(raw_hole))
+            except (AccountError, TypeError, ValueError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            if payload is None:
+                self._json_response(HTTPStatus.NOT_FOUND, {"error": "course geometry version was not found"})
+                return
+            etag = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:24]
+            self._json_response(HTTPStatus.OK, payload, {
+                "Cache-Control": "private, max-age=31536000, immutable",
+                "ETag": f'"{etag}"',
+            })
+            return
         if parsed.path == "/api/player/leaderboard":
             player = self._require_player()
             if player is None:
@@ -219,6 +319,9 @@ class AppHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/ai/gps-hole-review":
             self._handle_json_route(AI_SERVICE.review_gps_hole)
             return
+        if parsed.path == "/api/ai/replay":
+            self._handle_json_route(AI_SERVICE.interpret_replay)
+            return
         if parsed.path == "/api/ai/strategy":
             self._handle_json_route(AI_SERVICE.critique_strategy, attach_verified_learning=True)
             return
@@ -227,6 +330,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/course-mapper/install":
             self._handle_course_install()
+            return
+        if parsed.path.startswith("/api/v1/course-import/golf-intelligence/"):
+            self._handle_golf_intelligence_import(parsed.path)
             return
         if parsed.path == "/api/player/register":
             self._handle_player_access(create=True)
@@ -269,7 +375,7 @@ class AppHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path not in {
             "/api/player/active-round", "/api/player/profile", "/api/player/gps-round",
-            "/api/player/rating", "/api/player/feedback/read", "/api/developer/feedback",
+            "/api/player/challenge", "/api/player/rating", "/api/player/feedback/read", "/api/developer/feedback",
         }:
             self._json_response(HTTPStatus.NOT_FOUND, {"error": "unknown api route"})
             return
@@ -283,6 +389,11 @@ class AppHandler(SimpleHTTPRequestHandler):
             elif parsed.path == "/api/player/gps-round":
                 payload = self._read_json_body(max_bytes=2 * 1024 * 1024)
                 result = PLAYER_STORE.save_gps_round(player["id"], payload.get("round"))
+            elif parsed.path == "/api/player/challenge":
+                payload = self._read_json_body(max_bytes=5 * 1024 * 1024)
+                result = PLAYER_STORE.save_challenge(
+                    player["id"], payload.get("challenge"), payload.get("geometry_snapshot")
+                )
             elif parsed.path == "/api/player/rating":
                 payload = self._read_json_body()
                 result = PLAYER_STORE.save_game_rating(player["id"], payload.get("stars"), payload.get("comment"))
@@ -298,6 +409,8 @@ class AppHandler(SimpleHTTPRequestHandler):
                 payload = self._read_json_body(max_bytes=10 * 1024 * 1024)
                 result = PLAYER_STORE.save_round(player["id"], payload.get("round"))
         except (AccountError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+            if parsed.path == "/api/player/gps-round":
+                print(f"GPS round sync rejected: {error}", flush=True)
             self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
             return
         self._json_response(HTTPStatus.OK, result)
@@ -422,6 +535,60 @@ class AppHandler(SimpleHTTPRequestHandler):
             "destination": str(destination.relative_to(ROOT)),
         })
 
+    def _handle_golf_intelligence_import(self, path: str) -> None:
+        player = self._require_developer()
+        if player is None:
+            return
+        try:
+            payload = self._read_json_body(max_bytes=128 * 1024)
+            requested_by = str(player["id"])
+            if path.endswith("/search"):
+                result = COURSE_IMPORT_SERVICE.search(payload)
+            elif path.endswith("/preview-gps-only"):
+                external_id = str(payload.get("public_id") or "").strip()
+                scorecard_path = GPS_RECOVERY_SCORECARDS.get(external_id)
+                if scorecard_path is None or not scorecard_path.is_file():
+                    raise CourseImportError(
+                        "No trusted local scorecard is configured for this GPS-only recovery",
+                        status=409,
+                    )
+                result = COURSE_IMPORT_SERVICE.preview_gps_only(
+                    payload,
+                    requested_by,
+                    scorecard_path.read_text(encoding="utf-8"),
+                )
+            elif path.endswith("/preview"):
+                result = COURSE_IMPORT_SERVICE.preview(payload, requested_by)
+            elif path.endswith("/import"):
+                result = COURSE_IMPORT_SERVICE.commit(payload, requested_by)
+            elif path.endswith("/paid-calls"):
+                if not isinstance(payload.get("allowed"), bool):
+                    raise CourseImportError("allowed must be true or false")
+                result = COURSE_IMPORT_SERVICE.set_paid_calls_allowed(payload["allowed"])
+                result["gps_only_recovery_public_ids"] = sorted(GPS_RECOVERY_SCORECARDS)
+            else:
+                self._json_response(HTTPStatus.NOT_FOUND, {"error": "unknown course import route"})
+                return
+        except CourseImportError as error:
+            try:
+                status = HTTPStatus(error.status)
+            except ValueError:
+                status = HTTPStatus.BAD_REQUEST
+            self._json_response(status, {"error": str(error)})
+            return
+        except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+            self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            return
+        except Exception as error:
+            self.log_error("course import failed unexpectedly: %s", error)
+            self._json_response(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                {"error": "The course import failed safely. Paid calls are now OFF; check the server log before retrying."},
+            )
+            COURSE_IMPORT_SERVICE.set_paid_calls_allowed(False)
+            return
+        self._json_response(HTTPStatus.OK, result)
+
     def _attach_verified_learning(self, payload: dict) -> None:
         player = self._current_player()
         learning = PLAYER_STORE.player_learning(player["id"]) if player is not None else None
@@ -489,8 +656,9 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        for name, value in (headers or {}).items():
+        response_headers = dict(headers or {})
+        self.send_header("Cache-Control", response_headers.pop("Cache-Control", "no-store"))
+        for name, value in response_headers.items():
             self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)

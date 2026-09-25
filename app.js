@@ -1,12 +1,35 @@
 import {
+  ENGINE_VERSION,
   declareUnplayable as resolveUnplayableRelief,
   segmentPolygonEntryProgress,
   simulateFullShot
 } from "./packages/simulation/browser_engine.mjs?v=20260815-4";
-import { scorePuttStrategy, scoreStrategy } from "./packages/simulation/browser_decision_scoring.mjs?v=20260729-2";
-import { simulateGreensideShot } from "./packages/simulation/browser_greenside.mjs?v=20260816-3";
-import { analyzeRoundStrategy } from "./packages/simulation/browser_round_analysis.mjs?v=20260729-1";
-import { simulatePutt } from "./packages/simulation/browser_putting.mjs?v=20260820-6";
+import { DECISION_SCORE_VERSION, scorePuttStrategy, scoreStrategy } from "./packages/simulation/browser_decision_scoring.mjs?v=20260729-2";
+import {
+  greensideRollRatio,
+  simulateGreensideShot
+} from "./packages/simulation/browser_greenside.mjs?v=20260901-2";
+import {
+  AimType,
+  PowerStatus,
+  SHORT_GAME_MODEL_VERSION,
+  expectedShortGameRoll,
+  generateRuleOf12Candidates,
+  markUnsafeTrajectory,
+  nominalAimCarryYards,
+  recommendNonPutterClubIndex,
+  solveShortGamePower
+} from "./packages/simulation/browser_short_game.mjs?v=20260901-2";
+import {
+  SHOT_TYPE_LABELS,
+  ShotType,
+  landingTargetAllowed,
+  recommendShotType,
+  shotTypeUsesGreensideEngine,
+  validateShotType
+} from "./packages/simulation/browser_shot_type.mjs?v=20260902-2";
+import { ROUND_STRATEGY_VERSION, analyzeRoundStrategy } from "./packages/simulation/browser_round_analysis.mjs?v=20260729-1";
+import { PUTTING_ENGINE_VERSION, simulatePutt } from "./packages/simulation/browser_putting.mjs?v=20260830-7";
 import {
   buildGreenCaddieRead,
   greenPlayerViewYawDegrees,
@@ -37,19 +60,51 @@ import {
 } from "./packages/simulation/browser_green_contour.mjs?v=20260807-5";
 import { analyzeSidehillShot } from "./packages/simulation/browser_sidehill.mjs?v=20260729-1";
 import { gradeAdjustmentReward } from "./packages/simulation/browser_adjustment_reward.mjs?v=20260809-1";
-import { buildStrategyChoices } from "./packages/simulation/browser_strategy_choices.mjs?v=20260816-24";
-import { evaluateTreeCondition, treeConditionMessage } from "./packages/simulation/browser_tree_conditions.mjs?v=20260817-1";
 import {
+  PLAYER_SAFE_SHOT_ERROR,
+  formatBreak,
+  modeledMakeChanceLabel,
+  outcomeDelta
+} from "./packages/simulation/browser_gm_feedback.mjs?v=20260830-1";
+import { buildAcademyStrategyChoices, buildStrategyChoices, buildTreeRecoveryChoices } from "./packages/simulation/browser_strategy_choices.mjs?v=20260921-1";
+import { applyTreeRecoveryContact, resolveTreeRecoveryOutcome } from "./packages/simulation/browser_tree_recovery.mjs?v=20260921-1";
+import { evaluateTreeCondition, treeConditionMessage } from "./packages/simulation/browser_tree_conditions.mjs?v=20260921-2";
+import {
+  MULTI_RUN_EVALUATOR_VERSION,
   evaluateShotCandidates,
   stableAnalysisSeed
-} from "./packages/simulation/browser_multi_run_evaluator.mjs?v=20260811-2";
+} from "./packages/simulation/browser_multi_run_evaluator.mjs?v=20260921-1";
+import { buildInPlayPresentation } from "./packages/presentation/in_play_presentation_policy.mjs?v=20260921-1";
+import { replaceDraftMessage } from "./packages/presentation/gm_conversation.mjs?v=20260925-1";
+import {
+  buildPostRoundPdf,
+  postRoundReportFilename
+} from "./packages/presentation/post_round_export.mjs?v=20260924-1";
+import {
+  attachPostRoundNarrative,
+  buildPostRoundReportModel,
+  buildReportNarrativePacket,
+  relativeScoreLabel,
+  reportLabel
+} from "./packages/presentation/post_round_report.mjs?v=20260924-1";
+import {
+  ACADEMY_DECISION_POLICY_VERSION,
+  academyChoiceEvidence,
+  scoreAcademySession
+} from "./packages/academy/academy_policy.mjs?v=20260918-2";
+import {
+  rememberAcademyHole,
+  selectAcademyParFiveIndex
+} from "./packages/academy/academy_hole_rotation.mjs?v=20260918-1";
 import {
   CompetitionPhase,
   ParticipantType,
   appendStrategistResult,
+  competitionExecutionIdentity,
+  competitionPairedTotals,
   competitionRoundSummary,
-  competitionTotals,
   continueCompetition,
+  cloneStrategistProfile,
   createCompetitionRound,
   expectedScoreCost,
   loadCompetition,
@@ -62,7 +117,38 @@ import {
   selectSmartExpectedScore,
   strategistHoleState,
   validateSameGameplayProfile
-} from "./packages/simulation/competition.mjs?v=20260820-2";
+} from "./packages/simulation/competition.mjs?v=20260921-1";
+import {
+  challengeSeeds,
+  generateChallengeHoles,
+  challengeHoleKey,
+  orderedChallengeCandidates,
+  replaceIneligibleHole
+} from "./packages/challenge/challenge_generator.mjs?v=20260916-1";
+import {
+  challengeScoreToPar,
+  compactChallengeForStorage,
+  createChallengeState,
+  officialMatchState,
+  recordChallengeHole,
+  startChallenge,
+  validateChallengeState
+} from "./packages/challenge/challenge_state.mjs?v=20260921-1";
+import { ChallengeHoleLoader } from "./packages/challenge/challenge_hole_loader.mjs?v=20260916-1";
+import {
+  ChallengeAudioDirector,
+  DEFAULT_AUDIO_SETTINGS
+} from "./packages/audio/challenge_audio.mjs?v=20260916-1";
+import { ReplayHoleLoader } from "./packages/replay/browser_replay_loader.mjs?v=20260903-1";
+import {
+  ASSESSMENT_VERSION,
+  DECISION_POLICY_VERSION,
+  DecisionLabel,
+  ResultLabel,
+  assessGameShot,
+  canonicalAssessmentForGameShot,
+  legacyPacketAssessment
+} from "./packages/assessment/browser_assessment_service.mjs?v=20260904-2";
 import {
   appendHoleEvent,
   buildHoleBrowserState,
@@ -70,7 +156,7 @@ import {
   classifyShotCompletion,
   createRoundState,
   loadRoundState,
-  migrateLegacyRoundStateStorage,
+  migrateLegacyRoundState,
   replaceHoleEvents,
   resetRoundState,
   saveRoundState
@@ -80,32 +166,46 @@ import {
   parseRoundSave,
   roundSaveFilename
 } from "./packages/simulation/round_save.mjs?v=20260730-1";
-import { createSupabaseAuth } from "./packages/accounts/browser_supabase_auth.mjs?v=20260804-1";
+import { createSupabaseAuth } from "./packages/accounts/browser_supabase_auth.mjs?v=20260920-1";
 import { personalizeCustomProfile, playerProfileName } from "./packages/accounts/browser_profile_naming.mjs?v=20260804-1";
-import { createUniformMapProjector, imageViewportForWorldBounds } from "./packages/editor/map_projection.mjs?v=20260812-1";
+import {
+  approachHoleCameraBounds,
+  createUniformMapProjector,
+  imageViewportForWorldBounds,
+  uprightHoleCameraBounds
+} from "./packages/editor/map_projection.mjs?v=20260903-1";
 import {
   coursePointToGps as gpsCoursePointToGps,
-  completeGpsHole,
+  correctGpsRecordedShot,
   createGpsRoundId,
   createGpsRound,
-  firstUnfinishedGpsHoleIndex,
+  deleteGpsRecordedShot,
+  deleteLastGpsPutt,
   gpsDistanceYards,
   gpsHoleReview,
   gpsHoleScore,
+  holeOutGpsHole,
   gpsRoundComplete,
+  gpsRoundReviewAction,
   gpsRoundScore,
   gpsToCoursePoint,
   latestCompletedGpsHoleIndex,
   manualGpsStrategy,
+  nextGpsHoleIndex,
   normalizeGpsBallConditions,
   recommendGpsClub,
   undoGpsHoleAction
-} from "./packages/gps/browser_gps_mode.mjs?v=20260817-5";
+} from "./packages/gps/browser_gps_mode.mjs?v=20260920-4";
+import {
+  gpsReplayShotEvidence,
+  gpsReplaySteps
+} from "./packages/gps/browser_gps_replay.mjs?v=20260904-2";
 
 const METERS_TO_YARDS = 1.09361;
 const PUTTER_RANGE_FEET = 60;
 const AI_REQUEST_TIMEOUT_MS = 65000;
 const SHOW_GEOMETRY_DEBUG = new URLSearchParams(window.location.search).get("debugGeometry") === "1";
+const CHALLENGE_STORAGE_SUFFIX = "three-hole-challenge-current";
 let authConfig = { provider: "local" };
 let supabaseAuth = null;
 let authRecoveryMode = false;
@@ -123,7 +223,8 @@ function nearestSwingPower(value) {
 }
 
 function swingLengthLabel(power) {
-  return ({ 25: "¼ swing", 50: "½ swing", 75: "¾ swing", 100: "Full swing" })[Math.round(Number(power) * 100)] || "Full swing";
+  const percentage = Math.round(Number(power) * 100);
+  return ({ 25: "¼ swing", 50: "½ swing", 75: "¾ swing", 100: "Full swing" })[percentage] || `${percentage}% swing`;
 }
 
 function shotPowerLabel(powerPercent, clubName = "") {
@@ -200,7 +301,7 @@ function courseIllustrationPath() {
   const course = courseCatalog[state.courseId];
   if (course?.illustrations && course.illustrationPath) {
     const extension = course.illustrationExtension || "jpg";
-    return `${course.illustrationPath}/hole${state.holeIndex + 1}.${extension}?v=${encodeURIComponent(course.dataVersion)}`;
+    return `${course.illustrationPath}/hole${challengeActive() ? activeDisplayHoleNumber() : state.holeIndex + 1}.${extension}?v=${encodeURIComponent(course.dataVersion)}`;
   }
   return null;
 }
@@ -320,6 +421,7 @@ const state = {
   scores: Array(18).fill(null),
   roundHistory: Array.from({ length: 18 }, () => []),
   roundState: null,
+  postRoundReport: null,
   roundSeed: null,
   holeFinished: false,
   completionType: null,
@@ -339,14 +441,16 @@ const state = {
   terrainViewTilt: 50,
   flightAnimation: null,
   swingPower: 1,
+  aimType: AimType.DIRECTION_TARGET,
+  shortGamePlan: null,
   shotDraft: { club: false, target: false, power: false },
-  structuredShot: { aim: "", adjustment: "none", offset: 1, selectedTarget: null },
+  structuredShot: { aim: "", shotType: "auto", adjustment: "none", offset: 1, selectedTarget: null },
   pendingPlayerInstructions: [],
   pendingPlayerNote: "",
   gmVoiceEnabled: false,
   strategySelectedId: null,
   desktopCaddieExpanded: false,
-  mobileSheetState: "carousel",
+  mobileSheetState: "minimized",
   mobileQuickPanel: null,
   liveGpsView: false,
   liveGpsRound: null,
@@ -354,13 +458,14 @@ const state = {
   liveGpsLoading: false,
   liveGpsLastRefresh: null,
   liveGpsStatus: "Choose On Course Live to load your GPS round.",
+  gpsReplay: null,
   gpsPageView: "actual",
   gpsCaddieExpanded: false,
-  livePanelDock: ["top", "bottom"].includes(localStorage.getItem("golf-live-panel-dock"))
-    ? localStorage.getItem("golf-live-panel-dock")
+  livePanelDock: ["top", "bottom"].includes(readBrowserValue("golf-live-panel-dock"))
+    ? readBrowserValue("golf-live-panel-dock")
     : "bottom",
-  livePanelPosition: localStorage.getItem("golf-live-panel-position"),
-  livePanelCollapsed: localStorage.getItem("golf-live-panel-collapsed") === "true",
+  livePanelPosition: readBrowserValue("golf-live-panel-position"),
+  livePanelCollapsed: readBrowserValue("golf-live-panel-collapsed") === "true",
   mobileMapPlanTop: null,
   mobileCarouselPage: 0,
   competition: null,
@@ -369,9 +474,15 @@ const state = {
   competitionComparisonTurnId: null,
   competitionBusy: false,
   competitionPlayback: null,
+  competitionPlaybackHumanStart: null,
   competitionRecoveryMessage: null,
-  mobileCarouselDock: ["top", "bottom"].includes(localStorage.getItem("golf-mobile-carousel-dock"))
-    ? localStorage.getItem("golf-mobile-carousel-dock")
+  challenge: null,
+  challengeReturn: null,
+  challengeLoading: false,
+  academy: null,
+  academyReturn: null,
+  mobileCarouselDock: ["top", "bottom"].includes(readBrowserValue("golf-mobile-carousel-dock"))
+    ? readBrowserValue("golf-mobile-carousel-dock")
     : "bottom"
 };
 
@@ -415,6 +526,7 @@ let suppressMapClickUntil = 0;
 let gpsRound = null;
 let gpsSyncTimer = null;
 let gpsSyncPromise = Promise.resolve();
+let gpsReplayTimer = null;
 let gpsCompletingRound = false;
 let gpsSyncDisplay = { text: "On phone", tone: "local" };
 const gpsHoleAiCache = new Map();
@@ -430,6 +542,33 @@ let mobileCarouselWheelUntil = 0;
 let mobileShotToastHandle = null;
 let mapViewportResizeFrame = null;
 let lastMapViewportWidth = window.innerWidth;
+let liveMapMeasurePointerId = null;
+let liveMapMeasureSurface = null;
+let liveMapInstructionUtterance = null;
+let replayPageState = null;
+let replayCoachAiSequence = 0;
+const replayCoachAiCache = new Map();
+const syncedGeometryRefs = new Set();
+const replayHoleLoader = new ReplayHoleLoader({
+  fetchJson: (path, options) => playerApi(path, options),
+  maxHoles: 6,
+  onMetric: metric => {
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+      console.debug("Replay cache", metric);
+    }
+  }
+});
+const challengeHoleLoader = new ChallengeHoleLoader({ maxHoles: 3 });
+const challengeAudio = new ChallengeAudioDirector({
+  settings: DEFAULT_AUDIO_SETTINGS,
+  onCaption: phrase => {
+    const caption = document.querySelector("#challenge-audio-caption");
+    if (caption) {
+      caption.textContent = phrase;
+      caption.hidden = false;
+    }
+  }
+});
 
 const MOBILE_CAROUSEL_SECTIONS = ["plan", "game-master", "club-power", "caddie", "adjustment"];
 const MOBILE_CAROUSEL_DOCKS = ["top", "bottom"];
@@ -588,6 +727,119 @@ function storageKey(type) { return playerStorageKey(`${state.courseId}-${type}`)
 function profileStorageKey() { return playerStorageKey("profile"); }
 function customProfilesStorageKey() { return playerStorageKey("custom-profiles"); }
 
+function readBrowserValue(key, fallback = null) {
+  try {
+    return window.localStorage.getItem(key) ?? fallback;
+  } catch (error) {
+    console.warn(`Browser storage could not be read for ${key}.`, error);
+    return fallback;
+  }
+}
+
+function readBrowserJson(key, fallback) {
+  const raw = readBrowserValue(key);
+  if (raw == null) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    console.warn(`Ignored unreadable browser data for ${key}.`, error);
+    return fallback;
+  }
+}
+
+function writeBrowserValue(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    // Mobile browsers can deny storage or exhaust their smaller quota. Account
+    // sync still protects signed-in rounds, so storage failure must not stop UI startup.
+    console.warn(`Browser storage could not be updated for ${key}.`, error);
+    return false;
+  }
+}
+
+function removeBrowserValue(key) {
+  try {
+    window.localStorage.removeItem(key);
+    return true;
+  } catch (error) {
+    console.warn(`Browser storage could not remove ${key}.`, error);
+    return false;
+  }
+}
+
+function courseVersionId(courseId = state.courseId) {
+  return String(courseCatalog[courseId]?.dataVersion || "legacy-v1");
+}
+
+// Full simulation surfaces are immutable course/version data. Keeping another
+// copy inside every shot made detailed courses grow by tens of kilobytes per
+// stroke. Persist only the reference; replay paths and all shot evidence remain.
+function compactRoundStateForStorage(roundState) {
+  if (!roundState) return roundState;
+  const compact = structuredClone(roundState);
+  const version = compact.course_version_id || courseVersionId(compact.course_id);
+  compact.course_version_id = version;
+  for (const hole of compact.holes || []) {
+    for (const event of hole.events || []) {
+      const payload = event?.payload;
+      const shot = payload?.shot && typeof payload.shot === "object"
+        ? payload.shot
+        : event.event_type === "shot_committed" && payload && typeof payload === "object"
+          ? payload
+          : null;
+      const request = shot?.resultRequest;
+      if (!request?.context || !Array.isArray(request.context.surfaces)) continue;
+      request.geometry_ref = {
+        course_id: compact.course_id,
+        course_version_id: version,
+        hole_number: Number(hole.hole_number)
+      };
+      delete request.context.surfaces;
+    }
+  }
+  return compact;
+}
+
+function compactResultRequest(request, holeNumber = state.holeIndex + 1) {
+  if (!request?.context || !Array.isArray(request.context.surfaces)) return request;
+  const compact = structuredClone(request);
+  delete compact.context.surfaces;
+  compact.geometry_ref = {
+    course_id: state.courseId,
+    course_version_id: courseVersionId(),
+    hole_number: challengeActive() ? activeDisplayHoleNumber() : holeNumber
+  };
+  return compact;
+}
+
+function hydrateResultRequestContext(request) {
+  if (!request?.context) return null;
+  return Array.isArray(request.context.surfaces)
+    ? request.context
+    : { ...request.context, surfaces: canonicalSurfaces() };
+}
+
+function loadBrowserRoundState(courseId, playerId = null) {
+  try {
+    return loadRoundState(window.localStorage, courseId, playerId);
+  } catch (error) {
+    console.warn(`Ignored an unreadable saved round for ${courseId}.`, error);
+    return null;
+  }
+}
+
+function saveBrowserRoundState(roundState, playerId = null) {
+  try {
+    saveRoundState(window.localStorage, compactRoundStateForStorage(roundState), playerId);
+    return true;
+  } catch (error) {
+    console.warn(`The ${roundState?.course_id || "current"} round could not be cached in this browser.`, error);
+    return false;
+  }
+}
+
 let roundSyncTimer = null;
 let roundSyncPromise = Promise.resolve();
 
@@ -600,15 +852,55 @@ function setAccountSyncStatus(title, message, tone = "saved") {
   if (statusNode) statusNode.textContent = message;
 }
 
-function currentRoundSave() {
+function currentPostRoundReport({ freezeCompleted = true } = {}) {
+  if (!state.course || !state.scorecard.length) return null;
+  const roundId = `${state.courseId}:${state.roundSeed || state.roundState?.round_seed || "legacy"}`;
+  const completed = state.scores.filter(Number.isInteger).length === state.scorecard.length;
+  if (completed && state.postRoundReport?.round?.round_id === roundId) {
+    return structuredClone(state.postRoundReport);
+  }
+  const input = {
+    roundId,
+    course: { id: state.courseId, name: state.course.name },
+    courseVersion: courseVersionId(),
+    tee: state.tee,
+    scorecard: state.scorecard,
+    scores: state.scores,
+    roundHistory: state.roundHistory,
+    verifiedPatterns: verifiedPlayerPatterns(),
+    playerProfile: state.profile,
+    narrative: state.postRoundReport?.round?.round_id === roundId ? state.postRoundReport.narrative : null
+  };
+  let report = buildPostRoundReportModel(input);
+  if (!completed && report.narrative.status === "available" && report.narrative.input_hash !== buildReportNarrativePacket(report).input_hash) {
+    report = buildPostRoundReportModel({ ...input, narrative: null });
+  }
+  if (completed && freezeCompleted) state.postRoundReport = structuredClone(report);
+  return report;
+}
+
+function currentRoundSave({ includePostRoundReport = true } = {}) {
   if (!state.roundState || !state.profile) return null;
-  return createRoundSave({
+  const completed = state.scores.filter(Number.isInteger).length === state.scorecard.length;
+  const postRoundReport = includePostRoundReport && completed ? currentPostRoundReport() : null;
+  const round = createRoundSave({
     roundState: state.roundState,
     currentHoleIndex: state.holeIndex,
     pinIndex: state.pinIndex,
     playerProfile: state.profile,
-    roundSummary: currentRoundSummary()
+    roundSummary: currentRoundSummary(),
+    postRoundReport
   });
+  round.course_version_id = courseVersionId();
+  round.round_state.course_version_id = round.course_version_id;
+  const geometryKey = `${round.course_id}:${round.course_version_id}:${state.holeIndex + 1}`;
+  if (!syncedGeometryRefs.has(geometryKey)) {
+    round.geometry_snapshot = {
+      hole_number: state.holeIndex + 1,
+      simulation_surfaces: canonicalSurfaces()
+    };
+  }
+  return round;
 }
 
 function currentRoundSummary() {
@@ -640,6 +932,9 @@ async function syncPlayerRound() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ round })
   });
+  for (const holeNumber of result.geometry_saved || []) {
+    syncedGeometryRefs.add(`${round.course_id}:${round.course_version_id}:${holeNumber}`);
+  }
   setAccountSyncStatus(
     result.complete ? "Round complete" : "Round saved",
     result.complete
@@ -650,7 +945,7 @@ async function syncPlayerRound() {
 }
 
 function schedulePlayerRoundSync(delay = 250) {
-  if (!state.player) return;
+  if (!state.player || challengeActive() || academyActive()) return;
   window.clearTimeout(roundSyncTimer);
   roundSyncTimer = window.setTimeout(() => {
     roundSyncPromise = roundSyncPromise
@@ -664,18 +959,43 @@ function schedulePlayerRoundSync(delay = 250) {
 }
 
 function persistLegacyRound() {
-  localStorage.setItem(storageKey("history"), JSON.stringify(state.roundHistory));
-  localStorage.setItem(storageKey("scores"), JSON.stringify(state.scores));
+  // round-state is the canonical browser fallback. These keys used to contain
+  // a second full copy of every replay and were the immediate quota trigger.
+  removeBrowserValue(storageKey("history"));
+  removeBrowserValue(storageKey("scores"));
+}
+
+function cacheActiveCompetition() {
+  if (!state.competition) return;
+  if (challengeActive()) persistChallengeLocal();
+  else saveCompetition(localStorage, state.competition, state.player?.id);
 }
 
 function persistRoundState() {
   if (!state.roundState) return null;
-  if (state.competition) {
+  // Academy uses an isolated practice round. Normal round progress remains
+  // untouched until the player returns to the regular game.
+  if (academyActive()) return state.roundState;
+  if (challengeActive()) {
     state.competition.human_round = structuredClone(state.roundState);
-    saveCompetition(localStorage, state.competition, state.player?.id);
+    persistChallengeLocal();
     return state.roundState;
   }
-  state.roundState = saveRoundState(localStorage, state.roundState, state.player?.id);
+  if (state.competition) {
+    state.competition.human_round = structuredClone(state.roundState);
+    try {
+      cacheActiveCompetition();
+    } catch (error) {
+      console.warn("Competition could not be cached in this browser.", error);
+    }
+    schedulePlayerRoundSync();
+    return state.roundState;
+  }
+  const cached = saveBrowserRoundState(state.roundState, state.player?.id);
+  persistLegacyRound();
+  if (!cached && state.player) {
+    setAccountSyncStatus("Saving to account…", "Browser storage is full; this round will continue from your server copy.", "saving");
+  }
   schedulePlayerRoundSync();
   return state.roundState;
 }
@@ -707,13 +1027,7 @@ async function exportRoundFile() {
     setRoundFileStatus("The round is not ready to save yet.", "error");
     return;
   }
-  const portableSave = createRoundSave({
-    roundState: state.roundState,
-    currentHoleIndex: state.holeIndex,
-    pinIndex: state.pinIndex,
-    playerProfile: state.profile,
-    roundSummary: currentRoundSummary()
-  });
+  const portableSave = currentRoundSave();
   const filename = roundSaveFilename(portableSave);
   const file = new File(
     [JSON.stringify(portableSave, null, 2)],
@@ -749,11 +1063,12 @@ function storeImportedProfile(profile) {
     normalizeProfile(structuredClone(profile)),
     state.player?.name
   );
-  const profiles = JSON.parse(localStorage.getItem(customProfilesStorageKey()) || "[]");
+  const storedProfiles = readBrowserJson(customProfilesStorageKey(), []);
+  const profiles = Array.isArray(storedProfiles) ? storedProfiles : [];
   const existingIndex = profiles.findIndex(candidate => candidate.id === imported.id);
   if (existingIndex >= 0) profiles[existingIndex] = imported;
   else profiles.push(imported);
-  localStorage.setItem(customProfilesStorageKey(), JSON.stringify(profiles));
+  writeBrowserValue(customProfilesStorageKey(), JSON.stringify(profiles));
   return imported.id;
 }
 
@@ -790,6 +1105,7 @@ async function importRoundFile(file) {
     localStorage.setItem(profileStorageKey(), profileId);
 
     await loadData(portableSave.course_id);
+    state.postRoundReport = portableSave.post_round_report ? structuredClone(portableSave.post_round_report) : null;
     state.holeIndex = portableSave.current_hole_index;
     const pinCount = hole().geometries.green_complex.pin_zones.length;
     state.pinIndex = Math.min(portableSave.pin_index, Math.max(0, pinCount - 1));
@@ -913,31 +1229,36 @@ async function loadData(courseId = state.courseId) {
   state.holes.forEach(ensurePlayablePinZones);
   state.holes = state.holes.map(holeData => ensureHazardFreePinZones(holeData));
   state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
-  state.customProfiles = JSON.parse(localStorage.getItem(customProfilesStorageKey()) || "[]")
+  const storedProfiles = readBrowserJson(customProfilesStorageKey(), []);
+  state.customProfiles = (Array.isArray(storedProfiles) ? storedProfiles : [])
     .map(normalizeProfile)
     .map(profile => personalizeCustomProfile(profile, state.player?.name));
-  localStorage.setItem(customProfilesStorageKey(), JSON.stringify(state.customProfiles));
-  state.roundHistory = JSON.parse(localStorage.getItem(storageKey("history")) || "null") || Array.from({ length: 18 }, () => []);
-  state.scores = JSON.parse(localStorage.getItem(storageKey("scores")) || "null") || Array(18).fill(null);
-  state.roundSeed = Number(localStorage.getItem(storageKey("round-seed"))) || newRoundSeed();
-  state.roundState = loadRoundState(localStorage, state.courseId, state.player?.id);
+  writeBrowserValue(customProfilesStorageKey(), JSON.stringify(state.customProfiles));
+  const storedHistory = readBrowserJson(storageKey("history"), null);
+  const storedScores = readBrowserJson(storageKey("scores"), null);
+  state.roundHistory = Array.isArray(storedHistory) ? storedHistory : Array.from({ length: 18 }, () => []);
+  state.scores = Array.isArray(storedScores) ? storedScores : Array(18).fill(null);
+  state.roundSeed = Number(readBrowserValue(storageKey("round-seed"))) || newRoundSeed();
+  const browserRoundState = loadBrowserRoundState(state.courseId, state.player?.id);
+  const accountRoundState = state.roundState?.course_id === state.courseId ? state.roundState : null;
+  state.roundState = accountRoundState || browserRoundState;
   if (!state.roundState) {
     state.roundState = state.player
       ? createRoundState({ courseId: state.courseId, roundSeed: state.roundSeed, tee: state.tee })
-      : migrateLegacyRoundStateStorage(localStorage, {
+      : migrateLegacyRoundState({
         courseId: state.courseId,
         roundSeed: state.roundSeed,
         tee: state.tee,
         roundHistory: state.roundHistory,
         scores: state.scores
       });
-    saveRoundState(localStorage, state.roundState, state.player?.id);
+    saveBrowserRoundState(state.roundState, state.player?.id);
   }
   state.roundSeed = state.roundState.round_seed;
-  localStorage.setItem(storageKey("round-seed"), String(state.roundSeed));
+  writeBrowserValue(storageKey("round-seed"), String(state.roundSeed));
   state.tee = state.roundState?.tee || "White";
   syncRoundStateCaches();
-  const savedId = localStorage.getItem(profileStorageKey()) || "90";
+  const savedId = readBrowserValue(profileStorageKey(), "90");
   state.profile = [...builtInProfiles, ...state.customProfiles].find(p => p.id === savedId) || builtInProfiles[1];
 }
 
@@ -1074,18 +1395,23 @@ function resetHole() {
   state.manualTargetPreview = false;
   state.clubAdjustment = 0;
   state.swingPower = 1;
+  state.aimType = AimType.DIRECTION_TARGET;
+  state.shortGamePlan = null;
   state.shotDraft = { club: false, target: false, power: false };
-  state.structuredShot = { aim: "", adjustment: "none", offset: 1, selectedTarget: null };
+  state.structuredShot = { aim: "", shotType: "auto", adjustment: "none", offset: 1, selectedTarget: null };
   state.pendingPlayerInstructions = [];
   state.pendingPlayerNote = "";
   state.strategySelectedId = null;
   state.desktopCaddieExpanded = false;
   state.greenCaddieRead = null;
-  state.mobileSheetState = "carousel";
+  state.mobileSheetState = "minimized";
   state.mobileCarouselPage = 0;
+  const mobilePlanViewport = $("#mobile-carousel-viewport");
+  if (mobilePlanViewport) mobilePlanViewport.scrollTop = 0;
   state.gmMessages = [];
   syncActiveHoleStateFromRoundState();
   if (!state.holeFinished) recommendClub();
+  state.aimType = defaultAimType();
   $("#putt-analysis")?.setAttribute("hidden", "");
   closeEnlargedGreen();
   updateAll();
@@ -1133,6 +1459,23 @@ function fullCourseBounds() {
   return { minX: minX - xPad, maxX: maxX + xPad, minY: minY - yPad, maxY: maxY + yPad };
 }
 
+function fullHoleRoute() {
+  return (hole().centerline_waypoints || [])
+    .map(waypoint => waypoint?.point)
+    .filter(point => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite));
+}
+
+function uprightFullHoleBounds() {
+  const route = fullHoleRoute();
+  return route.length >= 2 ? uprightHoleCameraBounds(route, mapFrame()) : fullCourseBounds();
+}
+
+function holeVerticalDirection() {
+  const route = fullHoleRoute();
+  if (route.length < 2) return 1;
+  return route.at(-1)[1] >= route[0][1] ? 1 : -1;
+}
+
 function courseIllustrationViewport(fullBounds) {
   return imageViewportForWorldBounds(fullBounds, currentMapProjector());
 }
@@ -1153,7 +1496,7 @@ function greenContourIsVisible(viewMode = mapViewMode()) {
 
 function calculateBounds() {
   if (state.liveGpsView) {
-    state.bounds = fullCourseBounds();
+    state.bounds = uprightFullHoleBounds();
     return state.bounds;
   }
   const viewMode = mapViewMode();
@@ -1197,34 +1540,22 @@ function calculateBounds() {
     const g = hole().geometries;
     const ball = state.ball;
     const target = pin().center_point;
-    const corridorDistance = rawYards(ball, target);
-    const nearbyFeatures = [
+    const featurePolygons = [
       ...g.hazards,
       ...(g.rough_zones || []),
       ...(g.tree_zones || []),
       ...g.fairway_segments
-    ].filter(feature => feature.polygon.some(point =>
-      rawYards(point, target) < 85 || rawYards(point, ball) < 55
-    ));
-    const points = [
+    ].map(feature => feature.polygon);
+    state.bounds = approachHoleCameraBounds({
       ball,
       target,
-      ...g.green_complex.polygon,
-      ...nearbyFeatures.flatMap(feature => feature.polygon)
-    ];
-    const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
-    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-    const xPad = Math.max(18, (maxX - minX) * .28, corridorDistance / METERS_TO_YARDS * .08);
-    const yPad = Math.max(15, (maxY - minY) * .12);
-    state.bounds = {
-      minX: minX - xPad,
-      maxX: maxX + xPad,
-      minY: minY - yPad,
-      maxY: maxY + yPad
-    };
+      greenPolygon: g.green_complex.polygon,
+      featurePolygons,
+      unitsPerYard: 1 / METERS_TO_YARDS
+    });
     return state.bounds;
   }
-  state.bounds = fullCourseBounds();
+  state.bounds = uprightFullHoleBounds();
   return state.bounds;
 }
 
@@ -1262,13 +1593,15 @@ function mapFrame() {
   if (mobileTallMapActive()) {
     const viewport = mapSvgViewport();
     const side = Math.max(36, viewport.width * .075);
-    return { left: side, right: viewport.width - side, top: 118, bottom: 970 };
+    return { left: side, right: viewport.width - side, top: 70, bottom: 970 };
   }
   return { left: 100, right: 900, top: 50, bottom: 950 };
 }
 
 function currentMapProjector() {
-  return createUniformMapProjector(state.bounds, mapFrame());
+  return createUniformMapProjector(state.bounds, mapFrame(), {
+    verticalDirection: holeVerticalDirection()
+  });
 }
 
 function sx(x) {
@@ -1743,6 +2076,9 @@ function greenReliefMarkup() {
   // enlarged 40-yard display green. Project the same ball in 3D and let the SVG
   // viewport naturally hide it only when it is genuinely outside the scene.
   const ballScreen = state.ball ? project(state.ball) : null;
+  const strategistState = activeStrategistHoleState();
+  const strategistBall = strategistState?.ball ? pointArray(strategistState.ball) : null;
+  const strategistBallScreen = strategistBall ? project(strategistBall) : null;
   const puttAnimation = activePuttAnimation();
   const puttPath = puttAnimation
     ? projectPuttPath(playedShotVisual()?.roll, project)
@@ -1779,6 +2115,7 @@ function greenReliefMarkup() {
     ${targetScreen ? `<g class="relief-target" transform="translate(${targetScreen[0]},${targetScreen[1]})"><ellipse rx="15" ry="8"/><path d="M-22 0h44M0-14v28"/></g>` : ""}
     <g class="relief-pin" transform="translate(${pinScreen[0]},${pinScreen[1]})"><ellipse rx="9" ry="4"/><path d="M0 0V-72"/><path class="flag" d="M1-72l36 12-36 13z"/></g>
     ${ballScreen && (!puttAnimation || puttAnimation.participant === "gm") ? `<g class="relief-ball" transform="translate(${ballScreen[0]},${ballScreen[1]})"><title>Your ball</title><ellipse class="ball-shadow" cy="3" rx="15" ry="6"/><circle class="ball-halo" cy="-6" r="18"/><circle class="ball-body" cy="-6" r="11"/><circle class="ball-shine" cx="-3" cy="-9" r="3"/></g>` : ""}
+    ${competitionActive() && strategistBallScreen && (!puttAnimation || puttAnimation.participant !== "gm") ? `<g class="relief-gm-ball" transform="translate(${strategistBallScreen[0]},${strategistBallScreen[1]})" role="img" aria-label="Game Master ball, ${escapeHtml(strategistState.lie || "tee")}"><title>Game Master · ${escapeHtml(strategistState.lie || "Tee")}</title><ellipse class="ball-shadow" cy="4" rx="16" ry="7"/><path class="ball-halo" d="M0-23L23 0 0 23-23 0Z"/><path class="ball-body" d="M0-13L13 0 0 13-13 0Z"/><circle class="ball-core" r="5"/><text x="0" y="-29" text-anchor="middle">GM</text></g>` : ""}
     <g class="relief-title" transform="translate(42,900)"><text>3D ELEVATION · HOLE ${state.holeIndex + 1}</text><text y="25">EQUAL-HEIGHT LINES · ${transform.rotation_degrees}°</text></g>
     <g class="relief-height-key" transform="translate(700,895)">
       <text x="0" y="13">LOW</text>
@@ -1806,6 +2143,11 @@ function greenReliefMarkup() {
       .relief-ball .ball-halo{fill:rgba(255,253,243,.3);stroke:none}
       .relief-ball .ball-body{fill:#fffdf3;stroke:#183126;stroke-width:3}
       .relief-ball .ball-shine{fill:#fff;stroke:none;opacity:.85}
+      .relief-gm-ball .ball-shadow{fill:rgba(12,31,20,.42)}
+      .relief-gm-ball .ball-halo{fill:rgba(216,189,121,.28);stroke:none}
+      .relief-gm-ball .ball-body{fill:#d8bd79;stroke:#183126;stroke-width:3}
+      .relief-gm-ball .ball-core{fill:#183126;stroke:none}
+      .relief-gm-ball text{fill:#fffdf3;stroke:#183126;stroke-width:3px;paint-order:stroke;font:800 14px var(--font-system);letter-spacing:.8px}
       .relief-putt-trace{fill:none;stroke:#f59d45;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
       .relief-putt-ball .ball-shadow{fill:rgba(12,31,20,.42)}
       .relief-putt-ball .ball-halo{fill:rgba(255,253,243,.3);stroke:none}
@@ -1841,7 +2183,7 @@ function setGreenTargetFromPointer(event) {
 
   const lineDistance = distance(state.ball, state.target);
   const putting = currentLieType() === "Green";
-  addGmMessage(`3D aim point set at ${putting ? Math.round(lineDistance * 3) + " feet" : Math.round(lineDistance) + " yards"}. Click another contour point to adjust it, or set the pace and play.`);
+  replaceGmTargetMessage(`3D aim point set at ${putting ? Math.round(lineDistance * 3) + " feet" : Math.round(lineDistance) + " yards"}. Click another contour point to adjust it, or set the pace and play.`);
   return true;
 }
 
@@ -2070,9 +2412,10 @@ function setTerrainTargetFromPointer(event) {
   state.target = target;
   state.manualTargetPreview = false;
   state.shotDraft.target = true;
+  rememberStructuredTarget(state.target);
   renderMap();
   updateShotDesk();
-  addGmMessage(`Bird's-eye target set ${Math.round(distance(state.ball, state.target))} yards from the ball. Click again to refine it, or choose the club and swing.`);
+  replaceGmTargetMessage(`Bird's-eye target set ${Math.round(distance(state.ball, state.target))} yards from the ball. Click again to refine it, or choose the club and swing.`);
   return true;
 }
 
@@ -2207,16 +2550,37 @@ function renderMap() {
   const liveBall = liveGpsBallPoint();
   const liveSegments = liveGpsShotSegments();
   const ball = state.liveGpsView ? (liveBall || liveTee || teePoint()) : (state.ball || teePoint());
+  const liveGreenCenter = state.liveGpsView && liveBall
+    ? centerOfPolygon(g.green_complex.polygon)
+    : null;
+  const liveBunkerCenter = state.liveGpsView && liveBall
+    ? g.hazards
+      .filter(hazard => !hazard.lie_catalog_id.includes("water"))
+      .map(hazard => centerOfPolygon(hazard.polygon))
+      .sort((first, second) => distance(liveBall, first) - distance(liveBall, second))[0] || null
+    : null;
+  const liveRangeReferences = [
+    liveBunkerCenter ? { className: "bunker", label: "Bunker", point: liveBunkerCenter } : null,
+    liveGreenCenter ? { className: "green", label: "Green", point: liveGreenCenter } : null
+  ].filter(Boolean).map(reference => ({
+    ...reference,
+    yards: Math.max(0, Math.round(distance(liveBall, reference.point)))
+  }));
   const target = state.liveGpsView ? null : state.target;
   const recoveryCondition = state.liveGpsView || viewMode === "putting" ? null : treeConditionAt(ball);
-  const recoveryTarget = Array.isArray(recoveryCondition?.recovery_target)
+  // Recovery cards now present the real choice set. Do not leave the legacy
+  // single punch-out marker on the course map, where it looks like either a
+  // second ball or a mandatory route.
+  const recoveryTarget = recoveryCondition && !currentStrategyChoices().some(choice => choice.treeRecovery) && Array.isArray(recoveryCondition?.recovery_target)
     ? recoveryCondition.recovery_target
     : null;
   const recoveryTargetYards = recoveryTarget
     ? Math.max(1, Math.round(distance(ball, recoveryTarget)))
     : null;
   const targetDistanceText = target
-    ? (mapViewMode() === "putting" ? `${Math.round(distance(ball, target) * 3)} ft` : `${Math.round(distance(ball, target))} yd`)
+    ? (mapViewMode() === "putting"
+        ? `${Math.round(distance(ball, target) * 3)} ft`
+        : `${landingTargetActive() ? "LAND " : "LINE "}${Math.round(distance(ball, target))} yd`)
     : "";
   const shotLine = state.liveGpsView ? null : playedShotVisual();
   const strategistState = state.liveGpsView ? null : activeStrategistHoleState();
@@ -2228,6 +2592,11 @@ function renderMap() {
   const activeShotAnimation = puttAnimation || flightAnimation;
   const gameMasterAnimating = activeShotAnimation?.participant === "gm";
   const humanAnimating = Boolean(activeShotAnimation && !gameMasterAnimating);
+  const gameMasterTurnPlaying = state.competitionBusy && state.competitionPlayback === "gm";
+  const hideCommittedHumanShot = gameMasterTurnPlaying && !gameMasterAnimating;
+  const visibleHumanBall = gameMasterTurnPlaying && Array.isArray(state.competitionPlaybackHumanStart)
+    ? state.competitionPlaybackHumanStart
+    : ball;
   const puttPath = animatingPutt ? shotLine.roll.map(point => [sx(point[0]), sy(point[1])]) : null;
   const animatedPutt = animatedPuttMarkup(puttPath, puttAnimation);
   const flightPath = animatingFlight
@@ -2242,7 +2611,7 @@ function renderMap() {
     trace: "full-shot-flight-trace",
     ball: "full-shot-flight-ball"
   });
-  const rollAnimationPath = !animatingPutt && shotLine?.rollOnGreen && shotLine.roll?.length > 1
+  const rollAnimationPath = !hideCommittedHumanShot && !animatingPutt && shotLine?.rollOnGreen && shotLine.roll?.length > 1
     ? shotLine.roll.map((point, index) => `${index ? "L" : "M"}${sx(point[0])},${sy(point[1])}`).join(" ")
     : "";
   const targetAngle = target ? Math.atan2(sy(target[1]) - sy(ball[1]), sx(target[0]) - sx(ball[0])) * 180 / Math.PI : 0;
@@ -2367,22 +2736,34 @@ function renderMap() {
       </g>
       <g class="course-interactive-layer" data-map-layer="interactive">
       ${state.liveGpsView ? liveSegments.map(segment => `
-        <line class="live-gps-shot-halo" x1="${sx(segment.start[0])}" y1="${sy(segment.start[1])}" x2="${sx(segment.end[0])}" y2="${sy(segment.end[1])}"/>
-        <line class="live-gps-shot" x1="${sx(segment.start[0])}" y1="${sy(segment.start[1])}" x2="${sx(segment.end[0])}" y2="${sy(segment.end[1])}"><title>Actual GPS shot ${segment.number} · ${Math.round(segment.shot.distance_yards || 0)} yards</title></line>
+        <line class="live-gps-shot-halo ${segment.replayCurrent ? "replay-current" : ""}" pathLength="1" x1="${sx(segment.start[0])}" y1="${sy(segment.start[1])}" x2="${sx(segment.end[0])}" y2="${sy(segment.end[1])}"/>
+        <line class="live-gps-shot ${segment.replayCurrent ? "replay-current" : ""}" pathLength="1" x1="${sx(segment.start[0])}" y1="${sy(segment.start[1])}" x2="${sx(segment.end[0])}" y2="${sy(segment.end[1])}"><title>Actual GPS shot ${segment.number} · ${Math.round(segment.shot.distance_yards || 0)} yards</title></line>
         <g class="live-gps-shot-number" transform="translate(${sx(segment.end[0])},${sy(segment.end[1])})"><circle r="10"/><text text-anchor="middle" dominant-baseline="central">${segment.number}</text></g>`).join("") : ""}
       ${state.liveGpsView && liveTee ? `<g class="live-gps-tee" transform="translate(${sx(liveTee[0])},${sy(liveTee[1])})"><circle r="8"><title>Recorded tee location</title></circle></g>` : ""}
+      ${liveRangeReferences.map(reference => `
+        <g class="live-range-reference ${reference.className}" role="img" aria-label="${reference.label} center, ${reference.yards} yards from the ball">
+          <line x1="${sx(liveBall[0])}" y1="${sy(liveBall[1])}" x2="${sx(reference.point[0])}" y2="${sy(reference.point[1])}"/>
+          <g class="live-range-endpoint" transform="translate(${sx(reference.point[0])},${sy(reference.point[1])})">
+            <circle r="9"/>
+            <path d="M-4 0h8M0-4v8"/>
+          </g>
+          <g class="live-range-label" transform="translate(${sx(reference.point[0])},${sy(reference.point[1]) - 24})">
+            <rect x="-39" y="-11" width="78" height="22" rx="6"/>
+            <text text-anchor="middle" dominant-baseline="central">${reference.label.toUpperCase()} ${reference.yards} YD</text>
+          </g>
+        </g>`).join("")}
       ${yardageMarkers.map(marker => `
         <g class="yardage-marker ${marker.className}" transform="translate(${sx(marker.point[0])},${sy(marker.point[1])})">
           <circle r="13"/>
         </g>`).join("")}
-      ${shotLine?.carry?.length > 1 && !animatingFlight ? `<polyline class="played-carry" points="${pointsAttr(shotLine.carry)}"><title>Ball carry</title></polyline>` : ""}
-      ${shotLine?.roll?.length > 1 && !animatingPutt && !animatingFlight ? `<polyline class="played-roll ${shotLine.rollOnGreen ? "on-green" : ""}" points="${pointsAttr(shotLine.roll)}"><title>Ball roll${shotLine.rollOnGreen ? " on the green" : ""}</title></polyline>` : ""}
+      ${shotLine?.carry?.length > 1 && !animatingFlight && !hideCommittedHumanShot ? `<polyline class="played-carry" points="${pointsAttr(shotLine.carry)}"><title>Ball carry</title></polyline>` : ""}
+      ${shotLine?.roll?.length > 1 && !animatingPutt && !animatingFlight && !hideCommittedHumanShot ? `<polyline class="played-roll ${shotLine.rollOnGreen ? "on-green" : ""}" points="${pointsAttr(shotLine.roll)}"><title>Ball roll${shotLine.rollOnGreen ? " on the green" : ""}</title></polyline>` : ""}
       ${strategistShotLine?.carry?.length > 1 ? `<polyline class="gm-played-carry" points="${pointsAttr(strategistShotLine.carry)}"><title>Game Master ball carry</title></polyline>` : ""}
       ${strategistShotLine?.roll?.length > 1 ? `<polyline class="gm-played-roll ${strategistShotLine.rollOnGreen ? "on-green" : ""}" points="${pointsAttr(strategistShotLine.roll)}"><title>Game Master ball roll</title></polyline>` : ""}
       ${animatedPutt}
       ${animatedFlight}
       ${rollAnimationPath ? `<circle class="roll-tracer" r="7"><animateMotion dur="1.2s" path="${rollAnimationPath}" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".18 .72 .28 1"/></circle>` : ""}
-      ${shotLine?.carryPoint && shotLine.roll?.length > 1 && !animatingFlight ? `<g class="carry-landing" transform="translate(${sx(shotLine.carryPoint[0])},${sy(shotLine.carryPoint[1])})"><circle r="7"><title>Carry landing point</title></circle></g>` : ""}
+      ${shotLine?.carryPoint && shotLine.roll?.length > 1 && !animatingFlight && !hideCommittedHumanShot ? `<g class="carry-landing" transform="translate(${sx(shotLine.carryPoint[0])},${sy(shotLine.carryPoint[1])})"><circle r="7"><title>Carry landing point</title></circle></g>` : ""}
       ${greenCaddieRead ? `<g class="green-caddie-guide" clip-path="url(#green-contour-clip)">
         <ellipse class="green-caddie-finish-zone" cx="${sx(greenCaddieRead.landing[0])}" cy="${sy(greenCaddieRead.landing[1])}" rx="${greenCaddieFinishRadiusX}" ry="${greenCaddieFinishRadiusY}"/>
         <line class="green-caddie-start-line" x1="${sx(ball[0])}" y1="${sy(ball[1])}" x2="${sx(greenCaddieRead.target[0])}" y2="${sy(greenCaddieRead.target[1])}"/>
@@ -2402,7 +2783,7 @@ function renderMap() {
           <ellipse class="coverage-likely" rx="${likelyLongitudinal}" ry="${likelyLateral}"><title>Likely landing area</title></ellipse>
         </g>
         <g class="target-distance-label" transform="translate(${sx(target[0])},${sy(target[1]) - 34})">
-          <rect x="-29" y="-11" width="58" height="22" rx="4"/><text text-anchor="middle" dominant-baseline="central">${targetDistanceText}</text>
+          <rect x="-40" y="-11" width="80" height="22" rx="4"/><text text-anchor="middle" dominant-baseline="central">${targetDistanceText}</text>
         </g>
         <g class="target-mark ${targetDragging ? "dragging" : ""}" transform="translate(${sx(target[0])},${sy(target[1])})">
           <circle class="target-hit" r="30"/><circle class="target-core" r="12"/><path d="M-20 0h40M0-20v40"/>
@@ -2411,7 +2792,7 @@ function renderMap() {
         <path d="M0 18V-26" /><path class="flag" d="M1-26l26 8-26 9z"/>
       </g>
       ${state.liveGpsView && liveBall ? `<g class="live-gps-ball" transform="translate(${sx(liveBall[0])},${sy(liveBall[1])})"><circle class="live-ball-halo" r="17"/><circle class="live-ball-core" r="8"><title>Latest actual GPS ball location</title></circle></g>` : ""}
-      ${state.liveGpsView || humanAnimating ? "" : `<g class="ball-mark" filter="url(#soft-shadow)" transform="translate(${sx(ball[0])},${sy(ball[1])})">
+      ${state.liveGpsView || humanAnimating ? "" : `<g class="ball-mark" filter="url(#soft-shadow)" transform="translate(${sx(visibleHumanBall[0])},${sy(visibleHumanBall[1])})">
         <circle r="13"/><circle class="ball-core" r="6"/><text x="0" y="-19" text-anchor="middle">YOU</text>
       </g>`}
       ${competitionActive() && strategistBall && !gameMasterAnimating ? `<g class="gm-ball-mark" filter="url(#soft-shadow)" transform="translate(${sx(strategistBall[0])},${sy(strategistBall[1])})" role="img" aria-label="Game Master ball, ${escapeHtml(strategistState.lie || "tee")}">
@@ -2515,8 +2896,12 @@ function renderMap() {
   $("#course-map svg").addEventListener("click", onMapClick);
   $("#course-map svg").addEventListener("pointerup", onMapPointerUp);
   $("#course-map svg").addEventListener("pointerdown", onTargetPointerDown);
+  $("#course-map svg").addEventListener("pointerdown", onLiveMapMeasurePointerDown);
   $("#course-map svg").addEventListener("pointermove", onMapDistancePreview);
-  $("#course-map svg").addEventListener("pointerleave", hideMapDistancePreview);
+  $("#course-map svg").addEventListener("pointerup", endLiveMapMeasurement);
+  $("#course-map svg").addEventListener("pointercancel", endLiveMapMeasurement);
+  $("#course-map svg").addEventListener("lostpointercapture", endLiveMapMeasurement);
+  $("#course-map svg").addEventListener("pointerleave", onMapDistancePreviewLeave);
 }
 
 function splitPlayedPath(points, fraction) {
@@ -2608,7 +2993,7 @@ function liePenalty() {
   return { "Fairway": 1, "Tee": 1, "Rough": .9, "Heavy rough": .8, "Trees": .65, "Bunker": .72, "Green": 1 }[lie] || .9;
 }
 
-function resolveIntentTarget(start, linePoint, club = currentClub(), power = state.swingPower) {
+function resolveIntentTarget(start, linePoint, club = currentClub(), power = state.swingPower, aimType = state.aimType) {
   if (!linePoint) return null;
   const dx = linePoint[0] - start[0];
   const dy = linePoint[1] - start[1];
@@ -2617,7 +3002,13 @@ function resolveIntentTarget(start, linePoint, club = currentClub(), power = sta
   const isPutt = club.name === "Putter" && lieTypeForPoint(start) === "Green";
   const intentDistance = isPutt
     ? distance(start, pin().center_point)
-    : Math.max(1, club.carry * liePenalty() * power);
+    : nominalAimCarryYards({
+        aimType,
+        targetDistanceYards: distance(start, linePoint),
+        clubCarryYards: club.carry,
+        power,
+        lieMultiplier: liePenalty()
+      });
   return [
     start[0] + dx / length * intentDistance / (METERS_TO_YARDS * gameplayScale()),
     start[1] + dy / length * intentDistance / (METERS_TO_YARDS * gameplayScale())
@@ -2777,7 +3168,7 @@ function currentStrategyChoices() {
   }
   try {
     const surfaces = canonicalSurfaces();
-    return buildStrategyChoices({
+    const input = {
       start: canonicalPoint(state.ball),
       pin: canonicalPoint(pin().center_point),
       centerline: hole().centerline_waypoints.map(waypoint => canonicalPoint(waypoint.point)),
@@ -2788,23 +3179,98 @@ function currentStrategyChoices() {
       preferredApproachYards: preferredApproachDistance(),
       startSurface: currentLieType(),
       recoveryRequired: state.shots.at(-1)?.penalty > 0 || currentLieType() === "Trees"
-    });
+    };
+    const treeCondition = treeConditionAt(state.ball);
+    if (treeCondition) return buildTreeRecoveryChoices({ ...input, treeCondition });
+    const greenside = buildGreensideStrategyChoices();
+    return greenside.length ? greenside : buildStrategyChoices(input);
   } catch (error) {
     console.warn("Strategy choices could not be generated.", error);
     return [];
   }
 }
 
+// This adapter deliberately produces parameters for the existing chip-and-run
+// engine.  It does not model a second short-game physics system.
+const GREENSIDE_STRATEGY_VERSION = "greenside-strategy-v1";
+
+function greensideStrategyEligible(start = state.ball) {
+  const lie = lieTypeForPoint(start);
+  // Bunker cards remain outside V1 until bunker-specific plans have their own
+  // comparable presentation. The existing bunker shot path is unchanged.
+  if (!["Rough", "Heavy rough", "Fairway"].includes(lie)) return false;
+  const club = state.profile?.clubs.find(item => item.name !== "Putter");
+  if (!club) return false;
+  // Eligibility is based on the actual current hole situation, not a clipped
+  // hypothetical landing point. A 74-yard approach must stay an approach.
+  const target = pin().center_point;
+  return usesGreensideEngine(start, club, target, ShotType.CHIP_AND_RUN);
+}
+
+function greensideClubByNames(names) {
+  return state.profile.clubs.findIndex(club => names.some(name => club.name.toLowerCase().includes(name)));
+}
+
+function buildGreensideStrategyChoices() {
+  const start = state.ball;
+  if (!start || !greensideStrategyEligible(start)) return [];
+  const total = distance(start, pin().center_point);
+  const edge = greenEdgeDistanceOnCupLine(start);
+  const make = ({ id, title, objective, clubIndex, carryBias, minimumOnGreen = 0 }) => {
+    if (clubIndex < 0) return null;
+    const club = state.profile.clubs[clubIndex];
+    const ratio = greensideRollRatio(club.name);
+    const naturalCarry = total / (1 + ratio);
+    const carry = bounded(Math.max(naturalCarry * carryBias, (edge ?? 0) + minimumOnGreen), 1, Math.min(30, total));
+    const solved = solveShortGamePower({ clubCarryYards: club.carry, desiredCarryYards: carry, lieMultiplier: liePenalty() });
+    if (!Number.isFinite(solved.power)) return null;
+    const target = canonicalPoint(projectPointToward(start, pin().center_point, carry));
+    const roll = expectedShortGameRoll({
+      carryYards: solved.expected_carry_yards, rollRatio: ratio,
+      slopeFactor: greenRollSlopeFactor(coursePointFromCanonical(target)), landingSurface: "green"
+    });
+    return {
+      version: GREENSIDE_STRATEGY_VERSION,
+      id: `greenside-${id}`,
+      title, objective, mode: "greenside", strategyRole: id,
+      clubIndex, clubName: club.name, power: solved.power_percent,
+      target, expectedFinish: canonicalPoint(pin().center_point),
+      targetLabel: `Land ~${Math.round(carry)} yd`, leavesYards: Math.max(0, Math.round(Math.abs(total - carry - roll))),
+      rollYards: Math.round(roll), risk: 0, hazards: [], nearestHazard: null,
+      greensideStrategy: {
+        version: GREENSIDE_STRATEGY_VERSION, family: id,
+        nominal_carry_yards: Math.round(solved.expected_carry_yards * 10) / 10,
+        expected_rollout_yards: Math.round(roll * 10) / 10,
+        landing_target: structuredClone(target),
+        eligibility: "shot-type-greenside-engine-v1"
+      }
+    };
+  };
+  const soft = make({ id: "soft-pitch", title: "Soft Pitch", objective: "Higher flight · softer release", clubIndex: greensideClubByNames(["lob wedge", "sand wedge"]), carryBias: 1.15, minimumOnGreen: 1.5 });
+  const runner = make({ id: "chip-run", title: "Chip and Run", objective: "Lower flight · more release", clubIndex: greensideClubByNames(["pitching wedge", "gap wedge", "9 iron"]), carryBias: .88, minimumOnGreen: .25 });
+  const center = make({ id: "center-green", title: "Center Green", objective: "Favor the wider green", clubIndex: greensideClubByNames(["sand wedge", "gap wedge"]), carryBias: 1.4, minimumOnGreen: 3 });
+  const distinct = [];
+  for (const choice of [soft, runner, center]) {
+    if (!choice || distinct.some(other => other.clubIndex === choice.clubIndex && Math.abs(other.greensideStrategy.nominal_carry_yards - choice.greensideStrategy.nominal_carry_yards) < 2)) continue;
+    distinct.push(choice);
+  }
+  // A routine shot should not masquerade as a decision. One card is enough
+  // when the plans collapse to the same club/landing construction.
+  if (distinct.length === 1) distinct[0] = { ...distinct[0], title: "Straightforward Chip", objective: "Simple greenside play" };
+  return distinct.slice(0, 3);
+}
+
 const strategyAnalysisCache = new Map();
 const strategyAnalysisPending = new Map();
 const strategyWorkerRequests = new Map();
+const shortGameAnalysisCache = new Map();
 let strategyWorkerInstance = null;
 let strategyWorkerRequestId = 0;
 
 function strategyAnalysisWorker() {
   if (typeof Worker !== "function") return null;
   if (strategyWorkerInstance) return strategyWorkerInstance;
-  strategyWorkerInstance = new Worker("./packages/simulation/browser_strategy_worker.mjs?v=20260816-3", { type: "module" });
+  strategyWorkerInstance = new Worker("./packages/simulation/browser_strategy_worker.mjs?v=20260921-1", { type: "module" });
   strategyWorkerInstance.addEventListener("message", event => {
     const pending = strategyWorkerRequests.get(event.data?.requestId);
     if (!pending) return;
@@ -2866,21 +3332,26 @@ function strategySimulationCandidate(choice) {
   const club = state.profile.clubs[choice.clubIndex];
   const power = choice.power / 100;
   const lineTarget = coursePointFromCanonical(choice.target);
-  const greenside = isGreensideChip(start, club);
+  const greenside = choice.greensideStrategy
+    ? usesGreensideEngine(start, club, lineTarget, ShotType.CHIP_AND_RUN)
+    : isGreensideChip(start, club);
   const intendedTarget = greenside
     ? lineTarget
-    : resolveIntentTarget(start, lineTarget, club, power) || lineTarget;
+    : resolveIntentTarget(start, lineTarget, club, power, AimType.DIRECTION_TARGET) || lineTarget;
   const sidehill = greenside ? null : sidehillShotPlan(start, intendedTarget);
   return {
     id: choice.id,
     engine: greenside ? "greenside" : "full",
     deterministicOutlook: choice.outlook,
     context: greenside
-      ? greensideShotSimulationContext(start, intendedTarget, club, power)
+      ? greensideShotSimulationContext(start, intendedTarget, club, power, {
+          nominalCarryYards: choice.greensideStrategy?.nominal_carry_yards,
+          rollSlopeFactor: greenRollSlopeFactor(intendedTarget)
+        })
       : fullShotSimulationContext(start, intendedTarget, club, power, sidehill),
     target: choice.expectedFinish || choice.target,
     targetRadiusYards: choice.mode === "approach" ? 12 : choice.mode === "recovery" ? 15 : 18,
-    successSurface: choice.mode === "approach" ? "green" : null
+    successSurface: choice.mode === "approach" || choice.greensideStrategy ? "green" : null
   };
 }
 
@@ -2902,13 +3373,16 @@ function runStrategyAnalysis(choices) {
   return analysis;
 }
 
-function evaluateLockedHumanShot({ start, intendedTarget, intendedLie, club, power, sidehill, greenside }) {
+function evaluateLockedHumanShot({ start, intendedTarget, intendedLie, club, power, sidehill, greenside, shortGamePlan = null }) {
   const candidate = {
     id: "human-locked-shot",
     engine: greenside ? "greenside" : "full",
     deterministicOutlook: "Competitive",
     context: greenside
-      ? greensideShotSimulationContext(start, intendedTarget, club, power)
+      ? greensideShotSimulationContext(start, intendedTarget, club, power, {
+          nominalCarryYards: shortGamePlan?.expected_carry,
+          rollSlopeFactor: shortGamePlan?.slope_factor
+        })
       : fullShotSimulationContext(start, intendedTarget, club, power, sidehill),
     target: canonicalPoint(intendedTarget),
     targetRadiusYards: intendedLie === "Green" ? 12 : 18,
@@ -2976,7 +3450,20 @@ function loadStrategyAnalysis(choices) {
 function renderStrategyProbabilityAnalysis(analysis, choices, selectedChoice) {
   const container = $("#strategy-probability-content");
   if (!container) return;
-  const rows = [
+  const isGreenside = Boolean(selectedChoice.greensideStrategy);
+  const rows = isGreenside ? [
+    ["Green hit", "green_percent", "%"],
+    ["Inside 3 ft", "inside_3ft_percent", "%"],
+    ["Inside 6 ft", "inside_6ft_percent", "%"],
+    ["Inside 8 ft", "inside_8ft_percent", "%"],
+    ["Inside 15 ft", "inside_15ft_percent", "%"],
+    ["Expected leave", "expected_leave_feet", " ft"],
+    ["Median leave", "median_leave_feet", " ft"],
+    ["Short / off green", "short_off_green_percent", "%"],
+    ["Long / off green", "long_off_green_percent", "%"],
+    ["Bunker", "bunker_percent", "%"],
+    ["Penalty", "penalty_percent", "%"]
+  ] : [
     ["Green / target", "target_percent", "%"],
     ["Playable lie", "playable_percent", "%"],
     ["Bunker", "bunker_percent", "%"],
@@ -2984,7 +3471,6 @@ function renderStrategyProbabilityAnalysis(analysis, choices, selectedChoice) {
     ["Typical leave", "median_leave_yards", " yd"]
   ];
   const selected = analysis.candidates[selectedChoice.id];
-  const recommendedChoice = choices.find(choice => choice.id === analysis.recommended_choice_id) || selectedChoice;
   const selectedLabel = selectedChoice.mode === "approach" ? "green" : "target area";
   const miss = selected.common_miss === "mixed" ? "no single dominant miss" : `${selected.common_miss} as the most common miss`;
   const clearance = selectedChoice.nearestHazard && selectedChoice.hazardClearanceYards != null
@@ -2992,15 +3478,25 @@ function renderStrategyProbabilityAnalysis(analysis, choices, selectedChoice) {
     : "";
   $("#strategy-explanation-outcome").textContent = `${selectedChoice.targetLabel} · ${strategyOutlookLabel(selected.hybrid_outlook, "hybrid")} · Risk index ${selectedChoice.risk}/100${clearance}`;
   renderStrategyExplanationReasons(selectedChoice, analysis);
+  const treeDetails = selectedChoice.treeRecovery
+    ? (() => {
+        const recovery = selectedChoice.treeRecovery;
+        const pct = value => `${Math.round(value * 100)}%`;
+        return `<p class="tree-recovery-details"><strong>Tree-recovery details:</strong> ${pct(recovery.probabilities.clean_escape)} clean escape, ${pct(recovery.probabilities.branch_clip)} branch clip, and ${pct(recovery.probabilities.major_tree_contact)} major contact. A clean result leaves about ${recovery.reward.expected_leave_if_clean_yards} yards; the all-outcome expected leave is about ${recovery.reward.overall_expected_leave_yards} yards. A major contact has a ${pct(recovery.remaining_in_trees_on_major)} chance of leaving the ball in tree trouble${recovery.hazard_exposure ? `; known hazard exposure is ${pct(recovery.hazard_exposure)}` : ""}.</p>`;
+      })()
+    : "";
+  const greensideDetails = selectedChoice.greensideStrategy
+    ? `<p class="greenside-strategy-details"><strong>Shot construction:</strong> land about ${selectedChoice.greensideStrategy.nominal_carry_yards} yd, release about ${selectedChoice.greensideStrategy.expected_rollout_yards} yd. The landing target and nominal power are locked in when you play this plan.</p>`
+    : "";
   container.innerHTML = `
-    <p><strong>${escapeHtml(recommendedChoice.title)} is the simulation-backed recommendation.</strong> It produced the strongest course-management balance across the paired outcomes${analysis.recommendation_margin <= 3 ? "; the two plans remain close" : ""}.</p>
+    <p><strong>Comparison from the same ${analysis.sample_count} simulated outcomes.</strong> These are tradeoffs, not a preselected answer.</p>
     <div class="strategy-probability-scroll">
       <table>
         <thead><tr><th>400-shot comparison</th>${choices.map(choice => `<th>${escapeHtml(choice.title)}</th>`).join("")}</tr></thead>
         <tbody>${rows.map(([label, key, suffix]) => `<tr><th>${label}</th>${choices.map(choice => `<td>${analysis.candidates[choice.id][key]}${suffix}</td>`).join("")}</tr>`).join("")}</tbody>
       </table>
     </div>
-    <p><strong>${escapeHtml(selectedChoice.title)}:</strong> ${selected.target_percent}% reached the ${selectedLabel}; ${selected.playable_percent}% stayed playable. The middle result leaves ${selected.median_leave_yards} yards, with most outcomes between ${selected.leave_p10_yards} and ${selected.leave_p90_yards} yards and ${miss}.</p>`;
+    <p><strong>${escapeHtml(selectedChoice.title)}:</strong> ${isGreenside ? `${selected.green_percent}% reached the green; the expected leave is ${selected.expected_leave_feet} ft.` : `${selected.target_percent}% reached the ${selectedLabel}; ${selected.playable_percent}% stayed playable. The middle result leaves ${selected.median_leave_yards} yards, with most outcomes between ${selected.leave_p10_yards} and ${selected.leave_p90_yards} yards and ${miss}.`}</p>${greensideDetails}${treeDetails}`;
 }
 
 function strategyReasonsWithoutOldRanking(choice) {
@@ -3019,7 +3515,12 @@ function strategyReasonsWithoutOldRanking(choice) {
 
 function renderStrategyExplanationReasons(choice, analysis = null) {
   const probability = analysis?.candidates?.[choice.id] || null;
-  const reasons = probability
+  const reasons = choice.greensideStrategy && probability
+    ? [
+        `The figures compare ${analysis.sample_count} deterministic simulated outcomes for this plan.`,
+        "Use the landing, rollout, proximity, and miss evidence to choose the tradeoff you prefer."
+      ]
+    : probability
     ? [
         probability.hybrid_outlook === "Best"
           ? `This plan produced the best course-management balance across ${analysis.sample_count} paired simulations.`
@@ -3049,8 +3550,16 @@ function strategyOutlookLabel(outlook, source = "deterministic") {
 function strategyChoiceMarkup(choice, analysis = null) {
   const selected = state.strategySelectedId === choice.id;
   const probability = analysis?.candidates?.[choice.id] || null;
-  const outlook = probability?.hybrid_outlook || choice.outlook;
-  const source = probability ? "hybrid" : "deterministic";
+  const greensideSummary = choice.greensideStrategy && probability
+    ? `${probability.inside_8ft_percent}% inside 8 ft · expected ${probability.expected_leave_feet} ft`
+    : null;
+  const treeSummary = choice.treeRecovery
+    ? (() => {
+        const recovery = choice.treeRecovery;
+        const contact = Math.round((recovery.probabilities.branch_clip + recovery.probabilities.major_tree_contact) * 100);
+        return `${Math.round(recovery.probabilities.clean_escape * 100)}% clean · ${contact}% tree contact · expected leave ~${recovery.reward.overall_expected_leave_yards} yd`;
+      })()
+    : null;
   return `
     <article class="strategy-choice ${selected ? "selected" : ""}">
       <div class="strategy-choice-head">
@@ -3060,7 +3569,11 @@ function strategyChoiceMarkup(choice, analysis = null) {
       <button class="strategy-choice-main" type="button" data-strategy-choice="${choice.id}" aria-pressed="${selected}">
         <strong>${escapeHtml(choice.title)}</strong>
         <span>${escapeHtml(choice.clubName)} · ${shotPowerLabel(choice.power, choice.clubName)} · ${choice.mode === "approach" && choice.leavesYards <= 8 ? `${choice.rollYards} yd roll` : choice.leavesYards <= 8 ? "green" : `${choice.leavesYards} yd left`}</span>
-        <small>${escapeHtml(choice.targetLabel)} · ${strategyOutlookLabel(outlook, source)}</small>
+        ${choice.treeRecovery
+          ? `<small class="tree-recovery-summary">${treeSummary}</small>`
+          : choice.greensideStrategy
+            ? `<small class="greenside-strategy-summary">${greensideSummary || `${escapeHtml(choice.targetLabel)} · simulating tradeoffs…`}</small>`
+            : `<small>${escapeHtml(choice.targetLabel)} · ${strategyOutlookLabel(probability?.hybrid_outlook || choice.outlook, probability ? "hybrid" : "deterministic")}</small>`}
       </button>
     </article>`;
 }
@@ -3082,7 +3595,9 @@ function renderStrategyChoices() {
       count.textContent = available
         ? `${choices.length} ${choices.length === 1 ? "option" : "options"}`
         : "Unavailable";
-      planner.hidden = !available || !state.desktopCaddieExpanded;
+      // Tree recovery is an active decision, not a hidden caddie aside. Keep
+      // its risk cards visible beside the situation briefing.
+      planner.hidden = !available || (!state.desktopCaddieExpanded && !choices.some(choice => choice.treeRecovery));
     }
     if (!available) {
       container.innerHTML = prefix === "mobile"
@@ -3094,7 +3609,11 @@ function renderStrategyChoices() {
     container.innerHTML = choices.map(choice => strategyChoiceMarkup(choice, analysis)).join("");
     const title = $(`#${prefix}-strategy-title`);
     const hint = planner.querySelector(".strategy-planner-heading small");
-    if (title) title.textContent = choices.length === 1 ? "One clear recommendation" : "Choose how to play it";
+    if (title) title.textContent = choices.some(choice => choice.treeRecovery)
+      ? "Choose your tree recovery"
+      : choices.length === 1
+      ? choices[0].greensideStrategy ? "Straightforward greenside plan" : "One clear recommendation"
+      : "Choose how to play it";
     if (hint) hint.textContent = choices.length === 1
       ? `${prefix === "mobile" ? "Tap" : "Click"} to preview the line`
       : `${prefix === "mobile" ? "Tap a plan" : "Click a plan"} to preview${prefix === "desktop" ? " its line" : ""}`;
@@ -3115,9 +3634,14 @@ function selectStrategyChoice(choiceId) {
   state.selectedClub = choice.clubIndex;
   state.swingPower = choice.power / 100;
   state.target = coursePointFromCanonical(choice.target);
+  state.aimType = choice.greensideStrategy || isGreensideChip(state.ball, state.profile.clubs[choice.clubIndex])
+    ? AimType.LANDING_TARGET
+    : AimType.DIRECTION_TARGET;
+  if (choice.greensideStrategy) state.structuredShot.shotType = ShotType.CHIP_AND_RUN;
   state.manualTargetPreview = false;
   state.shotDraft = { club: true, target: true, power: true };
   rememberStructuredTarget(state.target, { resetAdjustment: true });
+  if (landingTargetActive()) syncLandingTargetPower();
   updateAll();
 }
 
@@ -3142,7 +3666,9 @@ function showStrategyExplanation(choiceId) {
     : "";
   const cachedAnalysis = strategyAnalysisCache.get(strategyAnalysisKey(choices)) || null;
   const cachedProbability = cachedAnalysis?.candidates?.[choice.id] || null;
-  $("#strategy-explanation-outcome").textContent = `${choice.targetLabel} · ${strategyOutlookLabel(cachedProbability?.hybrid_outlook || choice.outlook, cachedProbability ? "hybrid" : "deterministic")} · Risk index ${choice.risk}/100${clearance}`;
+  $("#strategy-explanation-outcome").textContent = choice.greensideStrategy && cachedProbability
+    ? `${choice.targetLabel} · ${cachedProbability.green_percent}% green hit · ${cachedProbability.inside_8ft_percent}% inside 8 ft${clearance}`
+    : `${choice.targetLabel} · ${strategyOutlookLabel(cachedProbability?.hybrid_outlook || choice.outlook, cachedProbability ? "hybrid" : "deterministic")} · Risk index ${choice.risk}/100${clearance}`;
   renderStrategyExplanationReasons(choice, cachedAnalysis);
   const dialog = $("#strategy-explanation-dialog");
   dialog.dataset.choiceId = choice.id;
@@ -3287,14 +3813,11 @@ function fullShotSimulationContext(start, target, club, power, sidehill = null) 
 
 function authoritativeFullShot(start, target, club, power, sidehill) {
   const context = fullShotSimulationContext(start, target, club, power, sidehill);
-  const identity = {
-    roundSeed: state.roundSeed, holeNumber: state.holeIndex + 1,
-    strokeIndex: competitionExecutionStrokeIndex(state.shots.length + 1)
-  };
+  const identity = activeCompetitionExecutionIdentity(ParticipantType.HUMAN, state.shots.length + 1);
   return { packet: simulateFullShot(context, identity), request: { context, identity } };
 }
 
-function greensideShotSimulationContext(start, target, club, power) {
+function greensideShotSimulationContext(start, target, club, power, options = {}) {
   const conditions = shotConditions(start);
   const contourSeed = (state.holeIndex + 1) * 17 + state.pinIndex * 11;
   const lie = authoritativeLie(lieTypeForPoint(start));
@@ -3306,7 +3829,10 @@ function greensideShotSimulationContext(start, target, club, power) {
     accuracy: bounded(club.accuracy / 100, 0, 1),
     lie_type: lie.lie_type,
     power,
-    roll_slope_factor: conditions.slope === "uphill" ? 0.78 : conditions.slope === "downhill" ? 1.18 : 1,
+    nominal_carry_yards: Number.isFinite(options.nominalCarryYards) ? options.nominalCarryYards : undefined,
+    roll_slope_factor: Number.isFinite(options.rollSlopeFactor)
+      ? options.rollSlopeFactor
+      : conditions.slope === "uphill" ? 0.78 : conditions.slope === "downhill" ? 1.18 : 1,
     break_direction: contourSeed % 2 === 0 ? "right" : "left",
     contour_modifier: (contourSeed % 5) - 2,
     surfaces: canonicalSurfaces(),
@@ -3316,13 +3842,9 @@ function greensideShotSimulationContext(start, target, club, power) {
   };
 }
 
-function authoritativeGreensideShot(start, target, club, power, strokeIndex) {
-  const context = greensideShotSimulationContext(start, target, club, power);
-  const identity = {
-    roundSeed: state.roundSeed,
-    holeNumber: state.holeIndex + 1,
-    strokeIndex
-  };
+function authoritativeGreensideShot(start, target, club, power, strokeIndex, options = {}) {
+  const context = greensideShotSimulationContext(start, target, club, power, options);
+  const identity = activeCompetitionExecutionIdentity(ParticipantType.HUMAN, strokeIndex);
   return {
     packet: simulateGreensideShot(context, identity),
     request: { engine: "greenside", context, identity }
@@ -3334,9 +3856,9 @@ function adjustmentRewardMessage(reward, clubName) {
   if (reward.accuracy_bonus > 0) {
     const label = reward.grade === "excellent" ? "Excellent adjustment" :
       reward.grade === "sound" ? "Good adjustment" : "Useful adjustment";
-    return `${label}: ${reward.explanation} ${clubName} accuracy improves from ${reward.base_accuracy}% to ${reward.effective_accuracy}% for this shot only.`;
+    return `${label}: ${reward.explanation} For this simulated shot, the model increases ${clubName} accuracy from ${reward.base_accuracy}% to ${reward.effective_accuracy}%. Your saved golfer profile is unchanged.`;
   }
-  return `Adjustment not rewarded: ${reward.explanation} ${clubName} remains at ${reward.base_accuracy}% accuracy.`;
+  return `Adjustment not rewarded: ${reward.explanation} For this simulated shot, ${clubName} remains at ${reward.base_accuracy}% modeled accuracy. Your saved golfer profile is unchanged.`;
 }
 
 function lineSamplePoints(start, target, count = 48) {
@@ -3462,10 +3984,7 @@ function authoritativePutt(start, target, paceScale, identityOverride = null) {
     contour_key: greenContourKey(),
     contour_strength: contourPuttStrength(read.feet)
   };
-  const identity = identityOverride || {
-    roundSeed: state.roundSeed, holeNumber: state.holeIndex + 1,
-    strokeIndex: competitionExecutionStrokeIndex(state.shots.length + 1)
-  };
+  const identity = identityOverride || activeCompetitionExecutionIdentity(ParticipantType.HUMAN, state.shots.length + 1);
   const packet = simulatePutt(context, identity);
   if (!Number.isFinite(packet?.landing?.x) || !Number.isFinite(packet?.landing?.y)) {
     throw new Error("putting simulation returned a non-finite landing point");
@@ -3570,9 +4089,8 @@ function normalShotTarget(start) {
     : (fairwayCenterTarget() || pinPoint());
 }
 
-function sidehillShotPlan(start, intendedTarget) {
+function sidehillShotPlan(start, intendedTarget, referenceTarget = normalShotTarget(start)) {
   const conditions = shotConditions(start);
-  const referenceTarget = normalShotTarget(start);
   return analyzeSidehillShot({
     stance: conditions.stanceType,
     lateralDistanceYards: conditions.lateralDistanceYards,
@@ -3695,21 +4213,299 @@ function isGreensideChip(start = state.ball, club = currentClub()) {
   const lie = lieTypeForPoint(start);
   const distanceToCup = distance(start, pin().center_point);
   return club.name !== "Putter" &&
-    ["Rough", "Heavy rough", "Fairway"].includes(lie) &&
+    ["Rough", "Heavy rough", "Fairway", "Bunker"].includes(lie) &&
     distanceToCup <= 30;
 }
 
-function chipRollRatio(clubName) {
-  const name = clubName.toLowerCase();
-  if (name.includes("lob wedge")) return 0.8;
-  if (name.includes("sand wedge")) return 1.0;
-  if (name.includes("gap wedge")) return 1.5;
-  if (name.includes("pitching wedge")) return 2.0;
-  if (name.includes("9 iron")) return 3.0;
-  if (name.includes("8 iron")) return 4.0;
-  if (name.includes("7 iron")) return 5.0;
-  if (name.includes("6 iron")) return 6.0;
-  return 2.5;
+function automaticShotType(start = state.ball, club = currentClub(), target = state.target) {
+  const targetPoint = finitePointOrNull(target);
+  return recommendShotType({
+    lie: lieTypeForPoint(start),
+    clubName: club?.name,
+    distanceToPinYards: distance(start, pin().center_point),
+    targetDistanceYards: targetPoint ? distance(start, targetPoint) : null,
+    targetSurface: targetPoint ? lieAt(targetPoint).type : null,
+    effectiveCarryYards: Number(club?.carry || 0) * liePenalty(),
+    landingTarget: state.aimType === AimType.LANDING_TARGET
+  });
+}
+
+function currentShotType(start = state.ball, club = currentClub(), target = state.target) {
+  const selected = state.structuredShot.shotType;
+  return selected && selected !== "auto" ? selected : automaticShotType(start, club, target);
+}
+
+function defaultAimType() {
+  if (!state.ball || currentLieType() === "Green" || currentClub()?.name === "Putter") {
+    return AimType.DIRECTION_TARGET;
+  }
+  return distance(state.ball, pin().center_point) <= 30
+    ? AimType.LANDING_TARGET
+    : AimType.DIRECTION_TARGET;
+}
+
+function landingTargetActive() {
+  return state.aimType === AimType.LANDING_TARGET && currentClub()?.name !== "Putter" && currentLieType() !== "Green";
+}
+
+function landingTargetAvailable() {
+  return landingTargetAllowed({ lie: currentLieType(), clubName: currentClub()?.name });
+}
+
+function usesGreensideEngine(start = state.ball, club = currentClub(), target = state.target, shotType = currentShotType(start, club, target)) {
+  const targetPoint = finitePointOrNull(target);
+  return shotTypeUsesGreensideEngine({
+    shotType,
+    targetDistanceYards: targetPoint ? distance(start, targetPoint) : null
+  });
+}
+
+function greenRollSlopeFactor(target) {
+  if (!target || lieAt(target).type !== "Green") return 1;
+  const polygon = hole().geometries.green_complex.polygon;
+  const landingHeight = sampleCourseGreenContour(target, polygon, greenContourKey()).height;
+  const pinHeight = sampleCourseGreenContour(pin().center_point, polygon, greenContourKey()).height;
+  return bounded(1 + (landingHeight - pinHeight) * .18, .78, 1.25);
+}
+
+function shortGameLandingPlan(club = currentClub(), target = state.target) {
+  if (!target || state.aimType !== AimType.LANDING_TARGET || club.name === "Putter") return null;
+  const desiredCarry = distance(state.ball, target);
+  const lieMultiplier = liePenalty();
+  let solution = solveShortGamePower({
+    clubCarryYards: club.carry,
+    desiredCarryYards: desiredCarry,
+    lieMultiplier
+  });
+  const landingSurface = lieAt(target).type === "Green" ? "green" : "other";
+  const slopeFactor = greenRollSlopeFactor(target);
+  const shotType = currentShotType(state.ball, club, target);
+  const shotTypeValidation = validateShotType({
+    shotType,
+    lie: currentLieType(),
+    clubName: club.name,
+    targetDistanceYards: desiredCarry
+  });
+  if (!shotTypeValidation.valid) {
+    return {
+      version: SHORT_GAME_MODEL_VERSION,
+      shot_model: "invalid",
+      shot_type: shotType,
+      aim_type: AimType.LANDING_TARGET,
+      landing_target_coordinate: canonicalPoint(target),
+      landing_target_distance: Math.round(desiredCarry * 10) / 10,
+      selected_club: club.name,
+      auto_calculated_power: null,
+      expected_carry: null,
+      expected_roll: null,
+      expected_finish: null,
+      power_status: PowerStatus.UNREACHABLE,
+      validation_message: shotTypeValidation.message,
+      slope_factor: 1,
+      landing_surface: landingSurface,
+      hazard_clearance_required: false,
+      candidate_clubs: [],
+      rule_of_12_candidate: null,
+      recommended_choice: null,
+      safe_smart_choice: null,
+      aggressive_choice: null,
+      evaluator_version: null,
+      seed: null,
+      sample_count: 0
+    };
+  }
+  const ruleOf12 = shotTypeUsesGreensideEngine({ shotType, targetDistanceYards: desiredCarry });
+  if (!ruleOf12) {
+    const flightProbe = fullShotSimulationContext(state.ball, target, club, 1, null);
+    solution = solveShortGamePower({
+      clubCarryYards: club.carry,
+      desiredCarryYards: desiredCarry,
+      lieMultiplier: flightProbe.lie.carry_multiplier * flightProbe.environment.elevation_carry_multiplier
+    });
+    const fullContext = fullShotSimulationContext(state.ball, target, club, solution.power ?? 1, null);
+    const expectedRoll = fullContext.club.roll_mean * fullContext.lie.roll_multiplier *
+      fullContext.environment.surface_roll_multiplier * fullContext.environment.wind_roll_multiplier;
+    return {
+      version: SHORT_GAME_MODEL_VERSION,
+      shot_model: "full_flight",
+      shot_type: shotType,
+      aim_type: AimType.LANDING_TARGET,
+      landing_target_coordinate: canonicalPoint(target),
+      landing_target_distance: Math.round(desiredCarry * 10) / 10,
+      selected_club: club.name,
+      auto_calculated_power: solution.power_percent,
+      expected_carry: solution.expected_carry_yards,
+      expected_roll: Math.round(expectedRoll * 10) / 10,
+      expected_finish: solution.expected_carry_yards == null
+        ? null
+        : Math.round((solution.expected_carry_yards + expectedRoll) * 10) / 10,
+      power_status: solution.status,
+      slope_factor: 1,
+      landing_surface: landingSurface,
+      hazard_clearance_required: lineHazardSummary(state.ball, target).hazardCount > 0,
+      candidate_clubs: [],
+      rule_of_12_candidate: null,
+      recommended_choice: club.name,
+      safe_smart_choice: null,
+      aggressive_choice: null,
+      evaluator_version: "full-shot-flight",
+      seed: null,
+      sample_count: 0
+    };
+  }
+  const rollRatio = greensideRollRatio(club.name);
+  const expectedRoll = solution.expected_carry_yards == null ? null : expectedShortGameRoll({
+    carryYards: solution.expected_carry_yards,
+    rollRatio,
+    slopeFactor,
+    landingSurface
+  });
+  const distanceToPin = distance(state.ball, pin().center_point);
+  const rolloutNeeded = distance(target, pin().center_point);
+  const hazards = lineHazardSummary(state.ball, target);
+  const rawCandidates = generateRuleOf12Candidates({
+    clubs: state.profile.clubs,
+    carryDistanceYards: desiredCarry,
+    rollDistanceYards: rolloutNeeded,
+    lieMultiplier
+  });
+  const candidates = rawCandidates.map(candidate => {
+    const ratio = greensideRollRatio(candidate.club_name);
+    const roll = candidate.expected_carry_yards == null ? null : expectedShortGameRoll({
+      carryYards: candidate.expected_carry_yards,
+      rollRatio: ratio,
+      slopeFactor,
+      landingSurface
+    });
+    const lowRunner = candidate.club_number <= 9;
+    const evaluated = markUnsafeTrajectory(candidate, lowRunner && hazards.hazardCount > 0);
+    const finish = roll == null ? null : candidate.expected_carry_yards + roll;
+    return {
+      ...evaluated,
+      expected_roll_yards: roll == null ? null : Math.round(roll * 10) / 10,
+      expected_finish_yards: finish == null ? null : Math.round(finish * 10) / 10,
+      expected_leave_yards: finish == null ? null : Math.round(Math.abs(distanceToPin - finish) * 10) / 10
+    };
+  });
+  let evaluatedCandidates = candidates;
+  const viable = candidates.filter(candidate => candidate.status === PowerStatus.REACHABLE || candidate.status === PowerStatus.MARGINAL);
+  const analysisKey = JSON.stringify({
+    version: SHORT_GAME_MODEL_VERSION,
+    course: state.courseId,
+    hole: state.holeIndex + 1,
+    ball: canonicalPoint(state.ball),
+    target: canonicalPoint(target),
+    pin: canonicalPoint(pin().center_point),
+    lie: currentLieType(),
+    profile: state.profile.id,
+    slopeFactor,
+    candidates: viable.map(candidate => [candidate.club_name, candidate.power_percent])
+  });
+  let analysis = shortGameAnalysisCache.get(analysisKey) || null;
+  if (!analysis && viable.length && !targetDragging) {
+    const simulationCandidates = viable.map(candidate => {
+      const candidateClub = state.profile.clubs[candidate.club_index];
+      return {
+        id: `short-game-${candidate.club_index}`,
+        club_name: candidate.club_name,
+        deterministicOutlook: candidate.rule_of_12_candidate ? "Best" : "Competitive",
+        context: greensideShotSimulationContext(state.ball, target, candidateClub, candidate.power, {
+          nominalCarryYards: candidate.expected_carry_yards,
+          rollSlopeFactor: slopeFactor
+        }),
+        target: canonicalPoint(pin().center_point),
+        targetRadiusYards: 4,
+        successSurface: null
+      };
+    });
+    analysis = evaluateShotCandidates({
+      candidates: simulationCandidates,
+      sampleCount: 120,
+      analysisSeed: stableAnalysisSeed(analysisKey),
+      holeNumber: state.holeIndex + 1,
+      simulate: (candidate, identity) => simulateGreensideShot(candidate.context, identity)
+    });
+    shortGameAnalysisCache.set(analysisKey, analysis);
+    if (shortGameAnalysisCache.size > 24) shortGameAnalysisCache.delete(shortGameAnalysisCache.keys().next().value);
+  }
+  if (analysis) {
+    evaluatedCandidates = candidates.map(candidate => {
+      const summary = analysis.candidates[`short-game-${candidate.club_index}`];
+      return summary ? { ...candidate, probability_analysis: summary } : candidate;
+    });
+  }
+  const recommended = analysis
+    ? evaluatedCandidates.find(candidate => `short-game-${candidate.club_index}` === analysis.recommended_choice_id) || null
+    : [...viable].sort((first, second) =>
+        (first.expected_leave_yards ?? 999) - (second.expected_leave_yards ?? 999) ||
+        (first.rule_of_12_distance ?? 99) - (second.rule_of_12_distance ?? 99)
+      )[0] || null;
+  const aggressive = analysis
+    ? [...viable]
+      .filter(candidate => analysis.candidates[`short-game-${candidate.club_index}`])
+      .sort((first, second) => {
+        const firstSummary = analysis.candidates[`short-game-${first.club_index}`];
+        const secondSummary = analysis.candidates[`short-game-${second.club_index}`];
+        return firstSummary.median_leave_yards - secondSummary.median_leave_yards ||
+          firstSummary.penalty_percent - secondSummary.penalty_percent;
+      })[0] || recommended
+    : recommended;
+  const ruleCandidate = evaluatedCandidates.find(candidate => candidate.rule_of_12_candidate) || null;
+  const selectedCandidate = evaluatedCandidates.find(candidate => candidate.club_name === club.name) || null;
+  return {
+    version: SHORT_GAME_MODEL_VERSION,
+    shot_model: "rule_of_12",
+    shot_type: shotType,
+    aim_type: AimType.LANDING_TARGET,
+    landing_target_coordinate: canonicalPoint(target),
+    landing_target_distance: Math.round(desiredCarry * 10) / 10,
+    selected_club: club.name,
+    auto_calculated_power: solution.power_percent,
+    expected_carry: solution.expected_carry_yards,
+    expected_roll: expectedRoll == null ? null : Math.round(expectedRoll * 10) / 10,
+    expected_finish: expectedRoll == null ? null : Math.round((solution.expected_carry_yards + expectedRoll) * 10) / 10,
+    power_status: selectedCandidate?.status || solution.status,
+    slope_factor: Math.round(slopeFactor * 1000) / 1000,
+    landing_surface: landingSurface,
+    hazard_clearance_required: hazards.hazardCount > 0,
+    candidate_clubs: evaluatedCandidates,
+    rule_of_12_candidate: ruleCandidate?.club_name || null,
+    recommended_choice: recommended?.club_name || null,
+    safe_smart_choice: recommended?.club_name || null,
+    aggressive_choice: aggressive?.club_name || null,
+    evaluator_version: analysis?.version || SHORT_GAME_MODEL_VERSION,
+    seed: analysis?.analysis_seed ?? null,
+    sample_count: analysis?.sample_count ?? 0
+  };
+}
+
+function syncLandingTargetPower() {
+  state.shortGamePlan = shortGameLandingPlan();
+  if (!state.shortGamePlan) return null;
+  const power = state.shortGamePlan.auto_calculated_power;
+  if (Number.isFinite(power)) state.swingPower = bounded(power / 100, .05, 1);
+  state.shotDraft.power = state.shortGamePlan.power_status !== PowerStatus.UNREACHABLE &&
+    state.shortGamePlan.power_status !== PowerStatus.UNSAFE_TRAJECTORY;
+  return state.shortGamePlan;
+}
+
+function setAimType(aimType, { announce = true } = {}) {
+  if (!Object.values(AimType).includes(aimType)) return;
+  if (aimType === AimType.LANDING_TARGET && !landingTargetAvailable()) {
+    if (announce) addGmMessage("Landing Target is unavailable while putting. Select a non-Putter club from off the green, or use Direction Target for the putt line.");
+    return;
+  }
+  state.aimType = aimType;
+  state.manualTargetPreview = false;
+  clearStrategyPlan();
+  if (aimType === AimType.LANDING_TARGET) syncLandingTargetPower();
+  else state.shortGamePlan = null;
+  if (announce) {
+    addGmMessage(aimType === AimType.LANDING_TARGET
+      ? "Landing Target mode: place the marker where the ball should first land. Choose a club and Auto Power will calculate the nominal swing."
+      : "Direction Target mode: the marker sets the aim line. Your club and manual swing power determine distance.");
+  }
+  updateAll();
 }
 
 function greenEdgeDistanceOnCupLine(start = state.ball) {
@@ -3730,7 +4526,7 @@ function recommendedChipPlan(start = state.ball) {
   const eligible = state.profile.clubs.filter(club => club.name !== "Driver" && club.name !== "3 Wood" && club.name !== "5 Wood" && club.name !== "4 Iron" && club.name !== "5 Iron" && club.name !== "Putter");
   const club = eligible
     .map(candidate => {
-      const ratio = chipRollRatio(candidate.name);
+      const ratio = greensideRollRatio(candidate.name);
       const carryFraction = 1 / (1 + ratio);
       return { candidate, difference: Math.abs(carryFraction - desiredCarryFraction), ratio };
     })
@@ -3761,15 +4557,15 @@ function gameMasterBriefing(includeDistance = true) {
   if (c.treeCondition) return treeConditionMessage(c.treeCondition, { includeDistance });
   if (c.lie === "Green") {
     const read = puttingRead();
-    const profileChance = Math.round(puttingMakeProbability(read.feet) * 100);
+    const profileChance = modeledMakeChanceLabel(puttingMakeProbability(read.feet));
     const rangeWarning = read.feet > PUTTER_RANGE_FEET
       ? ` This is beyond the ${PUTTER_RANGE_FEET}-foot modeled putter range; treat it as a lag putt and expect another putt.`
       : "";
     const distanceLead = includeDistance ? `You have ${formatPuttDistance(read.feet)} to the cup. ` : "";
     const breakDescription = read.breakInches > 0
-      ? `The contour moves it about ${formatInches(read.breakInches)} to the ${read.direction}; a neutral read starts roughly ${formatInches(read.breakInches)} ${read.startDirection} of the cup.`
+      ? `The contour moves it about ${formatBreak(read.breakInches)} to the ${read.direction}; a neutral read starts roughly ${formatBreak(read.breakInches)} ${read.startDirection} of the cup.`
       : "The contour is nearly straight on this line.";
-    return `${distanceLead}Your profile make rate is about ${profileChance}%. ${breakDescription} This section is ${read.slope} at roughly ${read.slopeDegrees.toFixed(1)}°.${rangeWarning}`;
+    return `${distanceLead}Based on your putting profile, the modeled make chance is about ${profileChance}. ${breakDescription} This section is ${read.slope} at roughly ${read.slopeDegrees.toFixed(1)}°.${rangeWarning}`;
   }
   const chipPlan = isGreensideChip() ? recommendedChipPlan() : null;
   if (chipPlan) {
@@ -3782,7 +4578,7 @@ function gameMasterBriefing(includeDistance = true) {
         ? `${Math.round(chipPlan.carryYards)} yards from the ball—about ${Math.max(0, Math.round(chipPlan.landingDepthYards))} yards onto the green`
         : `${Math.round(chipPlan.carryYards)} yards from the ball—about ${Math.abs(Math.round(chipPlan.landingDepthYards))} yards short of the front edge`;
     const distanceLead = includeDistance ? `You have ${Math.round(c.remaining)} yards to the cup from ${c.lie.toLowerCase()}.` : `From ${c.lie.toLowerCase()},`;
-    return `${distanceLead}${edgeDescription} Treat the target as a landing spot, not the cup. A ${chipPlan.clubName} should land about ${landingDescription}, then release about ${Math.round(chipPlan.rollYards)} yards toward the cup. Favor the ${chipPlan.startDirection} side by about ${formatInches(chipPlan.breakInches)}.`;
+    return `${distanceLead}${edgeDescription} Treat the target as a landing spot, not the cup. A ${chipPlan.clubName} should land about ${landingDescription}, then release about ${Math.round(chipPlan.rollYards)} yards toward the cup. Favor the ${chipPlan.startDirection} side by about ${formatBreak(chipPlan.breakInches)}.`;
   }
   const unit = `${Math.round(c.remaining)} yards`;
   const sidehill = sidehillShotPlan(state.ball, normalShotTarget(state.ball));
@@ -3792,12 +4588,65 @@ function gameMasterBriefing(includeDistance = true) {
       ? ` Expect about ${Math.round(Math.abs(sidehill.expected_curve_yards) * 10) / 10} yards of movement right; aim roughly ${Math.round(Math.abs(sidehill.recommended_aim_yards) * 10) / 10} yards left.`
       : ` Expect about ${Math.round(Math.abs(sidehill.expected_curve_yards) * 10) / 10} yards of movement left; aim roughly ${Math.round(Math.abs(sidehill.recommended_aim_yards) * 10) / 10} yards right.`;
   const distanceLead = includeDistance ? `You have ${unit} to the pin from ${c.lie.toLowerCase()}. ` : "";
-  return `${distanceLead}The stance has ${c.stance}, and the shot is ${c.slope}${Math.abs(c.elevationFeet) >= 4 ? ` by about ${Math.abs(Math.round(c.elevationFeet))} feet` : ""}.${sidehillAdvice}`;
+  const stanceDescription = c.stanceType === "level"
+    ? "Your stance is fairly level"
+    : `You have ${c.stance}`;
+  const slopeDescription = c.slope === "playing nearly level"
+    ? "the shot plays nearly level"
+    : `the shot plays ${c.slope}${Math.abs(c.elevationFeet) >= 4 ? ` by about ${Math.abs(Math.round(c.elevationFeet))} feet` : ""}`;
+  return `${distanceLead}${stanceDescription}, and ${slopeDescription}.${sidehillAdvice}`;
 }
 
 function addGmMessage(text, role = "gm", metadata = {}) {
   state.gmMessages.push({ text, role, ...metadata });
   renderGmConversation();
+}
+
+function replaceGmTargetMessage(text) {
+  const draftKey = `target:${state.holeIndex}:${state.shots.length + 1}`;
+  state.gmMessages = replaceDraftMessage(state.gmMessages, {
+    text,
+    role: "gm",
+    kind: "target-selection",
+    draftKey
+  });
+  renderGmConversation();
+}
+
+function persistDisplayedGmResponses(shotUpdateId, source) {
+  const match = /^shot-(\d+)-(\d+)-/.exec(String(shotUpdateId));
+  if (!match || !state.roundState) return;
+  const holeIndex = Number(match[1]) - 1;
+  const strokeIndex = Number(match[2]);
+  const hole = state.roundState.holes?.[holeIndex];
+  if (!hole?.events?.some(event => event.event_type === "shot_committed" && event.stroke_index === strokeIndex)) return;
+  const kinds = source === "ai" ? new Set(["ai-comment"]) : new Set([
+    "adjustment-reward", "decision-review", "target-review", "next-shot", "shot-result", "position-status"
+  ]);
+  const responses = state.gmMessages
+    .filter(message => message.role !== "player" && message.shotUpdateId === shotUpdateId && kinds.has(message.kind))
+    .map((message, index) => ({
+      response_id: `${shotUpdateId}-${source}-${index + 1}`,
+      response_type: message.kind,
+      source,
+      text: message.text
+    }));
+  if (!responses.length) return;
+  const auditBatchId = `${shotUpdateId}-${source}`;
+  if (hole.events.some(event => event.event_type === "gm_response_recorded" && event.payload?.audit_batch_id === auditBatchId)) return;
+  state.roundState = appendHoleEvent(state.roundState, holeIndex, {
+    event_type: "gm_response_recorded",
+    stroke_index: strokeIndex,
+    payload: {
+      audit_batch_id: auditBatchId,
+      recorded_at: new Date().toISOString(),
+      mode: competitionActive() ? "game_master" : "simulator",
+      hole_number: holeIndex + 1,
+      stroke_index: strokeIndex,
+      responses
+    }
+  });
+  persistRoundState();
 }
 
 function storeAiShotComments(shotUpdateId, texts) {
@@ -3807,6 +4656,7 @@ function storeAiShotComments(shotUpdateId, texts) {
   if (resultIndex < 0) return;
   const messages = texts.filter(Boolean).map(text => ({ text, role: "gm", kind: "ai-comment", shotUpdateId }));
   state.gmMessages.splice(resultIndex, 0, ...messages);
+  persistDisplayedGmResponses(shotUpdateId, "ai");
   renderGmConversation();
 }
 
@@ -3826,6 +4676,76 @@ function remainingPositionMessage({ start, landing, remaining, resultLie, comple
       ? `${lateralAmount < 36 ? formatInches(Math.round(lateralAmount)) : formatPuttDistance(lateralAmount / 12)} ${side} of the cup line`
       : `${Math.round(lateralAmount)} ${Math.round(lateralAmount) === 1 ? "yard" : "yards"} ${side} of the pin line`;
   return `${distanceLabel} to the ${targetName} · ${lateralLabel}.`;
+}
+
+function outcomeVsTargetMessage({ start, target, landing, putting = false, aimType = null }) {
+  const from = finitePointOrNull(start);
+  const intended = finitePointOrNull(target);
+  const actual = finitePointOrNull(landing);
+  if (!from || !intended || !actual) return "The selected target was not recorded for this shot.";
+  const delta = outcomeDelta(from, intended, actual, finiteScale());
+  if (!delta) return "The selected target was too close to calculate a directional miss.";
+  const distanceDifference = delta.distance_yards;
+  const lateralDifference = delta.lateral_yards;
+  const factor = putting ? 36 : 1;
+  const threshold = putting ? 1 : 1;
+  const lateralAmount = Math.abs(lateralDifference * factor);
+  const distanceAmount = Math.abs(distanceDifference * factor);
+  const targetLabel = aimType === AimType.LANDING_TARGET
+    ? "selected landing target"
+    : aimType === AimType.DIRECTION_TARGET
+      ? "modeled carry point on the selected line"
+      : "selected target";
+  if (lateralAmount < threshold && distanceAmount < threshold) return `Finished on the ${targetLabel}.`;
+  const formatAmount = amount => putting
+    ? formatInches(Math.max(1, Math.round(amount)))
+    : `${Math.max(1, Math.round(amount))} yd`;
+  const parts = [];
+  if (lateralAmount >= threshold) parts.push(`${formatAmount(lateralAmount)} ${lateralDifference >= 0 ? "right" : "left"}`);
+  if (distanceAmount >= threshold) parts.push(`${formatAmount(distanceAmount)} ${distanceDifference >= 0 ? "long" : "short"}`);
+  return `Finished ${parts.join(" and ")} of the ${targetLabel}.`;
+}
+
+function decisionReviewMessage({ shotRecord, puttingEvaluation, sidehill, plannedRisk, playedStrategy, playedStrategyAnalysis }) {
+  const canonical = canonicalAssessmentForGameShot(shotRecord);
+  const gradeLead = {
+    [DecisionLabel.PREFERRED]: "Preferred plan.",
+    [DecisionLabel.COMPETITIVE]: "Competitive plan.",
+    [DecisionLabel.HIGHER_RISK]: "Higher-risk plan.",
+    [DecisionLabel.NOT_GRADED]: "Decision not graded."
+  }[canonical.decision.label];
+  if (puttingEvaluation) {
+    const detail = puttingEvaluation.correctDecision
+      ? "The selected starting line and pace matched the modeled read."
+      : "The selected starting line or pace differed from the modeled read.";
+    return `${gradeLead} ${detail}`;
+  }
+  const landingPlan = shotRecord?.landingTargetPlan;
+  if (landingPlan) {
+    const chosen = landingPlan.selected_club || shotRecord.club;
+    if (landingPlan.shot_model === "full_flight") {
+      return `${gradeLead} ${SHOT_TYPE_LABELS[landingPlan.shot_type] || "Approach"} landing plan: ${chosen} used ${landingPlan.auto_calculated_power}% Auto Power for about ${landingPlan.expected_carry} yd of carry and ${landingPlan.expected_roll} yd of normal rollout.`;
+    }
+    const recommended = landingPlan.recommended_choice;
+    const comparison = recommended && recommended !== chosen
+      ? ` The ${landingPlan.sample_count || "multi-run"}-shot comparison preferred ${recommended}.`
+      : ` It matched the preferred club from the ${landingPlan.sample_count || "multi-run"}-shot comparison.`;
+    return `${gradeLead} Landing Target: ${chosen} used ${landingPlan.auto_calculated_power}% Auto Power for about ${landingPlan.expected_carry} yd of carry and ${landingPlan.expected_roll} yd of roll.${comparison}`;
+  }
+  if (sidehill?.compensation === "correct") {
+    return `${gradeLead} Your ${Math.round(Math.abs(sidehill.player_aim_yards) * 10) / 10}-yard ${sidehill.player_aim_yards > 0 ? "right" : "left"} sidehill adjustment opposed the expected curve.`;
+  }
+  if (sidehill && sidehill.compensation !== "not_required") {
+    const refinement = `The sidehill refinement was about ${Math.round(Math.abs(sidehill.recommended_aim_yards) * 10) / 10} yards ${sidehill.recommended_aim_yards > 0 ? "right" : "left"} of the chosen target.`;
+    return `${gradeLead} ${refinement}`;
+  }
+  if (playedStrategy && playedStrategyAnalysis?.recommended_choice_id) {
+    const detail = playedStrategy.id === playedStrategyAnalysis.recommended_choice_id
+      ? `${playedStrategy.title} had the best modeled outlook among the compared choices.`
+      : `${playedStrategy.title} was not the preferred modeled choice; review the compared risk and expected leave.`;
+    return `${gradeLead} ${detail}`;
+  }
+  return `${gradeLead} The selected line carried about ${Math.round(plannedRisk)}% modeled decision risk.`;
 }
 
 function clearPendingAutoPlay() {
@@ -3872,11 +4792,11 @@ function queueAutoPlay() {
       }
       void playShot().catch(error => {
         console.error(error);
-        addGmMessage(`The shot could not be played because of an internal error: ${error?.message || error}.`);
+        addGmMessage(PLAYER_SAFE_SHOT_ERROR);
       });
     } catch (error) {
       console.error(error);
-      addGmMessage(`The shot could not be played because of an internal error: ${error?.message || error}.`);
+      addGmMessage(PLAYER_SAFE_SHOT_ERROR);
     }
   }, 180);
 }
@@ -3907,19 +4827,7 @@ async function postAiJson(path, payload, { retry = false } = {}) {
 }
 
 function packetAssessment(shot) {
-  if (shot?.strategyPacket) {
-    const decisionAssessment = ["excellent", "sound", "acceptable"].includes(shot.strategyPacket.decision.label) ? "sound" : "review";
-    const executionAssessment = shot.strategyPacket.execution?.score >= 70 ? "on_plan" : "missed";
-    const overallAssessment = decisionAssessment === "sound" && executionAssessment === "on_plan" ? "good" : "bad";
-    return {
-      decision_assessment: decisionAssessment,
-      execution_assessment: executionAssessment,
-      overall_assessment: overallAssessment,
-      decision_risk: null,
-      risk_label: null
-    };
-  }
-  return shot?.resultPacket?.assessment || shot?.puttPacket?.assessment || null;
+  return legacyPacketAssessment(canonicalAssessmentForGameShot(shot));
 }
 
 function strategyPacketForShot(shot) {
@@ -4009,6 +4917,7 @@ function overallQualityFromAssessment(assessment, fallbackQuality = null) {
 
 function aiShotPayload({ shotRecord, puttingEvaluation, plannedRisk, remaining, completionType, resultLie, intendedTarget }) {
   const assessment = packetAssessment(shotRecord);
+  const canonicalAssessment = canonicalAssessmentForGameShot(shotRecord);
   return {
     course: { id: state.courseId, name: state.course.name },
     hole: { number: state.holeIndex + 1, par: card().Par, handicap: card().Handicap, layout_type: hole().hole_metadata.layout_type },
@@ -4031,6 +4940,7 @@ function aiShotPayload({ shotRecord, puttingEvaluation, plannedRisk, remaining, 
       decision_assessment: assessment?.decision_assessment ?? null,
       execution_assessment: assessment?.execution_assessment ?? null,
       overall_assessment: assessment?.overall_assessment ?? null,
+      canonical_assessment: canonicalAssessment,
       decision_risk: assessment?.decision_risk ?? plannedRisk,
       risk_label: assessment?.risk_label ?? null,
       result_packet: shotRecord.resultPacket,
@@ -4038,6 +4948,25 @@ function aiShotPayload({ shotRecord, puttingEvaluation, plannedRisk, remaining, 
       condition_snapshot: shotRecord.conditionSnapshot,
       resolved_tree_condition: shotRecord.resolvedTreeCondition,
       player_intent: shotRecord.playerIntent,
+      aim_type: shotRecord.aimType ?? AimType.DIRECTION_TARGET,
+      short_game_plan: shotRecord.landingTargetPlan ? {
+        model_version: shotRecord.landingTargetPlan.version,
+        landing_target: shotRecord.landingTargetPlan.landing_target_coordinate,
+        landing_target_distance_yards: shotRecord.landingTargetPlan.landing_target_distance,
+        selected_club: shotRecord.landingTargetPlan.selected_club,
+        auto_power_percent: shotRecord.landingTargetPlan.auto_calculated_power,
+        power_status: shotRecord.landingTargetPlan.power_status,
+        expected_carry_yards: shotRecord.landingTargetPlan.expected_carry,
+        expected_roll_yards: shotRecord.landingTargetPlan.expected_roll,
+        expected_finish_yards: shotRecord.landingTargetPlan.expected_finish,
+        rule_of_12_candidate: shotRecord.landingTargetPlan.rule_of_12_candidate,
+        recommended_choice: shotRecord.landingTargetPlan.recommended_choice,
+        safe_smart_choice: shotRecord.landingTargetPlan.safe_smart_choice,
+        aggressive_choice: shotRecord.landingTargetPlan.aggressive_choice,
+        evaluator_version: shotRecord.landingTargetPlan.evaluator_version,
+        seed: shotRecord.landingTargetPlan.seed,
+        sample_count: shotRecord.landingTargetPlan.sample_count
+      } : null,
       sidehill_plan: shotRecord.sidehillPlan,
       adjustment_reward: shotRecord.adjustmentReward,
       strategy_choice: shotRecord.strategyChoice,
@@ -4134,6 +5063,7 @@ function aiRoundPayload(reviewHoleNumbers = null) {
       shots: meaningfulByIndex.has(index) ? holeShots.map((shot, shotIndex) => ({
         stroke_number: shotIndex + 1,
         assessment: packetAssessment(shot),
+        canonical_assessment: canonicalAssessmentForGameShot(shot),
         club: shot.club,
         power: shot.power,
         lie: shot.lie,
@@ -4164,7 +5094,14 @@ function setAiRoundReviewUnavailable(card) {
   retryButton.className = "ai-review-retry";
   retryButton.dataset.aiReviewRetry = "";
   retryButton.textContent = "Try AI insight again";
-  retryButton.addEventListener("click", () => void requestAiRoundReview([holeNumber]));
+  retryButton.addEventListener("click", async () => {
+    setPostRoundExportReady(false, "Refreshing this AI Caddie insight…");
+    try {
+      await requestAiRoundReview([holeNumber]);
+    } finally {
+      setPostRoundExportReady(true);
+    }
+  });
   card.append(retryButton);
 }
 
@@ -4216,7 +5153,10 @@ function escapeHtml(value) {
   })[character]);
 }
 
-const SEPARATE_FEEDBACK_KINDS = new Set(["ai-comment", "adjustment-reward", "shot-result", "position-status"]);
+const SEPARATE_FEEDBACK_KINDS = new Set([
+  "ai-comment", "adjustment-reward", "decision-review", "target-review",
+  "next-shot", "shot-result", "position-status"
+]);
 
 function conversationMessages() {
   return state.gmMessages.filter(message => !SEPARATE_FEEDBACK_KINDS.has(message.kind));
@@ -4228,15 +5168,68 @@ function latestShotFeedback() {
     if (status.kind !== "position-status" || !status.shotUpdateId) continue;
     const related = state.gmMessages.filter(message => message.shotUpdateId === status.shotUpdateId);
     const adjustment = related.find(message => message.kind === "adjustment-reward")?.text;
+    const decision = related.find(message => message.kind === "decision-review")?.text;
+    const target = related.find(message => message.kind === "target-review")?.text;
+    const nextShot = related.find(message => message.kind === "next-shot")?.text;
     const result = related.find(message => message.kind === "shot-result")?.text || "Shot calculated.";
     return {
       shotUpdateId: status.shotUpdateId,
-      result: [adjustment, result].filter(Boolean).join(" "),
-      status: status.text,
+      result,
+      decision: [adjustment, decision].filter(Boolean).join(" ") || "The recorded plan is available in the shot review.",
+      target: target || "The selected target was not recorded for this shot.",
+      status: [status.text, nextShot].filter(Boolean).join(" "),
       aiComments: related.filter(message => message.kind === "ai-comment").map(message => message.text)
     };
   }
   return null;
+}
+
+function currentInPlayPresentation(feedback) {
+  const conditions = shotConditions();
+  const sidehill = sidehillShotPlan(state.ball, normalShotTarget(state.ball));
+  const choices = currentStrategyChoices();
+  const specialized = choices.some(choice => choice.treeRecovery) ? "tree" : choices.some(choice => choice.greensideStrategy) ? "greenside" : null;
+  const primaryConditions = [];
+  const adjustments = [];
+  if (conditions.treeCondition) primaryConditions.push("Direct route has high tree-interference risk.");
+  else {
+    if (conditions.lie === "Heavy rough") primaryConditions.push("Heavy rough");
+    if (sidehill.stance === "ball_above_feet") primaryConditions.push("Ball above your feet");
+    if (sidehill.stance === "ball_below_feet") primaryConditions.push("Ball below your feet");
+    if (conditions.slope === "uphill") primaryConditions.push("Slightly uphill");
+    if (conditions.slope === "downhill") primaryConditions.push("Slightly downhill");
+    if (sidehill.stance !== "level") {
+      const amount = Math.round(Math.abs(sidehill.expected_curve_yards));
+      if (amount) {
+        const direction = sidehill.expected_curve_yards > 0 ? "right" : "left";
+        const aim = sidehill.recommended_aim_yards > 0 ? "right" : "left";
+        adjustments.push(`Expect ~${amount} yd ${direction}`, `Favor ~${Math.round(Math.abs(sidehill.recommended_aim_yards))} yd ${aim}`);
+      }
+    }
+    if (conditions.elevationFeet > 4) adjustments.push(`Plays ~${Math.round(conditions.remaining + Math.abs(conditions.elevationFeet) * .5)} yd`);
+  }
+  const shot = state.shots.at(-1);
+  const canonical = shot ? canonicalAssessmentForGameShot(shot) : null;
+  const label = canonical ? ({
+    [DecisionLabel.PREFERRED]: "Preferred plan",
+    [DecisionLabel.COMPETITIVE]: "Competitive plan",
+    [DecisionLabel.HIGHER_RISK]: "Higher-risk plan",
+    [DecisionLabel.NOT_GRADED]: "Decision not graded"
+  }[canonical.decision.label]) : null;
+  const costly = Boolean(shot && (shot.penalty || ["Water", "Out of bounds", "Bunker", "Trees"].includes(shot.lie)));
+  return buildInPlayPresentation({
+    current: { surface: conditions.lie, distanceYards: conditions.remaining, conditions: primaryConditions, adjustments, specializedBriefing: primaryConditions },
+    specialized,
+    previous: shot ? {
+      decisionLabel: label, risk: Number(shot.risk), costly, penalty: shot.penalty, surface: shot.landingLie || shot.lie,
+      treeOutcome: shot.treeRecovery?.resolved_outcome, details: [
+        `Result: ${feedback?.result || "Recorded shot"}`,
+        `Decision: ${feedback?.decision || "Not recorded"}`,
+        `Outcome vs target: ${feedback?.target || "Not recorded"}`,
+        `Shot: ${shot.club} · ${shot.power}% power`
+      ]
+    } : null
+  });
 }
 
 let lastSpokenShotUpdateId = null;
@@ -4274,7 +5267,7 @@ function updateGmVoiceButton() {
 }
 
 function restoreGmVoicePreference() {
-  state.gmVoiceEnabled = localStorage.getItem(playerStorageKey("gm-voice-enabled")) === "true";
+  state.gmVoiceEnabled = readBrowserValue(playerStorageKey("gm-voice-enabled")) === "true";
   updateGmVoiceButton();
 }
 
@@ -4300,14 +5293,37 @@ function renderShotFeedback(prefix) {
   const aiContainer = $(`#${prefix}-ai-caddie-feedback`);
   if (!container || !aiContainer) return;
   const feedback = latestShotFeedback();
-  container.hidden = !feedback;
+  const presentation = currentInPlayPresentation(feedback);
+  const choices = presentation.specializedDecisionUI ? currentStrategyChoices() : [];
+  const analysis = choices.length ? strategyAnalysisCache.get(strategyAnalysisKey(choices)) || null : null;
+  const strategyCards = choices.length
+    ? `<section class="in-play-strategy" aria-label="${presentation.specializedDecisionUI === "tree" ? "Tree recovery choices" : "Greenside strategy choices"}">
+        <span>${presentation.specializedDecisionUI === "tree" ? "Recovery choices" : "Greenside choices"}</span>
+        <div class="strategy-choice-row" data-count="${choices.length}">${choices.map(choice => strategyChoiceMarkup(choice, analysis)).join("")}</div>
+      </section>`
+    : "";
+  container.hidden = false;
   aiContainer.hidden = !feedback;
+  const primaryLines = [...presentation.primary.conditions, ...presentation.primary.adjustments];
+  const details = presentation.details.map(item => `<li>${escapeHtml(item)}</li>`).join("");
+  container.innerHTML = `
+    <section class="gm-feedback-card immediate-result compact-in-play" aria-live="polite">
+      ${presentation.event ? `<div class="in-play-event"><span>${escapeHtml(presentation.event.label)}</span><strong>${escapeHtml(presentation.event.copy)}</strong></div>` : ""}
+      <div class="in-play-next"><span>Next shot</span><strong>${escapeHtml(presentation.primary.surface)}${presentation.primary.distanceYards == null ? "" : ` · ${presentation.primary.distanceYards} YD`}</strong>${primaryLines.map(line => `<p>${escapeHtml(line)}</p>`).join("")}</div>
+      ${strategyCards}
+      ${presentation.previousShot ? `<details class="in-play-previous"><summary>Previous shot · ${escapeHtml(presentation.previousShot.summary)} <b>Details</b></summary><ul>${details}</ul></details>` : ""}
+    </section>`;
   if (!feedback) return;
-  $(`#${prefix}-shot-result-copy`).textContent = feedback.result;
-  $(`#${prefix}-position-status`).textContent = feedback.status;
   $(`#${prefix}-ai-caddie-copy`).textContent = feedback.aiComments.length
     ? feedback.aiComments.join(" ")
     : "Reviewing shot… Your calculated result is already available below.";
+  if (aiContainer.dataset.shotUpdateId !== feedback.shotUpdateId) {
+    aiContainer.dataset.shotUpdateId = feedback.shotUpdateId;
+    aiContainer.open = false;
+  }
+  if (choices.length && !analysis) {
+    void loadStrategyAnalysis(choices).then(() => renderShotFeedback(prefix)).catch(error => console.warn("In-play strategy analysis could not be loaded.", error));
+  }
 }
 
 function sizeForTwoRecentMessages(container, minimumHeight) {
@@ -4452,15 +5468,16 @@ function interpretGmInstruction(text) {
       const rangeAdvice = exactFeet > PUTTER_RANGE_FEET
         ? `The cup is beyond the ${PUTTER_RANGE_FEET}-foot modeled putter range, so use 100% as a lag putt and prioritize the next putt.`
         : `Use about ${recommendedPace}% pace, ${pace}.`;
-      addGmMessage(`You have ${formatPuttDistance(exactFeet)} to the cup. It is simulated to break about ${formatInches(read.breakInches)} to the ${read.direction}, so start near ${formatInches(read.breakInches)} ${read.startDirection} of the cup. ${rangeAdvice}`);
+      addGmMessage(`You have ${formatPuttDistance(exactFeet)} to the cup. It is simulated to break about ${formatBreak(read.breakInches)} to the ${read.direction}, so start near ${formatBreak(read.breakInches)} ${read.startDirection} of the cup. ${rangeAdvice}`);
       return { blocked: true };
     }
     const chipPlan = recommendedChipPlan();
     if (chipPlan) {
       state.selectedClub = chipPlan.clubIndex;
       state.target = chipPlan.landingPoint;
-      state.swingPower = chipPlan.recommendedPower / 100;
-      state.shotDraft = { club: true, target: true, power: true };
+      state.aimType = AimType.LANDING_TARGET;
+      state.shotDraft = { club: true, target: true, power: false };
+      syncLandingTargetPower();
       updateAll();
       const edgeCopy = chipPlan.greenEdgeYards === null
         ? ""
@@ -4470,7 +5487,7 @@ function interpretGmInstruction(text) {
         : chipPlan.landingDepthYards >= 0
           ? `Land it about ${Math.round(chipPlan.carryYards)} yards from the ball, roughly ${Math.max(0, Math.round(chipPlan.landingDepthYards))} yards onto the green.`
           : `The modeled landing point is ${Math.round(chipPlan.carryYards)} yards from the ball, roughly ${Math.abs(Math.round(chipPlan.landingDepthYards))} yards short of the front edge.`;
-      addGmMessage(`I like ${chipPlan.clubName}.${edgeCopy} ${landingCopy} Let it release about ${Math.round(chipPlan.rollYards)} yards toward the cup. Favor the ${chipPlan.startDirection} side by about ${formatInches(chipPlan.breakInches)}.`);
+      addGmMessage(`I like ${chipPlan.clubName}.${edgeCopy} ${landingCopy} Let it release about ${Math.round(chipPlan.rollYards)} yards toward the cup. Favor the ${chipPlan.startDirection} side by about ${formatBreak(chipPlan.breakInches)}.`);
       return { blocked: true };
     }
     if (currentClub().name === "Putter") {
@@ -4481,7 +5498,7 @@ function interpretGmInstruction(text) {
     const targetAdvice = mapViewMode() === "putting"
       ? "Aim at the cup."
       : distance(state.ball, pin().center_point) <= 210
-        ? "Aim at the pin, or favor the safe side of the green."
+        ? "Aim at the center of the green; use a named caddie plan when you want a verified hazard-specific target."
         : "Aim for the center of a reachable fairway or layup area.";
     addGmMessage(`I like ${club.name}${adjustment > 0 ? " with one club more for the uphill shot" : adjustment < 0 ? " with one club less for the downhill shot" : " at its normal yardage"}. ${targetAdvice}`);
     return { blocked: true };
@@ -4577,6 +5594,7 @@ function interpretGmInstruction(text) {
     targetDescription = `${formatInches(inchOffset[1])} ${offsetDirection} of the cup`;
     state.shotDraft.target = true;
   } else if (mapViewMode() !== "putting" && parsedTarget.landing_yards !== null) {
+    state.aimType = AimType.LANDING_TARGET;
     const landingPoint = projectPointToward(state.ball, pinPoint(), parsedTarget.landing_yards);
     const offsetYards = parsedTarget.lateral_inches === null
       ? 0
@@ -4628,6 +5646,7 @@ function interpretGmInstruction(text) {
   if (targetDescription) {
     state.manualTargetPreview = false;
     rememberStructuredTarget(state.target, { resetAdjustment: true });
+    if (state.aimType === AimType.LANDING_TARGET) syncLandingTargetPower();
   }
 
   const unresolvedTarget = parsedTarget.mentions_targeting && !targetDescription;
@@ -4719,13 +5738,16 @@ function shotRisk() {
   }
   const intentTarget = resolveIntentTarget(state.ball, state.target, club, state.swingPower) || state.target;
   const aim = distance(state.ball, intentTarget);
-  const expected = club.carry * liePenalty();
+  const landingPlan = landingTargetActive() ? (state.shortGamePlan || syncLandingTargetPower()) : null;
+  const expected = landingPlan?.expected_carry ?? club.carry * liePenalty();
   const targetLie = lieAt(intentTarget);
   const uncertainty = 100 - club.accuracy;
   const pattern = club.accuracy >= 86 ? "Tight" : club.accuracy >= 72 ? "Moderate" : club.accuracy >= 56 ? "Wide" : "Very wide";
   const likelyMiss = Math.max(1, Math.round(uncertainty * .11 * gameplayScale()));
   const largerMiss = Math.max(likelyMiss + 1, Math.round(uncertainty * .27 * METERS_TO_YARDS * gameplayScale()));
-  let risk = Math.abs(aim - expected) / Math.max(expected, 1) * 70 + (100 - club.accuracy) * .45;
+  let risk = (landingPlan ? 0 : Math.abs(aim - expected) / Math.max(expected, 1) * 70) + (100 - club.accuracy) * .45;
+  if (landingPlan?.power_status === PowerStatus.MARGINAL) risk += 18;
+  if ([PowerStatus.UNREACHABLE, PowerStatus.UNSAFE_TRAJECTORY].includes(landingPlan?.power_status)) risk += 55;
   if (targetLie.penalty) risk += 35;
   if (targetLie.type === "Bunker" || targetLie.type.includes("rough")) risk += 15;
   risk = Math.round(Math.min(100, risk));
@@ -4733,6 +5755,8 @@ function shotRisk() {
   const copy = targetLie.penalty
     ? `Your intended line finishes through ${targetLie.type.toLowerCase()}. Misses there are likely to cost a stroke.`
     : aim > expected * 1.12 ? `This asks for more than your usual ${club.carry}-yard carry.`
+    : landingPlan
+      ? `${landingPlan.auto_calculated_power}% Auto Power targets ${landingPlan.expected_carry} yards of carry with about ${landingPlan.expected_roll} yards of modeled rollout. Actual carry remains probabilistic.`
     : club.name === "Putter"
       ? `Your line starts on the ${targetLie.type.toLowerCase()}. Pace and the simulated break determine the result.`
       : `${pattern} shot pattern · ${club.accuracy}% club accuracy. A common miss is about ${likelyMiss} yards left or right; a larger miss can reach roughly ${largerMiss} yards. Favor space away from trouble.`;
@@ -4751,7 +5775,7 @@ function hideMapDistancePreview() {
   if (badge) badge.hidden = true;
 }
 
-function showMapDistancePreview(event, yardsFromBall, putting = false, hoverPoint = null) {
+function showMapDistancePreview(event, yardsFromBall, putting = false, hoverPoint = null, yardsToGreenCenter = null) {
   if (!Number.isFinite(yardsFromBall)) {
     hideMapDistancePreview();
     return;
@@ -4762,6 +5786,8 @@ function showMapDistancePreview(event, yardsFromBall, putting = false, hoverPoin
   if (putting && hoverPoint) {
     const feetFromCup = distance(hoverPoint, pin().center_point) * 3;
     badge.textContent = `${formatPuttDistance(yardsFromBall * 3)} from ball · ${formatPuttDistance(feetFromCup)} from cup`;
+  } else if (Number.isFinite(yardsToGreenCenter)) {
+    badge.textContent = `${Math.round(yardsFromBall)} yd from ball · ${Math.round(yardsToGreenCenter)} yd to green center`;
   } else {
     badge.textContent = `${Math.round(yardsFromBall)} yd from ball`;
   }
@@ -4770,8 +5796,89 @@ function showMapDistancePreview(event, yardsFromBall, putting = false, hoverPoin
   badge.hidden = false;
 }
 
+function updateLiveMapMeasurement(event) {
+  const svg = $("#course-map svg");
+  if (!svg) return;
+  const screenPoint = svgPointFromPointer(event, svg);
+  const origin = liveGpsBallPoint();
+  if (!screenPoint || !origin) {
+    hideMapDistancePreview();
+    return;
+  }
+  const target = coursePoint(screenPoint[0], screenPoint[1]);
+  const greenCenter = centerOfPolygon(hole().geometries.green_complex.polygon);
+  showMapDistancePreview(event, distance(origin, target), false, target, distance(target, greenCenter));
+}
+
+function onLiveMapMeasurePointerDown(event) {
+  if (!state.liveGpsView || event.pointerType === "mouse") return;
+  event.preventDefault();
+  liveMapMeasurePointerId = event.pointerId;
+  liveMapMeasureSurface = event.currentTarget;
+  updateLiveMapMeasurement(event);
+  try {
+    liveMapMeasureSurface.setPointerCapture?.(event.pointerId);
+  } catch {
+    // Older mobile Safari can reject SVG pointer capture. Window-level
+    // move/end listeners keep the temporary measurement working there.
+  }
+}
+
+function onLiveMapMeasurePointerMove(event) {
+  if (!state.liveGpsView || event.pointerId !== liveMapMeasurePointerId) return;
+  event.preventDefault();
+  updateLiveMapMeasurement(event);
+}
+
+function endLiveMapMeasurement(event) {
+  if (event.pointerId !== liveMapMeasurePointerId) return;
+  const surface = liveMapMeasureSurface;
+  liveMapMeasurePointerId = null;
+  liveMapMeasureSurface = null;
+  try {
+    if (surface?.hasPointerCapture?.(event.pointerId)) surface.releasePointerCapture(event.pointerId);
+  } catch {
+    // The pointer may already have been released by the browser.
+  }
+  hideMapDistancePreview();
+}
+
+function onMapDistancePreviewLeave(event) {
+  if (event.pointerType !== "mouse" && event.pointerId === liveMapMeasurePointerId) return;
+  hideMapDistancePreview();
+}
+
+function preventLiveMapNativeGesture(event) {
+  if (state.liveGpsView) event.preventDefault();
+}
+
+function liveMapInstructionText() {
+  return liveGpsBallPoint()
+    ? "Touch and hold the map to measure distance from the ball. Drag to move the point."
+    : "No location is recorded on this hole. Tap Record GPS to set the ball position first.";
+}
+
+function speakLiveMapInstruction() {
+  if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
+  const utterance = new SpeechSynthesisUtterance(liveMapInstructionText());
+  utterance.lang = document.documentElement.lang || "en-US";
+  utterance.rate = .94;
+  utterance.pitch = 1;
+  liveMapInstructionUtterance = utterance;
+  utterance.addEventListener("end", () => {
+    if (liveMapInstructionUtterance === utterance) liveMapInstructionUtterance = null;
+  });
+  utterance.addEventListener("error", () => {
+    if (liveMapInstructionUtterance === utterance) liveMapInstructionUtterance = null;
+  });
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.resume?.();
+  window.speechSynthesis.speak(utterance);
+}
+
 function onMapDistancePreview(event) {
-  if (event.pointerType !== "mouse" || targetDragging || (state.holeFinished && !state.liveGpsView)) {
+  if (event.pointerType !== "mouse") return;
+  if (targetDragging || (state.holeFinished && !state.liveGpsView)) {
     hideMapDistancePreview();
     return;
   }
@@ -4784,7 +5891,16 @@ function onMapDistancePreview(event) {
   const hoverPoint = coursePoint(screenPoint[0], screenPoint[1]);
   const origin = state.liveGpsView ? liveGpsBallPoint() : state.ball;
   if (!origin) return hideMapDistancePreview();
-  showMapDistancePreview(event, distance(origin, hoverPoint), !state.liveGpsView && mapViewMode() === "putting", hoverPoint);
+  const yardsToGreenCenter = state.liveGpsView
+    ? distance(hoverPoint, centerOfPolygon(hole().geometries.green_complex.polygon))
+    : null;
+  showMapDistancePreview(
+    event,
+    distance(origin, hoverPoint),
+    !state.liveGpsView && mapViewMode() === "putting",
+    hoverPoint,
+    yardsToGreenCenter
+  );
 }
 
 function onGreenDistancePreview(event) {
@@ -4836,9 +5952,11 @@ function setTargetFromPointer(event, announce = false) {
       ? `${Math.round(lineDistance * 3)} feet`
       : `${Math.round(lineDistance)} yards`;
     $("#distance-badge").hidden = true;
-    addGmMessage(mapViewMode() === "putting"
+    replaceGmTargetMessage(mapViewMode() === "putting"
       ? `Aim line set at ${lineDistanceLabel}. Drag the marker or use the one-inch arrows to refine the line, then tell me the club and pace percentage.`
-      : `Aim line set at ${lineDistanceLabel}. Drag the marker to refine the line, then choose a ¼, ½, ¾, or full swing.`);
+      : landingTargetActive()
+        ? `Landing target set at ${lineDistanceLabel}. Drag it to refine the landing spot, then choose a club; Auto Power will calculate the nominal swing.`
+        : `Direction target set at ${lineDistanceLabel}. Drag it to refine the aim line, then choose a ¼, ½, ¾, or full swing.`);
   }
   return true;
 }
@@ -4896,13 +6014,14 @@ function onTargetPointerUp(event) {
     const targetDistance = distance(state.ball, state.target);
     const unit = mapViewMode() === "putting" ? "feet" : "yards";
     const amount = mapViewMode() === "putting" ? Math.round(targetDistance * 3) : Math.round(targetDistance);
-    addGmMessage(`Aim line refined to ${amount} ${unit}. Use the arrows for final adjustment or play the shot.`);
+    replaceGmTargetMessage(`${landingTargetActive() ? "Landing target" : "Aim line"} refined to ${amount} ${unit}. Review the calculated shot, then play.`);
   }
   targetDragging = false;
   targetDragMoved = false;
   targetPointerId = null;
   targetDragStart = null;
   renderMap();
+  updateShotDesk();
 }
 
 function cancelTargetPointerDrag() {
@@ -4929,10 +6048,12 @@ function recommendClub() {
     state.selectedClub = chipPlan.clubIndex;
     return;
   }
-  const index = state.profile.clubs
-    .map((club, i) => ({ i, diff: Math.abs(club.carry * liePenalty() - Math.min(targetDistance, state.profile.clubs[0].carry)) }))
-    .sort((a, b) => a.diff - b.diff)[0].i;
-  state.selectedClub = index;
+  const index = recommendNonPutterClubIndex({
+    clubs: state.profile.clubs,
+    targetDistanceYards: Math.min(targetDistance, state.profile.clubs[0].carry),
+    lieMultiplier: liePenalty()
+  });
+  if (index >= 0) state.selectedClub = index;
 }
 
 function autoSelectClubForLie() {
@@ -4942,6 +6063,363 @@ function autoSelectClubForLie() {
     state.selectedClub = putterIndex;
     state.swingPower = recommendedPuttPower();
   }
+}
+
+function challengeActive() {
+  return Boolean(state.challenge && ["READY", "IN_PROGRESS", "COMPLETE"].includes(state.challenge.status));
+}
+
+function challengeSlot() {
+  if (state.competition?.challenge_id === state.challenge?.id && Number.isInteger(state.competition.challenge_slot)) {
+    return state.competition.challenge_slot - 1;
+  }
+  return state.challenge?.current_slot ?? 0;
+}
+
+function challengeStorageKey() {
+  return playerStorageKey(CHALLENGE_STORAGE_SUFFIX);
+}
+
+function readChallengeAudioSettings() {
+  return {
+    ...DEFAULT_AUDIO_SETTINGS,
+    ...readBrowserJson(playerStorageKey("challenge-audio-settings"), {})
+  };
+}
+
+function applyChallengeAudioSettingsFromForm() {
+  const settings = {
+    master: 1,
+    music: Number($("#challenge-music-volume")?.value ?? 45) / 100,
+    announcer: Number($("#challenge-announcer-volume")?.value ?? 80) / 100,
+    sfx: Number($("#challenge-sfx-volume")?.value ?? 80) / 100,
+    crowd: Number($("#challenge-crowd-volume")?.value ?? 50) / 100,
+    announcerMode: $("#challenge-announcer")?.value || "fun"
+  };
+  challengeAudio.applySettings(settings);
+  writeBrowserValue(playerStorageKey("challenge-audio-settings"), JSON.stringify(settings));
+  return settings;
+}
+
+function renderChallengeSetup() {
+  const profiles = [...builtInProfiles, ...state.customProfiles];
+  $("#challenge-profile").innerHTML = profiles.map(profile => `<option value="${escapeHtml(profile.id)}" ${profile.id === state.profile.id ? "selected" : ""}>${escapeHtml(profile.name)}</option>`).join("");
+  $("#challenge-tee").value = state.tee;
+  const audio = readChallengeAudioSettings();
+  $("#challenge-announcer").value = audio.announcerMode;
+  $("#challenge-music-volume").value = Math.round(audio.music * 100);
+  $("#challenge-announcer-volume").value = Math.round(audio.announcer * 100);
+  $("#challenge-sfx-volume").value = Math.round(audio.sfx * 100);
+  $("#challenge-crowd-volume").value = Math.round(audio.crowd * 100);
+  $("#challenge-setup-status").textContent = `${visibleCourses().length} installed courses available. Uses local published data only.`;
+}
+
+function parseChallengeScorecard(scoreText) {
+  const lines = scoreText.trim().split(/\r?\n/);
+  const headers = lines.shift().split(",");
+  return lines.map(line => Object.fromEntries(line.split(",").map((value, index) => [headers[index], value])))
+    .filter(row => /^\d+$/.test(row.Hole))
+    .map(row => ({
+      Hole: Number(row.Hole), Par: Number(row.Par), Handicap: Number(row.Handicap),
+      Yards_Blue: Number(row.Yards_Blue ?? row.Blue_Yards),
+      Yards_White: Number(row.Yards_White ?? row.White_Yards),
+      Yards_Red: Number(row.Yards_Red ?? row.Red_Yards)
+    }));
+}
+
+async function challengeCandidates() {
+  const courseRows = await Promise.all(visibleCourses().map(async course => {
+    try {
+      const response = await fetch(`${course.dataPath}/${course.scorecard}?v=${encodeURIComponent(course.dataVersion)}`);
+      if (!response.ok) return [];
+      return parseChallengeScorecard(await response.text()).filter(row => [3, 4, 5].includes(row.Par)).map(row => ({
+        course_id: course.id,
+        course_version_id: String(course.dataVersion),
+        course_name: course.name,
+        source_hole_number: row.Hole,
+        par: row.Par,
+        valid: [row.Yards_Blue, row.Yards_White, row.Yards_Red].some(Number.isFinite)
+      }));
+    } catch {
+      return [];
+    }
+  }));
+  return courseRows.flat();
+}
+
+function newChallengeId(seed) {
+  return `challenge-${Date.now().toString(36)}-${Number(seed).toString(36)}`;
+}
+
+function challengeExecutionIdentity(participantType, strokeIndex) {
+  const base = participantType === ParticipantType.HUMAN
+    ? state.challenge.seeds.player_execution_seed
+    : state.challenge.seeds.gm_execution_seed;
+  return competitionExecutionIdentity(base, challengeSlot() + 1, strokeIndex, participantType);
+}
+
+function persistChallengeLocal() {
+  if (!state.challenge) return;
+  if (state.competition && state.roundState) {
+    const slot = challengeSlot();
+    state.challenge.human_state.holes[slot] = structuredClone(state.roundState.holes[0]);
+    state.challenge.strategist_state.holes[slot] = structuredClone(state.competition.strategist_round.holes[0]);
+    state.challenge.updated_at = new Date().toISOString();
+  }
+  writeBrowserValue(challengeStorageKey(), JSON.stringify(compactChallengeForStorage(state.challenge)));
+  if (state.player) void syncPlayerChallenge().catch(error => console.warn("Challenge sync failed", error));
+}
+
+async function syncPlayerChallenge() {
+  if (!state.player || !state.challenge) return;
+  const slot = state.challenge.holes[challengeSlot()];
+  const challenge = compactChallengeForStorage(state.challenge);
+  const geometry_snapshot = state.holes[0] ? {
+    challenge_slot: challengeSlot() + 1,
+    course_id: slot.course_id,
+    course_version_id: slot.course_version_id,
+    source_hole_number: slot.source_hole_number,
+    simulation_surfaces: canonicalSurfaces()
+  } : null;
+  await playerApi("/api/player/challenge", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge, geometry_snapshot })
+  });
+}
+
+function renderChallengeMatchCard() {
+  const card = $("#challenge-match-card");
+  const active = challengeActive();
+  if (!card) return;
+  card.hidden = !active;
+  document.body.classList.toggle("challenge-active", active);
+  if (!active) return;
+  $("#challenge-match-hole").textContent = `Hole ${challengeSlot() + 1} of 3`;
+  $("#challenge-match-holes").innerHTML = state.challenge.holes.map((item, index) => `
+    <article data-state="${item.status.toLowerCase()}">
+      <b>${index + 1}</b><span>Par ${item.par} · ${escapeHtml(item.course_name || item.course_id)}</span>
+      <small>${item.player_score ?? "—"}:${item.gm_score ?? "—"}</small>
+    </article>`).join("");
+  const voiceOn = challengeAudio.settings.announcerMode !== "off";
+  $("#challenge-audio-toggle").textContent = voiceOn ? "Voice on" : "Voice off";
+  $("#challenge-audio-toggle").setAttribute("aria-pressed", String(voiceOn));
+  const displayedSlot = challengeSlot();
+  const nextButton = $("#challenge-next");
+  const readyToContinue = state.challenge.holes[displayedSlot]?.status === "COMPLETE";
+  nextButton.hidden = !readyToContinue;
+  nextButton.disabled = state.challengeLoading;
+  nextButton.textContent = state.challenge.status === "COMPLETE" ? "See result" : "Next hole →";
+}
+
+async function loadChallengeSlotCandidate(slotIndex) {
+  const ref = state.challenge.holes[slotIndex];
+  const course = courseCatalog[ref.course_id];
+  if (!course) throw new Error(`Course ${ref.course_id} is no longer installed`);
+  state.challengeLoading = true;
+  const payload = await challengeHoleLoader.load(course, ref.source_hole_number);
+  const scorecard = parseChallengeScorecard(payload.scoreText);
+  const row = scorecard.find(entry => entry.Hole === ref.source_hole_number);
+  if (!row || row.Par !== ref.par) throw new Error("Selected challenge hole no longer matches its published scorecard");
+  if (!Number.isFinite(row[`Yards_${ref.tee_id}`]) || row[`Yards_${ref.tee_id}`] <= 0) {
+    throw new Error(`${ref.tee_id} tee is unavailable on the selected hole`);
+  }
+  let holeData = payload.rawHole.hole_metadata ? payload.rawHole : normalizeWarrenbrookHole(payload.rawHole);
+  holeData = withoutParThreeFairway(holeData, row.Par);
+  holeData = expandSandHazards(holeData, sandHazardScaleForCourse(course, holeData));
+  holeData = generatedGreenHole(holeData, {
+    courseId: course.id,
+    holeNumber: ref.source_hole_number,
+    targetWidthYards: 40,
+    courseUnitsPerYard: 1 / METERS_TO_YARDS
+  });
+  ensurePlayablePinZones(holeData);
+  holeData = ensureHazardFreePinZones(holeData);
+  state.courseId = course.id;
+  state.course = course;
+  state.holes = [holeData];
+  state.scorecard = [{ ...row, Hole: 1 }];
+  state.holeIndex = 0;
+  state.tee = ref.tee_id;
+  state.pinIndex = state.challenge.seeds.pin_condition_seed % holeData.geometries.green_complex.pin_zones.length;
+  ref.pin_ref = holeData.geometries.green_complex.pin_zones[state.pinIndex]?.zone_id || `pin-${state.pinIndex}`;
+  const competition = createCompetitionRound({
+    courseId: course.id,
+    tee: state.tee,
+    roundSeed: state.challenge.seeds.selection_seed,
+    humanProfile: state.challenge.player_profile_snapshot,
+    pace: "fast",
+    coachingEnabled: false
+  });
+  competition.mode = "three_hole_challenge";
+  competition.challenge_id = state.challenge.id;
+  competition.challenge_slot = slotIndex + 1;
+  competition.human_round = createRoundState({
+    courseId: course.id,
+    roundSeed: state.challenge.seeds.player_execution_seed,
+    tee: state.tee
+  });
+  competition.human_round.holes[0] = structuredClone(state.challenge.human_state.holes[slotIndex]);
+  competition.strategist_round.holes[0] = structuredClone(state.challenge.strategist_state.holes[slotIndex]);
+  state.competition = competition;
+  state.roundState = competition.human_round;
+  state.roundSeed = state.challenge.seeds.player_execution_seed;
+  state.profile = normalizeProfile(structuredClone(state.challenge.player_profile_snapshot));
+  state.challengeLoading = false;
+  syncRoundStateCaches();
+  resetHole();
+  if (!currentStrategyChoices().length) throw new Error("This hole has no legal opening route for the selected profile");
+  renderChallengeMatchCard();
+  updateAll();
+  challengeAudio.setMusicState(slotIndex === 2 ? "FINAL_HOLE" : "NORMAL_PLAY");
+  challengeAudio.dispatch({ kind: "hole_start", slot: slotIndex + 1 });
+  const next = state.challenge.holes[slotIndex + 1];
+  if (next && courseCatalog[next.course_id]) void challengeHoleLoader.prefetch(courseCatalog[next.course_id], next.source_hole_number);
+}
+
+async function loadChallengeSlot(slotIndex) {
+  const rejected = [];
+  let lastError = null;
+  const candidates = await challengeCandidates();
+  const ordered = orderedChallengeCandidates(candidates, state.challenge.seeds.selection_seed, rejected);
+  const maximumAttempts = ordered[slotIndex]?.length || 1;
+  for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
+    try {
+      await loadChallengeSlotCandidate(slotIndex);
+      return;
+    } catch (error) {
+      lastError = error;
+      rejected.push(challengeHoleKey(state.challenge.holes[slotIndex]));
+      if (attempt + 1 >= maximumAttempts) break;
+      try {
+        state.challenge.holes = replaceIneligibleHole(state.challenge.holes, slotIndex, ordered, rejected);
+      } catch {
+        break;
+      }
+    }
+  }
+  state.challengeLoading = false;
+  throw lastError || new Error(`No playable Par ${state.challenge.holes[slotIndex]?.par || ""} replacement is available`);
+}
+
+async function startChallengeFromSetup(event) {
+  event.preventDefault();
+  const startButton = event.currentTarget.querySelector("button[type='submit']");
+  startButton.disabled = true;
+  $("#challenge-setup-status").textContent = "Building a Par 3, Par 4, and Par 5…";
+  try {
+    challengeAudio.unlock();
+    applyChallengeAudioSettingsFromForm();
+    const profileId = $("#challenge-profile").value;
+    const profile = [...builtInProfiles, ...state.customProfiles].find(candidate => candidate.id === profileId) || state.profile;
+    const teeId = $("#challenge-tee").value;
+    const selectionSeed = newRoundSeed();
+    const seeds = challengeSeeds(selectionSeed);
+    const recent = readBrowserJson(playerStorageKey("challenge-recent-holes"), []);
+    const holes = generateChallengeHoles(await challengeCandidates(), { selectionSeed, teeId, recentKeys: recent });
+    const gmProfile = cloneStrategistProfile(profile);
+    state.challengeReturn ||= { courseId: state.courseId, holeIndex: state.holeIndex };
+    state.challenge = startChallenge(createChallengeState({
+      id: newChallengeId(selectionSeed), holes, seeds,
+      playerProfile: profile, gmProfile,
+      implementationVersions: {
+        simulation: ENGINE_VERSION,
+        putting: PUTTING_ENGINE_VERSION,
+        evaluator: MULTI_RUN_EVALUATOR_VERSION,
+        strategy_analysis: ROUND_STRATEGY_VERSION,
+        decision_scoring: DECISION_SCORE_VERSION,
+        canonical_assessment: ASSESSMENT_VERSION,
+        decision_policy: DECISION_POLICY_VERSION
+      }
+    }));
+    writeBrowserValue(playerStorageKey("challenge-recent-holes"), JSON.stringify(holes.map(challengeHoleKey)));
+    $("#challenge-dialog").close();
+    await loadChallengeSlot(0);
+    persistChallengeLocal();
+    challengeAudio.dispatch({ kind: "challenge_start" });
+  } catch (error) {
+    console.error(error);
+    $("#challenge-setup-status").textContent = `Challenge could not start: ${error.message}`;
+  } finally {
+    startButton.disabled = false;
+  }
+}
+
+async function restoreChallenge() {
+  const saved = readBrowserJson(challengeStorageKey(), null);
+  if (!saved || saved.status === "COMPLETE") return false;
+  try {
+    state.challenge = validateChallengeState(saved);
+    state.challengeReturn = { courseId: state.courseId, holeIndex: state.holeIndex };
+    challengeAudio.applySettings(readChallengeAudioSettings());
+    await loadChallengeSlot(state.challenge.current_slot);
+    return true;
+  } catch (error) {
+    console.warn("Ignored an invalid saved three-hole challenge", error);
+    state.challenge = null;
+    removeBrowserValue(challengeStorageKey());
+    return false;
+  }
+}
+
+function completeActiveChallengeSlot() {
+  if (!challengeActive() || !state.competition || state.challengeLoading) return false;
+  const playerHole = state.roundState.holes[0];
+  const gmHole = state.competition.strategist_round.holes[0];
+  if (!Number.isInteger(playerHole.score) || !Number.isInteger(gmHole.score)) return false;
+  const slot = challengeSlot();
+  if (state.challenge.holes[slot].status === "COMPLETE") return true;
+  state.challenge = recordChallengeHole(state.challenge, {
+    slot,
+    playerScore: playerHole.score,
+    gmScore: gmHole.score,
+    humanHole: playerHole,
+    strategistHole: gmHole,
+    strategySummary: state.competition.hole_summaries[0]
+  });
+  const official = officialMatchState(state.challenge, slot);
+  challengeAudio.dispatch({ kind: "hole_complete", relative: playerHole.score - state.scorecard[0].Par, official_leader: official.leader });
+  persistChallengeLocal();
+  renderChallengeMatchCard();
+  return true;
+}
+
+function renderChallengeComplete() {
+  const result = state.challenge.final_result || officialMatchState(state.challenge, 2);
+  const winner = result.leader === "PLAYER" ? `You win by ${result.margin}` : result.leader === "GAME_MASTER" ? `Game Master wins by ${result.margin}` : "Match tied";
+  $("#challenge-complete-title").textContent = winner;
+  $("#challenge-final-score").innerHTML = `<article><span>YOU</span><strong>${result.player}</strong><small>Total strokes</small></article><b>VS</b><article><span>GAME MASTER</span><strong>${result.gm}</strong><small>Total strokes</small></article>`;
+  $("#challenge-recap").innerHTML = state.challenge.holes.map((hole, index) => `<article><strong>Hole ${index + 1}</strong><span>Par ${hole.par} · ${escapeHtml(hole.course_name || hole.course_id)} #${hole.source_hole_number}</span><b>${hole.player_score}</b><b>${hole.gm_score}</b></article>`).join("");
+  $("#challenge-complete-dialog").showModal();
+  challengeAudio.setMusicState(result.leader === "PLAYER" ? "VICTORY" : "END");
+  challengeAudio.dispatch({ kind: "challenge_complete" });
+}
+
+async function continueChallenge() {
+  if (!state.challenge) return;
+  if (state.challenge.status === "COMPLETE") {
+    renderChallengeComplete();
+    return;
+  }
+  await loadChallengeSlot(state.challenge.current_slot);
+}
+
+async function exitChallenge() {
+  if (!state.challenge) return;
+  challengeAudio.cancel();
+  state.challenge = null;
+  state.competition = null;
+  state.competitionPendingTurn = null;
+  removeBrowserValue(challengeStorageKey());
+  document.body.classList.remove("challenge-active");
+  renderChallengeMatchCard();
+  const restore = state.challengeReturn || { courseId: preferredCourseId("meadows"), holeIndex: 0 };
+  state.challengeReturn = null;
+  state.holeIndex = restore.holeIndex || 0;
+  await loadData(restore.courseId);
+  resetHole();
+  renderCompetitionStatus();
+  updateAll();
 }
 
 function competitionActive() {
@@ -4954,6 +6432,20 @@ function competitionExecutionStrokeIndex(fallback) {
   return turn && [CompetitionPhase.BOTH_DECISIONS_LOCKED, CompetitionPhase.RESOLVING].includes(state.competition.phase)
     ? turn.paired_stroke_index
     : fallback;
+}
+
+function activeCompetitionExecutionIdentity(participantType, fallbackStrokeIndex) {
+  const strokeIndex = competitionExecutionStrokeIndex(fallbackStrokeIndex);
+  if (challengeActive()) return challengeExecutionIdentity(participantType, strokeIndex);
+  if (!competitionActive()) {
+    return { roundSeed: state.roundSeed, holeNumber: state.holeIndex + 1, strokeIndex };
+  }
+  return competitionExecutionIdentity(
+    state.competition.round_seed,
+    state.holeIndex + 1,
+    strokeIndex,
+    participantType
+  );
 }
 
 function strategistInitialHoleState() {
@@ -5027,11 +6519,14 @@ function prepareCompetitionTurn(humanDecision) {
       };
     }
     const start = [...state.ball];
-    const identity = {
-      roundSeed: state.roundSeed,
-      holeNumber: state.holeIndex + 1,
-      strokeIndex: turn.paired_stroke_index
-    };
+    const identity = challengeActive()
+      ? challengeExecutionIdentity(ParticipantType.AI_STRATEGIST, turn.paired_stroke_index)
+      : competitionExecutionIdentity(
+          state.competition.round_seed,
+          state.holeIndex + 1,
+          turn.paired_stroke_index,
+          ParticipantType.AI_STRATEGIST
+        );
     if (currentLieType() === "Green") {
       const read = puttingRead(start);
       const offsetYards = read.breakInches / 36 * (read.startDirection === "right" ? 1 : -1);
@@ -5068,15 +6563,38 @@ function prepareCompetitionTurn(humanDecision) {
     const choices = currentStrategyChoices();
     if (!choices.length) throw new Error("No legal Game Master strategy candidates were generated.");
     const analysis = runStrategyAnalysis(choices);
-    const selection = selectSmartExpectedScore(choices, analysis, {
+    const genericSelection = selectSmartExpectedScore(choices, analysis, {
       preferredScoringRange: [Math.max(25, preferredApproachDistance() - 20), preferredApproachDistance() + 20]
     });
+    const treeChoices = choices.filter(choice => choice.treeRecovery);
+    const selection = treeChoices.length
+      ? (() => {
+          const candidate = [...treeChoices].sort((first, second) =>
+            first.treeRecovery.reward.overall_expected_leave_yards - second.treeRecovery.reward.overall_expected_leave_yards ||
+            second.treeRecovery.probabilities.clean_escape - first.treeRecovery.probabilities.clean_escape
+          )[0];
+          return { ...genericSelection, candidate, summary: analysis.candidates[candidate.id] || genericSelection.summary,
+            expected_score: candidate.treeRecovery.reward.overall_expected_leave_yards };
+        })()
+      : genericSelection;
     const choice = selection.candidate;
     const candidate = strategySimulationCandidate(choice);
-    const packet = candidate.engine === "greenside"
+    let packet = candidate.engine === "greenside"
       ? simulateGreensideShot(candidate.context, identity)
       : simulateFullShot(candidate.context, identity);
     let landing = pointArray(coursePointFromCanonical(packet.resolved_ball || packet.landing));
+    let treeRecoveryResolution = null;
+    if (choice.treeRecovery) {
+      treeRecoveryResolution = resolveTreeRecoveryOutcome(choice.treeRecovery.probabilities, `${identity.roundSeed}:${identity.holeNumber}:${identity.strokeIndex}:${choice.id}:gm`);
+      landing = applyTreeRecoveryContact({ start, landing, resolution: treeRecoveryResolution });
+      packet = {
+        ...packet,
+        landing: canonicalPoint(landing),
+        resolved_ball: canonicalPoint(landing),
+        total_yards: distance(start, landing),
+        remaining_distance_yards: distance(landing, pin().center_point)
+      };
+    }
     const resultLie = packet.relief
       ? resultLieFromSurface(packet.relief.resulting_surface)
       : resultLieFromSurface(packet.resolved_surface || packet.landing_surface);
@@ -5103,8 +6621,20 @@ function prepareCompetitionTurn(humanDecision) {
       strategyChoice: {
         id: choice.id, title: choice.title, objective: choice.objective, target_label: choice.targetLabel,
         probability_analysis: selection.summary, expected_score: selection.expected_score,
-        analysis_identity: { seed: analysis.analysis_seed, sample_count: analysis.sample_count }
-      }
+        analysis_identity: { seed: analysis.analysis_seed, sample_count: analysis.sample_count },
+        tree_recovery: choice.treeRecovery ? { ...structuredClone(choice.treeRecovery), ...treeRecoveryResolution } : null,
+        tree_recovery_options: choice.treeRecovery ? choices.filter(item => item.treeRecovery).map(item => ({
+          id: item.id, title: item.title, target: structuredClone(item.target), tree_recovery: structuredClone(item.treeRecovery)
+        })) : null,
+        greenside_strategy: choice.greensideStrategy ? structuredClone(choice.greensideStrategy) : null,
+        greenside_strategy_options: choice.greensideStrategy ? choices.filter(item => item.greensideStrategy).map(item => ({
+          id: item.id, title: item.title, objective: item.objective, club_index: item.clubIndex,
+          club: item.clubName, power_percent: item.power, target: structuredClone(item.target),
+          greenside_strategy: structuredClone(item.greensideStrategy),
+          probability_analysis: structuredClone(analysis.candidates[item.id] || null)
+        })) : null
+      },
+      treeRecovery: choice.treeRecovery ? { ...structuredClone(choice.treeRecovery), ...treeRecoveryResolution } : null
     };
     return {
       kind: "shot", choice, summary: selection.summary,
@@ -5128,7 +6658,11 @@ function prepareCompetitionTurn(humanDecision) {
   prepared.decision.explanation = prepared.explanation;
   state.competition = lockCompetitionDecision(state.competition, ParticipantType.AI_STRATEGIST, prepared.decision);
   state.competitionPendingTurn = prepared;
-  saveCompetition(localStorage, state.competition, state.player?.id);
+  try {
+    cacheActiveCompetition();
+  } catch (error) {
+    console.warn("The resumed Game Master round could not be cached in this browser.", error);
+  }
   renderCompetitionStatus();
   return prepared;
 }
@@ -5149,7 +6683,11 @@ function finalizeCompetitionTurn(humanResult, humanDecisionScore) {
   }
   state.competition.human_round = structuredClone(state.roundState);
   state.competition = recordCompetitionHoleSummary(state.competition, state.holeIndex);
-  saveCompetition(localStorage, state.competition, state.player?.id);
+  if (challengeActive()) {
+    completeActiveChallengeSlot();
+  } else {
+    cacheActiveCompetition();
+  }
   state.competitionPendingTurn = null;
   renderCompetitionStatus();
   renderMap();
@@ -5180,31 +6718,10 @@ async function requestCompetitionDecisionExplanation(turnId) {
   current.coach_explanation = response?.reason
     ? { ...response, unavailable: false }
     : { reason: "AI explanation temporarily unavailable. The verified strategy data remains authoritative.", unavailable: true };
-  saveCompetition(localStorage, state.competition, state.player?.id);
+  cacheActiveCompetition();
   if (state.competitionComparisonTurnId === turnId && state.competitionComparisonOpen) {
-    $("#comparison-why-copy").textContent = current.coach_explanation.reason;
+    $("#comparison-why-reason").textContent = current.coach_explanation.reason;
   }
-}
-
-function completeStrategistHoleAfterHuman() {
-  if (!competitionActive() || !state.holeFinished) return;
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const strategist = activeStrategistHoleState();
-    if (strategist?.hole_finished) break;
-    if (state.competition.phase === CompetitionPhase.COMPARISON_READY) {
-      state.competition = continueCompetition(state.competition);
-    }
-    const prepared = prepareCompetitionTurn({
-      kind: "human_holed_out",
-      club: null,
-      power_percent: null,
-      target: null,
-      target_label: "Human already holed"
-    });
-    if (!prepared) break;
-    finalizeCompetitionTurn(null, 100);
-  }
-  saveCompetition(localStorage, state.competition, state.player?.id);
 }
 
 function competitionScoreText(value) {
@@ -5213,40 +6730,471 @@ function competitionScoreText(value) {
 }
 
 function competitionScores() {
+  if (challengeActive()) {
+    const standing = challengeScoreToPar(state.challenge, challengeSlot());
+    return {
+      humanScores: state.challenge.holes.map(hole => hole.player_score),
+      strategistScores: state.challenge.holes.map(hole => hole.gm_score),
+      human: { strokes: standing.player, relative_to_par: standing.player_to_par, holes_completed: standing.completed },
+      strategist: { strokes: standing.gm, relative_to_par: standing.gm_to_par, holes_completed: standing.completed }
+    };
+  }
   const humanScores = state.competition?.human_round?.holes?.map(holeState => holeState.score ?? null) || state.scores;
   const strategistScores = state.competition?.strategist_round?.holes?.map(holeState => holeState.score ?? null) || Array(18).fill(null);
   const pars = state.scorecard.map(entry => entry.Par);
+  const pairedTotals = competitionPairedTotals(state.competition, pars);
   return {
     humanScores,
     strategistScores,
-    human: competitionTotals(humanScores, pars),
-    strategist: competitionTotals(strategistScores, pars)
+    ...pairedTotals
   };
 }
 
+function academyActive() {
+  return Boolean(state.academy && ["LOADING", "CHOOSING", "PLAYING", "RESULT"].includes(state.academy.status));
+}
+
+function academyProfiles() {
+  return [...builtInProfiles, ...state.customProfiles];
+}
+
+function renderAcademySetup() {
+  $("#academy-course").innerHTML = visibleCourses()
+    .map(course => `<option value="${escapeHtml(course.id)}" ${course.id === state.courseId ? "selected" : ""}>${escapeHtml(course.name)}</option>`)
+    .join("");
+  $("#academy-profile").innerHTML = academyProfiles()
+    .map(profile => `<option value="${escapeHtml(profile.id)}" ${profile.id === state.profile.id ? "selected" : ""}>${escapeHtml(profile.name)}</option>`)
+    .join("");
+  $("#academy-tee").value = state.tee;
+  $("#academy-setup-status").textContent = "Rotates through the selected course’s Par 5s and avoids recently played lessons.";
+}
+
+function openAcademySetup() {
+  renderAcademySetup();
+  $("#academy-dialog").showModal();
+}
+
+function currentAcademyStrategyChoices() {
+  if (!academyActive() || !state.profile || !state.ball || state.holeFinished || currentLieType() === "Green") return [];
+  try {
+    const input = {
+      start: canonicalPoint(state.ball),
+      pin: canonicalPoint(pin().center_point),
+      centerline: hole().centerline_waypoints.map(waypoint => canonicalPoint(waypoint.point)),
+      fairways: hole().geometries.fairway_segments.map(segment => segment.polygon.map(canonicalPoint)),
+      surfaces: canonicalSurfaces(),
+      clubs: state.profile.clubs,
+      lieMultiplier: liePenalty(),
+      preferredApproachYards: preferredApproachDistance(),
+      startSurface: currentLieType(),
+      recoveryRequired: state.shots.at(-1)?.penalty > 0 || currentLieType() === "Trees"
+    };
+    const treeCondition = treeConditionAt(state.ball);
+    return treeCondition ? buildTreeRecoveryChoices({ ...input, treeCondition }) : buildAcademyStrategyChoices(input);
+  } catch (error) {
+    console.warn("Academy choices could not be generated.", error);
+    return [];
+  }
+}
+
+function academyChoiceTitle(choice) {
+  const id = choice.sourcePlanId || choice.id;
+  if (id === "smart") {
+    return choice.objective === "Preferred approach distance"
+      ? "Play to your wedge"
+      : "Balance distance and position";
+  }
+  return ({
+    attack: "Attack now",
+    safe: "Find the wide side",
+    attack_pin: "Attack the pin",
+    green_center: "Center of the green",
+    safe_miss: "Favor the safe side",
+    advance: "Advance through the opening",
+    escape: "Return to the fairway",
+    position: "Improve the next angle"
+  })[id] || choice.title;
+}
+
+function academyChoiceTradeoff(choice) {
+  const id = choice.sourcePlanId || choice.id;
+  if (["attack", "attack_pin", "advance"].includes(id)) return "More scoring opportunity · accepts more exposure";
+  if (["smart", "position"].includes(id)) return "Improves the next shot · gives up some distance";
+  if (["safe", "safe_miss", "escape"].includes(id)) return "Reduces immediate trouble · accepts a longer leave";
+  return choice.objective;
+}
+
+function academyMetric(value, suffix = "%") {
+  return Number.isFinite(Number(value)) ? `${Math.round(Number(value))}${suffix}` : "—";
+}
+
+function finishAcademyLesson() {
+  if (!academyActive()) return;
+  const report = scoreAcademySession(state.academy.decisions);
+  state.academy.finalReport = report;
+  state.academy.status = "RESULT";
+  state.academy.resultMarkup = `
+    <div class="academy-report">
+      <span class="eyebrow">Lesson complete · Decision score</span>
+      <div class="academy-report-lead">
+        <div class="academy-score-seal" aria-label="Academy score ${report.score} out of 100"><strong>${report.score}</strong><small>/ 100</small></div>
+        <div><h3>${escapeHtml(report.rating)}</h3><p>${escapeHtml(report.comment)}</p></div>
+      </div>
+      <div class="academy-report-breakdown" aria-label="Decision breakdown">
+        <span><small>Decisions</small><strong>${report.decision_count}</strong></span>
+        <span><small>Preferred</small><strong>${report.preferred}</strong></span>
+        <span><small>Competitive</small><strong>${report.competitive}</strong></span>
+        <span><small>Needs work</small><strong>${report.weak}</strong></span>
+      </div>
+      <p class="academy-score-note">This score grades your pre-shot choices. Good or bad shot luck does not change it.</p>
+      <button type="button" data-academy-exit-report>Exit Academy</button>
+    </div>`;
+  renderAcademyDecisionDesk();
+}
+
+function renderAcademyDecisionDesk() {
+  const desk = $("#academy-decision-desk");
+  const active = academyActive();
+  const flightActive = active && state.academy.status === "PLAYING";
+  const shotDesk = desk.closest(".shot-desk");
+  document.body.classList.toggle("academy-active", active);
+  document.body.classList.toggle("academy-flight-active", flightActive);
+  if (shotDesk) shotDesk.hidden = flightActive;
+  $("#academy-flight-callout").hidden = !flightActive;
+  const pinSelect = $("#pin-select");
+  if (pinSelect) pinSelect.disabled = active;
+  desk.hidden = !active;
+  syncMobileSheetUI();
+  if (!active) return;
+  const academy = state.academy;
+  const remaining = Math.round(distance(state.ball, pin().center_point));
+  $("#academy-situation").innerHTML = `
+    <span><small>Hole</small><strong>${state.holeIndex + 1} · Par ${card().Par}</strong></span>
+    <span><small>Situation</small><strong>${escapeHtml(currentLieType())} · ${remaining} yd</strong></span>
+    <span><small>Preferred leave</small><strong>~${Math.round(preferredApproachDistance())} yd</strong></span>`;
+  const status = $("#academy-analysis-status");
+  const list = $("#academy-choice-list");
+  const commit = $("#academy-commit");
+  const result = $("#academy-result");
+  if (academy.status === "LOADING") {
+    status.textContent = "Reading the hole and running paired outcomes…";
+    list.innerHTML = `<div class="academy-loading"><i></i><span>Building real plans from this golfer and course</span></div>`;
+    commit.hidden = false;
+    commit.disabled = true;
+    commit.textContent = "Reading the hole…";
+    result.hidden = true;
+    return;
+  }
+  if (academy.status === "PLAYING") {
+    status.textContent = "Plan committed. Watch where the decision leads.";
+    list.innerHTML = `<div class="academy-playing"><span>PLAYING</span><strong>${escapeHtml(academyChoiceTitle(academy.committed.choice))}</strong><small>${escapeHtml(academy.committed.choice.clubName)} · ${shotPowerLabel(academy.committed.choice.power, academy.committed.choice.clubName)}</small></div>`;
+    commit.hidden = true;
+    result.hidden = true;
+    return;
+  }
+  if (academy.status === "RESULT") {
+    status.textContent = academy.finalReport
+      ? "Lesson complete. Your score reflects decision quality, not shot luck."
+      : "Decision and result are shown separately.";
+    list.innerHTML = "";
+    commit.hidden = true;
+    result.hidden = false;
+    result.innerHTML = academy.resultMarkup;
+    return;
+  }
+  result.hidden = true;
+  const analysis = academy.analysis;
+  const selectedId = academy.selectedId;
+  status.textContent = `${analysis.sample_count} paired outcomes per plan · No answer is revealed before commitment`;
+  list.innerHTML = academy.choices.map((choice, index) => {
+    const summary = analysis.candidates[choice.id];
+    const selected = selectedId === choice.id;
+    const targetLabel = choice.mode === "approach" ? "Green" : "Target";
+    const targetValue = choice.mode === "approach" ? summary.green_percent : summary.target_percent;
+    return `<button class="academy-choice ${selected ? "selected" : ""}" type="button" role="radio" aria-checked="${selected}" data-academy-choice="${choice.id}">
+      <span class="academy-choice-letter">${String.fromCharCode(65 + index)}</span>
+      <span class="academy-choice-copy"><small>${escapeHtml(choice.objective)}</small><strong>${escapeHtml(academyChoiceTitle(choice))}</strong><b>${escapeHtml(choice.clubName)} · ${shotPowerLabel(choice.power, choice.clubName)} · ${escapeHtml(choice.targetLabel)}</b><em>${escapeHtml(choice.treeRecovery ? `${Math.round(choice.treeRecovery.probabilities.clean_escape * 100)}% clean escape · clean leave ~${choice.treeRecovery.reward.expected_leave_if_clean_yards} yd` : academyChoiceTradeoff(choice))}</em></span>
+      <span class="academy-tradeoff-strip">
+        <span><small>${targetLabel}</small><b>${academyMetric(targetValue)}</b></span>
+        <span><small>Bunker</small><b>${academyMetric(summary.bunker_percent)}</b></span>
+        <span><small>Penalty</small><b>${academyMetric(summary.penalty_percent)}</b></span>
+        <span><small>Typical leave</small><b>${academyMetric(summary.median_leave_yards, " yd")}</b></span>
+      </span>
+    </button>`;
+  }).join("");
+  commit.hidden = false;
+  commit.disabled = !selectedId;
+  commit.textContent = selectedId ? "Commit to this plan" : "Choose a plan";
+}
+
+async function prepareAcademyDecision() {
+  if (!academyActive()) return;
+  if (currentLieType() === "Green" || distance(state.ball, pin().center_point) <= 30 || state.holeFinished) {
+    finishAcademyLesson();
+    return;
+  }
+  state.academy.status = "LOADING";
+  state.academy.selectedId = null;
+  state.strategySelectedId = null;
+  renderAcademyDecisionDesk();
+  const choices = currentAcademyStrategyChoices();
+  if (!choices.length) throw new Error("No playable Academy strategy was generated for this position");
+  const analysis = await loadStrategyAnalysis(choices);
+  if (!academyActive()) return;
+  state.academy.choices = choices;
+  state.academy.analysis = analysis;
+  state.academy.status = "CHOOSING";
+  renderAcademyDecisionDesk();
+}
+
+async function startAcademyFromSetup(event) {
+  event.preventDefault();
+  const submit = event.currentTarget.querySelector("button[type='submit']");
+  submit.disabled = true;
+  $("#academy-setup-status").textContent = "Opening a real Par 5 and reading its strategy…";
+  try {
+    const courseId = $("#academy-course").value;
+    const tee = $("#academy-tee").value;
+    const profile = academyProfiles().find(item => item.id === $("#academy-profile").value) || state.profile;
+    state.academyReturn = {
+      courseId: state.courseId,
+      holeIndex: state.holeIndex,
+      tee: state.tee,
+      profile: structuredClone(state.profile)
+    };
+    state.academy = {
+      version: "academy-session-v1",
+      policyVersion: ACADEMY_DECISION_POLICY_VERSION,
+      status: "LOADING",
+      choices: [],
+      decisions: [],
+      analysis: null,
+      selectedId: null,
+      startedAt: new Date().toISOString()
+    };
+    await loadData(courseId);
+    state.profile = normalizeProfile(structuredClone(profile));
+    state.tee = tee;
+    const recentStorageKey = playerStorageKey("academy-recent-holes");
+    const recentByCourse = readBrowserJson(recentStorageKey, {});
+    const legacyFixedIndex = state.scorecard.findIndex(entry => Number(entry.Par) === 5);
+    const legacyFixedHole = legacyFixedIndex >= 0
+      ? Number(state.scorecard[legacyFixedIndex]?.Hole) || legacyFixedIndex + 1
+      : null;
+    const recentForCourse = Array.isArray(recentByCourse?.[courseId])
+      ? recentByCourse[courseId]
+      : (legacyFixedHole ? [legacyFixedHole] : []);
+    const parFiveIndex = selectAcademyParFiveIndex(state.scorecard, recentForCourse);
+    if (parFiveIndex < 0) throw new Error("This course does not contain a playable Par 5");
+    state.holeIndex = parFiveIndex;
+    state.pinIndex = rotatingPinIndex(parFiveIndex, hole().geometries.green_complex.pin_zones.length);
+    state.roundSeed = newRoundSeed();
+    state.roundState = createRoundState({ courseId, roundSeed: state.roundSeed, tee });
+    $("#academy-dialog").close();
+    resetHole();
+    syncGameModeSelector();
+    await prepareAcademyDecision();
+    const playedHoleNumber = Number(state.scorecard[parFiveIndex]?.Hole) || parFiveIndex + 1;
+    writeBrowserValue(recentStorageKey, JSON.stringify({
+      ...recentByCourse,
+      [courseId]: rememberAcademyHole(recentForCourse, playedHoleNumber)
+    }));
+  } catch (error) {
+    console.error("Academy could not start", error);
+    await exitAcademy();
+    $("#academy-setup-status").textContent = `Academy could not start: ${error.message}`;
+  } finally {
+    submit.disabled = false;
+  }
+}
+
+async function exitAcademy() {
+  if (!state.academyReturn) {
+    state.academy = null;
+    renderAcademyDecisionDesk();
+    syncGameModeSelector();
+    return;
+  }
+  const restore = state.academyReturn;
+  state.academy = null;
+  state.academyReturn = null;
+  state.roundState = null;
+  document.body.classList.remove("academy-active", "academy-flight-active");
+  $(".shot-desk").hidden = false;
+  $("#academy-flight-callout").hidden = true;
+  await loadData(restore.courseId);
+  state.profile = normalizeProfile(structuredClone(restore.profile));
+  state.tee = restore.tee;
+  state.holeIndex = restore.holeIndex;
+  state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
+  resetHole();
+  syncGameModeSelector();
+}
+
+function selectAcademyChoice(choiceId) {
+  if (!academyActive() || state.academy.status !== "CHOOSING") return;
+  const choice = state.academy.choices.find(item => item.id === choiceId);
+  if (!choice) return;
+  state.academy.selectedId = choiceId;
+  state.strategySelectedId = choice.id;
+  state.selectedClub = choice.clubIndex;
+  state.swingPower = choice.power / 100;
+  state.target = coursePointFromCanonical(choice.target);
+  state.aimType = isGreensideChip(state.ball, state.profile.clubs[choice.clubIndex])
+    ? AimType.LANDING_TARGET
+    : AimType.DIRECTION_TARGET;
+  state.manualTargetPreview = false;
+  state.shotDraft = { club: true, target: true, power: true };
+  rememberStructuredTarget(state.target, { resetAdjustment: true });
+  if (landingTargetActive()) syncLandingTargetPower();
+  updateAll();
+}
+
+function commitAcademyChoice() {
+  if (!academyActive() || state.academy.status !== "CHOOSING") return;
+  const choice = state.academy.choices.find(item => item.id === state.academy.selectedId);
+  if (!choice) return;
+  state.academy.committed = {
+    choice: structuredClone(choice),
+    evidence: academyChoiceEvidence(choice, state.academy.analysis)
+  };
+  state.academy.status = "PLAYING";
+  setMobileShotSheetState("minimized", { focus: false });
+  renderAcademyDecisionDesk();
+  void playShot().catch(error => {
+    console.error("Academy shot could not be played", error);
+    state.academy.status = "CHOOSING";
+    setMobileShotSheetState("expanded");
+    renderAcademyDecisionDesk();
+  });
+}
+
+function completeAcademyShot() {
+  if (!academyActive() || state.academy.status !== "PLAYING") return;
+  const shot = state.shots.at(-1);
+  const committed = state.academy.committed;
+  const band = committed.evidence.decision_band;
+  const decisionCopy = band === "PREFERRED"
+    ? "This plan had the strongest modeled balance in this comparison."
+    : band === "COMPETITIVE"
+      ? "This was a reasonable alternative within the competitive range."
+      : "This plan accepted a measurable modeled disadvantage for its tradeoff.";
+  const resultCopy = shot.relief
+    ? `The ball entered ${shot.landingLie.toLowerCase()} and finished in ${shot.lie.toLowerCase()} after relief.`
+    : `The ball finished in ${shot.lie.toLowerCase()} with ${Math.round(shot.remaining)} yards remaining.`;
+  const canContinue = !state.holeFinished && currentLieType() !== "Green" && distance(state.ball, pin().center_point) > 30;
+  state.academy.decisions.push({
+    choice_id: committed.choice.id,
+    choice_title: academyChoiceTitle(committed.choice),
+    evidence: structuredClone(committed.evidence),
+    result: {
+      lie: shot.lie,
+      remaining_yards: Number.isFinite(shot.remaining) ? Math.round(shot.remaining) : null,
+      relief: Boolean(shot.relief)
+    }
+  });
+  state.academy.status = "RESULT";
+  state.academy.resultMarkup = `
+    <span class="eyebrow">Decision, then result</span>
+    <h3>${escapeHtml(academyChoiceTitle(committed.choice))}</h3>
+    <div class="academy-learning-pair"><article><small>Pre-shot decision</small><p>${escapeHtml(decisionCopy)}</p></article><article><small>Actual result</small><p>${escapeHtml(resultCopy)}</p></article></div>
+    <p class="academy-lesson">${escapeHtml(shot.lesson || "The modeled decision and the random result are evaluated separately.")}</p>
+    <button type="button" ${canContinue ? "data-academy-next" : "data-academy-finish"}>${canContinue ? "Next decision" : "View lesson score"}</button>`;
+  renderAcademyDecisionDesk();
+}
+
+function activeGameMode() {
+  if (academyActive()) return "academy";
+  if (challengeActive()) return "challenge";
+  if (competitionActive()) return "competition";
+  return "round";
+}
+
+function syncGameModeSelector() {
+  const select = $("#game-mode-select");
+  if (!select) return;
+  select.value = document.body.classList.contains("gps-mode-open") ? "gps" : activeGameMode();
+  select.dataset.mode = select.value;
+}
+
+function openChallengeSetup() {
+  renderChallengeSetup();
+  $("#challenge-dialog").showModal();
+}
+
+function openCompetitionSetup() {
+  renderCompetitionSetup();
+  $("#competition-dialog").showModal();
+}
+
+async function changeGameMode(mode) {
+  const requested = ["round", "academy", "challenge", "competition", "gps"].includes(mode) ? mode : "round";
+  if (requested === "gps") {
+    openGpsMode();
+    syncGameModeSelector();
+    return;
+  }
+  const current = activeGameMode();
+  if (requested === current) {
+    syncGameModeSelector();
+    return;
+  }
+  if (current === "academy") {
+    if (!window.confirm("Exit the current Academy lesson and change game mode?")) {
+      syncGameModeSelector();
+      return;
+    }
+    await exitAcademy();
+  } else if (current === "challenge") {
+    if (!window.confirm("Exit the current 3-hole match and change game mode?")) {
+      syncGameModeSelector();
+      return;
+    }
+    await exitChallenge();
+  } else if (current === "competition") {
+    if (!window.confirm("Exit the current 18-hole match and change game mode?")) {
+      syncGameModeSelector();
+      return;
+    }
+    await exitCompetition();
+  }
+  if (requested === "academy") openAcademySetup();
+  else if (requested === "challenge") openChallengeSetup();
+  else if (requested === "competition") openCompetitionSetup();
+  else syncGameModeSelector();
+}
+
 function renderCompetitionStatus() {
+  renderChallengeMatchCard();
   const active = competitionActive();
   document.body.classList.toggle("competition-active", active);
+  syncGameModeSelector();
   const header = $("#competition-score-header");
   if (!header) return;
   header.hidden = !active;
-  $("#competition-button-label").textContent = active ? "Game Master" : "Play GM";
   $("#competition-exit").hidden = !active;
+  syncMobileCarouselSafeTop();
+  window.requestAnimationFrame(() => window.requestAnimationFrame(syncMobileCarouselSafeTop));
   if (!active) return;
   const scores = competitionScores();
   const strategist = activeStrategistHoleState();
   $("#competition-you-score").textContent = competitionScoreText(scores.human.relative_to_par);
   $("#competition-gm-score").textContent = competitionScoreText(scores.strategist.relative_to_par);
-  $("#competition-you-shot").textContent = state.holeFinished ? "Holed" : `Shot ${state.shots.length + 1}`;
+  $("#competition-you-shot").textContent = state.competitionBusy
+    ? state.competitionPlayback === "gm" ? "Waiting…" : state.competitionPlayback === "human" ? "Playing…" : "Locked"
+    : state.holeFinished ? "Holed" : `Shot ${state.shots.length + 1}`;
   $("#competition-gm-shot").textContent = state.competitionBusy
-    ? state.competitionPlayback === "gm" ? "Playing…" : state.competitionPlayback === "human" ? "Waiting…" : "Deciding…"
+    ? state.competitionPlayback === "gm" ? "Playing…" : state.competitionPlayback === "human" && strategist?.hole_finished ? "Holed" : state.competitionPlayback === "human" ? "Waiting…" : "Deciding…"
     : strategist?.hole_finished ? "Holed" : `Shot ${(strategist?.shots?.length || 0) + 1}`;
   header.dataset.phase = state.competition.phase;
 }
 
 function setCompetitionBusy(busy) {
   state.competitionBusy = Boolean(busy);
-  if (!state.competitionBusy) state.competitionPlayback = null;
+  if (!state.competitionBusy) {
+    state.competitionPlayback = null;
+    state.competitionPlaybackHumanStart = null;
+  }
   document.body.classList.toggle("competition-busy", state.competitionBusy);
   [$("#gm-form button[type='submit']"), $("#mobile-gm-form button[type='submit']"), $("#green-putt-play")]
     .filter(Boolean)
@@ -5263,6 +7211,19 @@ function resultSummary(result) {
   const distance = result.club === "Putter" ? `${result.feet || 0} ft` : `${result.yards || 0} yd`;
   const leave = Number.isFinite(result.remaining) ? ` · ${result.remaining} yd left` : "";
   return `${result.lie || result.landingLie || "Playable"} · ${distance}${leave}`;
+}
+
+function competitionOutcomeVsTarget(result, decision) {
+  if (!result || !decision?.target) return "No target comparison available";
+  const target = Array.isArray(decision.target)
+    ? decision.target
+    : coursePointFromCanonical(decision.target);
+  return outcomeVsTargetMessage({
+    start: result.start,
+    target,
+    landing: result.landing,
+    putting: decision.kind === "putt"
+  }).replace(/^Finished /, "");
 }
 
 function showCompetitionComparison() {
@@ -5289,17 +7250,16 @@ function showCompetitionComparison() {
       ? puttLabel(gmDecision, turn.strategist_result)
       : `${gmDecision.club || "—"} · ${gmDecision.power_percent ?? 100}%`;
   const difference = (turn.strategist_decision_score ?? 0) - (turn.human_decision_score ?? 0);
-  const leader = difference > 0 ? "GM" : difference < 0 ? "YOU" : "EVEN";
   const hasExpectedScores = Number.isFinite(humanDecision.expected_score) && Number.isFinite(gmDecision.expected_score);
   const expectedDifference = hasExpectedScores ? gmDecision.expected_score - humanDecision.expected_score : null;
   const expectedLeader = expectedDifference > 0 ? "YOU" : expectedDifference < 0 ? "GM" : "EVEN";
   let comparisonCopy = hasExpectedScores
-    ? expectedDifference === 0
-      ? "The two decisions carried the same modeled expected score."
+    ? Math.abs(expectedDifference) <= .05
+      ? "The two plans were within 0.05 modeled expected strokes."
       : `${expectedLeader} held a ${Math.abs(expectedDifference).toFixed(2)} expected-stroke strategy edge.`
     : difference === 0
       ? "The decisions received the same strategy grade."
-      : `${leader} held a ${Math.abs(difference)}-point decision-grade edge.`;
+      : `${difference > 0 ? "The Game Master plan" : "Your plan"} received the stronger modeled grade.`;
   if (puttingComparison && turn.human_result?.puttPacket) {
     const humanPacket = turn.human_result.puttPacket;
     const gmPacket = turn.strategist_result?.puttPacket;
@@ -5314,7 +7274,7 @@ function showCompetitionComparison() {
     toast.hidden = false;
     window.setTimeout(() => { toast.hidden = true; }, 4200);
     state.competition = continueCompetition(state.competition);
-    saveCompetition(localStorage, state.competition, state.player?.id);
+    cacheActiveCompetition();
     renderCompetitionStatus();
     return;
   }
@@ -5322,13 +7282,22 @@ function showCompetitionComparison() {
   $("#comparison-gm-choice").textContent = gmLabel;
   $("#comparison-you-result").textContent = resultSummary(turn.human_result);
   $("#comparison-gm-result").textContent = resultSummary(turn.strategist_result);
+  $("#comparison-you-target").textContent = competitionOutcomeVsTarget(turn.human_result, humanDecision);
+  $("#comparison-gm-target").textContent = competitionOutcomeVsTarget(turn.strategist_result, gmDecision);
   $("#comparison-decision-row").hidden = puttingComparison;
-  $("#comparison-decision-label").textContent = puttingComparison ? "Putting plan" : "Decision quality";
-  $("#comparison-decision-score").textContent = `YOU ${turn.human_decision_score ?? "—"}/100 · GM ${turn.strategist_decision_score ?? "—"}/100`;
+  $("#comparison-decision-label").textContent = "Decision";
+  $("#comparison-decision-score").textContent = hasExpectedScores && Math.abs(expectedDifference) <= .05
+    ? "Similar plans"
+    : expectedLeader === "YOU" || (!hasExpectedScores && difference < 0)
+      ? "Your plan preferred"
+      : "GM plan preferred";
   $("#comparison-edge").textContent = puttingComparison
     ? comparisonCopy
     : `${comparisonCopy} This grades the plan, not the outcome.`;
-  $("#comparison-why-copy").textContent = turn.coach_explanation?.reason || gmDecision.explanation || "Explanation loading. Verified strategy data is already available.";
+  $("#comparison-why-reason").textContent = turn.coach_explanation?.reason || gmDecision.explanation || "Explanation loading. Verified strategy data is already available.";
+  $("#comparison-raw-score").textContent = puttingComparison
+    ? "No numeric plan score is used on the green."
+    : `Plan score detail · You ${turn.human_decision_score ?? "—"}/100 · Game Master ${turn.strategist_decision_score ?? "—"}/100`;
   $("#comparison-why-copy").hidden = true;
   $("#competition-comparison").hidden = false;
   state.competitionComparisonOpen = true;
@@ -5340,13 +7309,22 @@ function closeCompetitionComparison({ continueRound = true } = {}) {
   state.competitionComparisonTurnId = null;
   if (continueRound && state.competition?.phase === CompetitionPhase.COMPARISON_READY) {
     state.competition = continueCompetition(state.competition);
-    saveCompetition(localStorage, state.competition, state.player?.id);
+    cacheActiveCompetition();
     renderCompetitionStatus();
   }
 }
 
 function renderCompetitionScorecard() {
   if (!competitionActive()) return;
+  if (challengeActive()) {
+    const official = officialMatchState(state.challenge, Math.max(0, challengeSlot() - (state.challenge.holes[challengeSlot()].status === "COMPLETE" ? 0 : 1)));
+    $("#competition-scorecard-grid").innerHTML = `
+      <table class="competition-scorecard-table"><thead><tr><th>Challenge</th><th>Par</th><th>YOU</th><th>GM</th></tr></thead><tbody>
+      ${state.challenge.holes.map((hole, index) => `<tr><th>Hole ${index + 1}<small>${escapeHtml(hole.course_name || hole.course_id)} #${hole.source_hole_number}</small></th><td>${hole.par}</td><td>${hole.player_score ?? "—"}</td><td>${hole.gm_score ?? "—"}</td></tr>`).join("")}
+      </tbody><tfoot><tr><th colspan="2">Posted total</th><td>${official.player || "—"}</td><td>${official.gm || "—"}</td></tr></tfoot></table>
+      <section class="competition-round-summary"><strong>${official.completed ? official.leader === "TIED" ? "Match tied" : `${official.leader === "PLAYER" ? "You lead" : "Game Master leads"} by ${official.margin}` : "No official lead yet"}</strong><p>Official lead changes only after both players post a score for the hole.</p></section>`;
+    return;
+  }
   const { humanScores, strategistScores, human, strategist } = competitionScores();
   const roundSummary = competitionRoundSummary(state.competition, state.scorecard.map(entry => entry.Par));
   const rows = state.scorecard.map((entry, index) => `
@@ -5421,7 +7399,7 @@ async function restoreCompetitionRound() {
   state.holeIndex = bounded(Number(competition.current_hole || 1) - 1, 0, 17);
   state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
   syncRoundStateCaches();
-  saveCompetition(localStorage, state.competition, state.player?.id);
+  cacheActiveCompetition();
   if (state.competition.phase === CompetitionPhase.COMPARISON_READY) {
     state.competitionComparisonTurnId = state.competition.turns.at(-1)?.id || null;
   }
@@ -5450,18 +7428,18 @@ async function startCompetitionFromSetup(event) {
   state.holeIndex = 0;
   state.pinIndex = rotatingPinIndex(0, hole().geometries.green_complex.pin_zones.length);
   localStorage.setItem(playerStorageKey("competition-pace"), pace);
-  saveCompetition(localStorage, state.competition, state.player?.id);
+  cacheActiveCompetition();
   resetHole();
   renderCompetitionStatus();
   $("#competition-dialog").close();
-  addGmMessage("Competition started. The Game Master has the same golfer profile and receives paired execution luck. Only the decisions differ.");
+  addGmMessage("Competition started. You and the Game Master use the same golfer profile and shot conditions, but every player gets an independent execution roll. Identical plans can produce different results.");
 }
 
 async function exitCompetition() {
   if (!competitionActive()) return;
   state.competition.status = "exited";
   state.competition.exited_at = new Date().toISOString();
-  saveCompetition(localStorage, state.competition, state.player?.id);
+  cacheActiveCompetition();
   state.competition = null;
   state.competitionPendingTurn = null;
   setCompetitionBusy(false);
@@ -5500,8 +7478,31 @@ async function playShot() {
     return;
   }
   const club = currentClub();
+  if (challengeActive()) challengeAudio.dispatch({ kind: "shot_start", actor: "PLAYER" });
+  const shotType = currentShotType(start, club, linePoint);
+  const shotTypeValidation = validateShotType({
+    shotType,
+    lie: startingConditions.lie,
+    clubName: club.name,
+    targetDistanceYards: distance(start, linePoint)
+  });
+  if (!shotTypeValidation.valid) {
+    addGmMessage(shotTypeValidation.message);
+    updateShotDesk();
+    return;
+  }
+  const landingPlan = landingTargetActive() ? syncLandingTargetPower() : null;
+  if (landingPlan && [PowerStatus.UNREACHABLE, PowerStatus.UNSAFE_TRAJECTORY].includes(landingPlan.power_status)) {
+    addGmMessage(landingPlan.power_status === PowerStatus.UNSAFE_TRAJECTORY
+      ? `${club.name} is not a safe trajectory to this landing target because an aerial hazard must be cleared. Choose a more lofted club or move the landing target.`
+      : `${club.name} cannot reliably carry to this landing target within its supported power range. Choose another club or target.`);
+    updateShotDesk();
+    return;
+  }
   const usedPower = state.swingPower;
-  const availableStrategyChoices = state.strategySelectedId ? currentStrategyChoices() : [];
+  const availableStrategyChoices = state.strategySelectedId
+    ? academyActive() ? state.academy.choices : currentStrategyChoices()
+    : [];
   const playedStrategy = availableStrategyChoices.find(choice => choice.id === state.strategySelectedId) || null;
   let playedStrategyAnalysis = null;
   if (playedStrategy) {
@@ -5512,16 +7513,17 @@ async function playShot() {
     }
   }
   const isPutt = club.name === "Putter" && currentLieType() === "Green";
-  const isGreenside = !isPutt && isGreensideChip(start, club);
+  const isGreenside = !isPutt && usesGreensideEngine(start, club, linePoint, shotType);
   const intendedTarget = isPutt
     ? pointArray(linePoint)
-    : isGreenside
+    : landingTargetActive()
       ? pointArray(linePoint)
-      : (resolveIntentTarget(start, linePoint, club, usedPower) || linePoint);
+      : (resolveIntentTarget(start, linePoint, club, usedPower, AimType.DIRECTION_TARGET) || linePoint);
   const intendedLie = lieAt(intendedTarget).type;
   const plannedRisk = shotRisk().value;
+  const sidehillReferenceTarget = finitePointOrNull(state.structuredShot?.selectedTarget) || normalShotTarget(start);
   const sidehill = !isPutt && !isGreenside
-    ? sidehillShotPlan(start, intendedTarget)
+    ? sidehillShotPlan(start, intendedTarget, sidehillReferenceTarget)
     : null;
   let competitionTurn = null;
   let competitionHumanDecisionScore = null;
@@ -5536,7 +7538,8 @@ async function playShot() {
         club,
         power: usedPower,
         sidehill,
-        greenside: isGreenside
+        greenside: isGreenside,
+        shortGamePlan: landingPlan
       });
       competitionTurn = prepareCompetitionTurn({
         kind: isPutt ? "putt" : "shot",
@@ -5557,7 +7560,7 @@ async function playShot() {
       console.error("Game Master decision failed", error);
       state.competitionPendingTurn = null;
       setCompetitionBusy(false);
-      addGmMessage(`The Game Master could not generate a legal strategy decision, so this paired turn was not played. ${error.message}`);
+      addGmMessage(PLAYER_SAFE_SHOT_ERROR);
       return;
     }
   }
@@ -5579,6 +7582,7 @@ async function playShot() {
   let puttRequest = null;
   let landing;
   let puttingEvaluation = null;
+  let treeRecoveryResolution = null;
   if (isPutt) {
     const authoritative = authoritativePutt(start, intendedTarget, usedPower);
     puttPacket = authoritative.packet;
@@ -5606,7 +7610,10 @@ async function playShot() {
     };
   } else {
     const authoritative = isGreenside
-      ? authoritativeGreensideShot(start, intendedTarget, effectiveClub, usedPower, competitionExecutionStrokeIndex(strokeIndex))
+      ? authoritativeGreensideShot(start, intendedTarget, effectiveClub, usedPower, competitionExecutionStrokeIndex(strokeIndex), {
+          nominalCarryYards: landingPlan?.expected_carry ?? distance(start, intendedTarget),
+          rollSlopeFactor: landingPlan?.slope_factor
+        })
       : authoritativeFullShot(start, intendedTarget, effectiveClub, usedPower, sidehill);
     resultPacket = authoritative.packet;
     resultRequest = authoritative.request;
@@ -5615,6 +7622,20 @@ async function playShot() {
       resultPacket
     );
     landing = coursePointFromCanonical(resultPacket.resolved_ball || resultPacket.landing);
+    if (playedStrategy?.treeRecovery) {
+      treeRecoveryResolution = resolveTreeRecoveryOutcome(
+        playedStrategy.treeRecovery.probabilities,
+        `${state.roundSeed}:${state.holeIndex + 1}:${strokeIndex}:${playedStrategy.id}:player`
+      );
+      landing = applyTreeRecoveryContact({ start, landing, resolution: treeRecoveryResolution });
+      resultPacket = {
+        ...resultPacket,
+        landing: canonicalPoint(landing),
+        resolved_ball: canonicalPoint(landing),
+        total_yards: distance(start, landing),
+        remaining_distance_yards: distance(landing, pin().center_point)
+      };
+    }
   }
 
   landing = pointArray(landing);
@@ -5636,6 +7657,7 @@ async function playShot() {
   const shotDistanceYards = distance(start, landing);
   const shotRecord = {
     start,
+    intendedTarget: pointArray(intendedTarget),
     landing: resultPacket ? pointArray(authoritativeLanding) : pointArray(landing),
     resolvedBall: pointArray(landing),
     club: club.name,
@@ -5649,9 +7671,12 @@ async function playShot() {
     relief,
     resultPacket,
     strategyPacket,
-    resultRequest,
+    resultRequest: compactResultRequest(resultRequest),
     puttPacket,
     puttRequest,
+    aimType: isPutt ? AimType.DIRECTION_TARGET : state.aimType,
+    shotType,
+    landingTargetPlan: landingPlan ? structuredClone(landingPlan) : null,
     sidehillPlan: sidehill,
     adjustmentReward,
     conditionSnapshot: {
@@ -5663,6 +7688,10 @@ async function playShot() {
       tree_condition: startingConditions.treeCondition
     },
     resolvedTreeCondition,
+    treeRecovery: playedStrategy?.treeRecovery ? {
+      ...structuredClone(playedStrategy.treeRecovery),
+      ...treeRecoveryResolution
+    } : null,
     playerIntent: state.pendingPlayerInstructions.length || state.pendingPlayerNote ? {
       instructions: [...state.pendingPlayerInstructions],
       note: state.pendingPlayerNote || null,
@@ -5684,6 +7713,26 @@ async function playShot() {
       recommended_by: playedStrategyAnalysis ? "paired_simulation" : "deterministic_fallback",
       planned_leave_yards: playedStrategy.leavesYards,
       modeled_risk: playedStrategy.risk,
+      tree_recovery: playedStrategy.treeRecovery ? structuredClone(playedStrategy.treeRecovery) : null,
+      tree_recovery_options: playedStrategy.treeRecovery
+        ? availableStrategyChoices.filter(choice => choice.treeRecovery).map(choice => ({
+            id: choice.id, title: choice.title, target: structuredClone(choice.target), tree_recovery: structuredClone(choice.treeRecovery)
+          }))
+        : null,
+      greenside_strategy: playedStrategy.greensideStrategy ? structuredClone(playedStrategy.greensideStrategy) : null,
+      greenside_strategy_options: playedStrategy.greensideStrategy
+        ? availableStrategyChoices.filter(choice => choice.greensideStrategy).map(choice => ({
+            id: choice.id,
+            title: choice.title,
+            objective: choice.objective,
+            club_index: choice.clubIndex,
+            club: choice.clubName,
+            power_percent: choice.power,
+            target: structuredClone(choice.target),
+            greenside_strategy: structuredClone(choice.greensideStrategy),
+            probability_analysis: structuredClone(playedStrategyAnalysis?.candidates?.[choice.id] || null)
+          }))
+        : null,
       probability_analysis: playedStrategyAnalysis?.candidates?.[playedStrategy.id] || null,
       analysis_identity: playedStrategyAnalysis ? {
         version: playedStrategyAnalysis.version,
@@ -5698,8 +7747,9 @@ async function playShot() {
   state.target = null;
   state.manualTargetPreview = false;
   state.swingPower = 1;
+  state.shortGamePlan = null;
   state.shotDraft = { club: false, target: false, power: false };
-  state.structuredShot = { aim: "", adjustment: "none", offset: 1, selectedTarget: null };
+  state.structuredShot = { aim: "", shotType: "auto", adjustment: "none", offset: 1, selectedTarget: null };
   state.pendingPlayerInstructions = [];
   state.pendingPlayerNote = "";
   state.clubAdjustment = 0;
@@ -5707,6 +7757,7 @@ async function playShot() {
   $("#distance-badge").hidden = true;
 
   const remaining = resultPacket ? resultPacket.remaining_distance_yards : puttPacket ? puttPacket.remaining_distance_yards : distance(landing, pin().center_point);
+  const completionType = classifyShotCompletion(remaining);
   if (puttingEvaluation) {
     shotRecord.puttAnalysis = {
       distanceFeet: Math.round(puttingEvaluation.read.feet),
@@ -5719,10 +7770,16 @@ async function playShot() {
     shotRecord.decisionQuality = decisionQualityFromAssessment(puttPacket?.assessment);
     shotRecord.executionQuality = executionQualityFromAssessment(puttPacket?.assessment);
     shotRecord.quality = overallQualityFromAssessment(puttPacket?.assessment);
-    shotRecord.lesson = puttingEvaluation.made
-      ? `Made the putt with ${shotRecord.power}% pace and the correct break compensation.`
+    shotRecord.lesson = completionType === "holed"
+      ? `Holed the putt with ${shotRecord.power}% pace.`
+      : completionType === "gimme"
+        ? `The putt finished ${formatPuttDistance(remaining * 3)} from the cup; the next putt was conceded as a gimme.`
+      : puttingEvaluation.made
+        ? `Made the putt with ${shotRecord.power}% pace and the correct break compensation.`
       : puttingEvaluation.correctDecision
-        ? `The read and pace were sound; the profile-based ${Math.round(puttingEvaluation.makeProbability * 100)}% make chance produced a miss.`
+        ? puttingEvaluation.read.feet > 12
+          ? `The read and pace were sound for a lag putt. From this distance, the modeled make chance was ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)}; the ball finished ${formatPuttDistance(puttPacket.remaining_distance_yards * 3)} from the cup.`
+          : `The read and pace were sound; the modeled ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)} make chance did not fall this time.`
         : `Missed the read by ${formatInches(Math.round(puttingEvaluation.aimErrorInches))} and the pace by ${Math.round(puttingEvaluation.powerErrorPoints)} percentage points.`;
   } else {
     const costly = penalty > 0 || ["Bunker", "Heavy rough", "Trees", "Water", "Out of bounds"].includes(resultLie.type);
@@ -5736,13 +7793,53 @@ async function playShot() {
       ? `${club.name} · ${shotPowerLabel(shotRecord.power, club.name)} finished in the intended ${intendedLie.toLowerCase()}.`
       : `${club.name} · ${shotPowerLabel(shotRecord.power, club.name)} missed the intended ${intendedLie.toLowerCase()} and finished in ${resultLie.type.toLowerCase()}${costly ? ", costing position or a penalty" : ""}.`;
     if (sidehill?.compensation === "correct") {
-      shotRecord.lesson = `Correct sidehill adjustment: you aimed ${Math.abs(sidehill.player_aim_yards)} yards ${sidehill.player_aim_yards > 0 ? "right" : "left"} to counter the expected curve. ${shotRecord.lesson}`;
+      shotRecord.lesson = `Correct sidehill adjustment: you aimed ${Math.round(Math.abs(sidehill.player_aim_yards) * 10) / 10} yards ${sidehill.player_aim_yards > 0 ? "right" : "left"} to counter the expected curve. ${shotRecord.lesson}`;
     } else if (sidehill && sidehill.compensation !== "not_required") {
-      shotRecord.lesson = `Sidehill adjustment needs work: aim about ${Math.abs(sidehill.recommended_aim_yards)} yards ${sidehill.recommended_aim_yards > 0 ? "right" : "left"}. ${shotRecord.lesson}`;
+      const sidehillPrefix = packetAssessment(shotRecord)?.decision_assessment === "sound"
+        ? "Small sidehill refinement"
+        : "Sidehill adjustment needs work";
+      shotRecord.lesson = `${sidehillPrefix}: aim about ${Math.round(Math.abs(sidehill.recommended_aim_yards) * 10) / 10} yards ${sidehill.recommended_aim_yards > 0 ? "right" : "left"} of the chosen target. ${shotRecord.lesson}`;
     }
   }
   shotRecord.remaining = Math.round(remaining);
-  const completionType = classifyShotCompletion(remaining);
+  if (shotRecord.treeRecovery) {
+    const outcome = shotRecord.treeRecovery.resolved_outcome === "CLEAN_ESCAPE"
+      ? "Clean escape"
+      : shotRecord.treeRecovery.resolved_outcome === "BRANCH_CLIP" ? "Branch clip" : "Major tree contact";
+    shotRecord.lesson = `${outcome}: ${shotRecord.lesson}`;
+  }
+  const recordedDecisionReview = decisionReviewMessage({
+    shotRecord,
+    puttingEvaluation,
+    sidehill,
+    plannedRisk,
+    playedStrategy,
+    playedStrategyAnalysis
+  });
+  const recordedTargetReview = outcomeVsTargetMessage({
+    start,
+    target: intendedTarget,
+    landing: authoritativeLanding,
+    putting: isPutt,
+    aimType: shotRecord.aimType
+  });
+  shotRecord.outcomeVsTarget = outcomeDelta(start, intendedTarget, authoritativeLanding, finiteScale());
+  shotRecord.gmReview = {
+    version: "gm-review-v1",
+    source: "deterministic",
+    result: shotRecord.lesson,
+    decision: recordedDecisionReview,
+    outcome_vs_target: recordedTargetReview
+  };
+  shotRecord.canonicalAssessment = assessGameShot(shotRecord);
+  if (challengeActive()) {
+    challengeAudio.dispatch({
+      kind: "shot",
+      reason_codes: shotRecord.canonicalAssessment?.result?.reason_codes || [],
+      close: Number(shotRecord.remaining) <= 5,
+      actor: "PLAYER"
+    });
+  }
   let completionStrokeDelta = 0;
   if (completionType === "gimme") {
     completionStrokeDelta = 1;
@@ -5765,6 +7862,7 @@ async function playShot() {
     payload: { shot: shotRecord }
   });
   syncRoundStateCaches();
+  state.aimType = defaultAimType();
   if (competitionTurn) {
     competitionHumanDecisionScore = Math.round(
       state.competition?.turns?.at(-1)?.human_decision?.evaluation?.probability_score ??
@@ -5772,18 +7870,23 @@ async function playShot() {
       strategyPacket?.decision_score ??
       Math.max(0, 100 - plannedRisk)
     );
-    state.competitionPlayback = "human";
+    state.competitionPlayback = "gm";
+    state.competitionPlaybackHumanStart = [...start];
     renderCompetitionStatus();
   }
-  const puttRollAnimation = puttPacket ? beginPuttAnimation(puttPacket, strokeIndex) : null;
-  const fullShotFlightAnimation = resultPacket
-    ? beginFlightAnimation(resultPacket, strokeIndex, preShotTerrainBounds, start)
-    : null;
+  let puttRollAnimation = competitionTurn || !puttPacket
+    ? null
+    : beginPuttAnimation(puttPacket, strokeIndex);
+  let fullShotFlightAnimation = competitionTurn || !resultPacket
+    ? null
+    : beginFlightAnimation(resultPacket, strokeIndex, preShotTerrainBounds, start);
   const shotUpdateId = `shot-${state.holeIndex + 1}-${strokeIndex}-${++gmShotUpdateSequence}`;
   const rewardMessage = adjustmentRewardMessage(adjustmentReward, club.name);
   if (rewardMessage) {
     addGmMessage(rewardMessage, "gm", { kind: "adjustment-reward", shotUpdateId });
   }
+  addGmMessage(recordedDecisionReview, "gm", { kind: "decision-review", shotUpdateId });
+  addGmMessage(recordedTargetReview, "gm", { kind: "target-review", shotUpdateId });
   if (completionType === "holed") {
     finishHole(0, "holed", { kind: "shot-result", shotUpdateId });
     addGmMessage(
@@ -5802,8 +7905,6 @@ async function playShot() {
     state.ball = pointArray(landing);
     state.currentLie = resultLie.type;
     autoSelectClubForLie();
-    const missDistance = distance(authoritativeLanding, intendedTarget);
-    const costlyMiss = penalty > 0 || ["Bunker", "Heavy rough", "Trees", "Water", "Out of bounds"].includes(resultLie.type);
     const penaltyOutcome = relief?.reason === "water"
       ? `The shot entered the water. One penalty stroke was added and the ball was dropped near its last boundary crossing.`
       : relief?.reason === "out_of_bounds"
@@ -5811,21 +7912,14 @@ async function playShot() {
         : null;
     const outcome = puttingEvaluation
       ? puttingEvaluation.correctDecision
-        ? `That was the right read and pace, but the ${Math.round(puttingEvaluation.makeProbability * 100)}% profile-based make chance did not fall this time.`
+        ? puttingEvaluation.read.feet > 12
+          ? `The read and pace were sound for a lag putt. The modeled make chance was ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)}, and the ball finished ${formatPuttDistance(remaining * 3)} from the cup.`
+          : `The read and pace were sound, but the modeled ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)} make chance did not fall this time.`
         : `That putt missed because the decision was off by about ${formatInches(Math.round(puttingEvaluation.aimErrorInches))} of starting line and ${Math.round(puttingEvaluation.powerErrorPoints)} percentage points of pace.`
       : penaltyOutcome
         ? penaltyOutcome
-      : resultLie.type === intendedLie
-      ? `Good shot. You held the ${resultLie.type.toLowerCase()} and finished about ${Math.round(missDistance)} yards from your intended landing point.`
-      : costlyMiss
-        ? `That was a costly miss. You aimed for ${intendedLie.toLowerCase()}, but the shot dispersed about ${Math.round(missDistance)} yards and finished in ${resultLie.type.toLowerCase()}.`
-        : `That shot missed your intended ${intendedLie.toLowerCase()}. It dispersed about ${Math.round(missDistance)} yards and finished in ${resultLie.type.toLowerCase()}.`;
-    if (!rewardMessage && sidehill?.compensation === "correct") {
-      addGmMessage(`Correct sidehill decision: your ${Math.abs(sidehill.player_aim_yards)}-yard ${sidehill.player_aim_yards > 0 ? "right" : "left"} adjustment opposed the expected ${Math.abs(sidehill.expected_curve_yards)}-yard curve.`, "gm", { kind: "coaching", shotUpdateId });
-    } else if (!rewardMessage && sidehill && sidehill.compensation !== "not_required") {
-      addGmMessage(`Sidehill review: with ${shotConditions(start).stance}, the recommended aim was about ${Math.abs(sidehill.recommended_aim_yards)} yards ${sidehill.recommended_aim_yards > 0 ? "right" : "left"}.`, "gm", { kind: "coaching", shotUpdateId });
-    }
-    addGmMessage(gameMasterBriefing(false), "gm", { kind: "coaching", shotUpdateId });
+      : `Finished in ${resultLie.type.toLowerCase()} after targeting ${intendedLie.toLowerCase()}.`;
+    addGmMessage(gameMasterBriefing(false), "gm", { kind: "next-shot", shotUpdateId });
     addGmMessage(outcome, "gm", { kind: "shot-result", shotUpdateId });
     addGmMessage(
       remainingPositionMessage({ start, landing, remaining, resultLie, completionType }),
@@ -5833,15 +7927,18 @@ async function playShot() {
       { kind: "position-status", shotUpdateId }
     );
   }
-  void requestAiShotNarration(aiShotPayload({
-    shotRecord,
-    puttingEvaluation,
-    plannedRisk,
-    remaining,
-    completionType,
-    resultLie,
-    intendedTarget
-  }), shotUpdateId);
+  persistDisplayedGmResponses(shotUpdateId, "deterministic");
+  if (!academyActive()) {
+    void requestAiShotNarration(aiShotPayload({
+      shotRecord,
+      puttingEvaluation,
+      plannedRisk,
+      remaining,
+      completionType,
+      resultLie,
+      intendedTarget
+    }), shotUpdateId);
+  }
   renderMap();
   updateAll(false);
   if (!isPutt && window.matchMedia?.("(max-width: 760px)").matches) {
@@ -5855,7 +7952,6 @@ async function playShot() {
       state.puttAnimation = null;
       puttAnimationTimer = null;
       renderMap();
-      if (completionType === "holed") playBallInHoleSound();
     }
     if (fullShotFlightAnimation && state.flightAnimation === fullShotFlightAnimation) {
       state.flightAnimation = null;
@@ -5863,44 +7959,43 @@ async function playShot() {
       renderMap();
       syncMobileSheetUI();
     }
+    if (completionType === "holed" && (puttRollAnimation || fullShotFlightAnimation || competitionTurn)) {
+      if (challengeActive()) challengeAudio.dispatch({ kind: "cup" });
+      else playBallInHoleSound();
+    }
     showResult(resultLie, remaining, penalty);
     if (puttingEvaluation) renderPuttAnalysis(puttingEvaluation, remaining);
     if (competitionTurn) showCompetitionComparison();
-    if (state.holeFinished && state.holeIndex === 17) {
-      window.setTimeout(openRoundReview, 650);
-    }
   };
-  const finishGameMasterPlayback = gmAnimation => {
-    if (gmAnimation?.putt && state.puttAnimation === gmAnimation.putt) {
-      state.puttAnimation = null;
-      puttAnimationTimer = null;
-    }
-    if (gmAnimation?.flight && state.flightAnimation === gmAnimation.flight) {
-      state.flightAnimation = null;
-      flightAnimationTimer = null;
-    }
-    finalizeCompetitionTurn(shotRecord, competitionHumanDecisionScore);
-    if (completionType) completeStrategistHoleAfterHuman();
-    setCompetitionBusy(false);
-    renderMap();
+  const finishHumanPlayback = () => {
+    if (competitionTurn) setCompetitionBusy(false);
     presentShotResult();
   };
-  const playGameMasterShot = () => {
-    if (puttRollAnimation && state.puttAnimation === puttRollAnimation) {
-      state.puttAnimation = null;
-      puttAnimationTimer = null;
-      if (completionType === "holed") playBallInHoleSound();
+  const playHumanShot = () => {
+    if (competitionTurn) {
+      state.competitionPlayback = "human";
+      renderCompetitionStatus();
     }
-    if (fullShotFlightAnimation && state.flightAnimation === fullShotFlightAnimation) {
-      state.flightAnimation = null;
-      flightAnimationTimer = null;
+    puttRollAnimation = puttPacket ? beginPuttAnimation(puttPacket, strokeIndex) : null;
+    fullShotFlightAnimation = resultPacket
+      ? beginFlightAnimation(resultPacket, strokeIndex, preShotTerrainBounds, start)
+      : null;
+    renderMap();
+    if (puttRollAnimation) {
+      puttAnimationTimer = window.setTimeout(finishHumanPlayback, puttRollAnimation.durationMs + 80);
+    } else if (fullShotFlightAnimation) {
+      flightAnimationTimer = window.setTimeout(finishHumanPlayback, fullShotFlightAnimation.durationMs + 80);
+    } else {
+      finishHumanPlayback();
     }
+  };
+  const playPreparedGameMasterShot = (prepared, onFinished) => {
     state.competitionPlayback = "gm";
     renderCompetitionStatus();
     renderMap();
-    const gmShot = competitionTurn?.result;
+    const gmShot = prepared?.result;
     window.setTimeout(() => {
-      if (!competitionActive() || state.competitionPendingTurn !== competitionTurn) return;
+      if (!competitionActive() || state.competitionPendingTurn !== prepared) return;
       const strategist = activeStrategistHoleState();
       const gmStrokeIndex = (strategist?.shots?.length || 0) + 1;
       const gmPuttAnimation = gmShot?.puttPacket
@@ -5911,29 +8006,95 @@ async function playShot() {
         : null;
       const gmAnimation = { putt: gmPuttAnimation, flight: gmFlightAnimation };
       renderMap();
+      const finishGameMasterPlayback = () => {
+        if (gmAnimation.putt && state.puttAnimation === gmAnimation.putt) {
+          state.puttAnimation = null;
+          puttAnimationTimer = null;
+        }
+        if (gmAnimation.flight && state.flightAnimation === gmAnimation.flight) {
+          state.flightAnimation = null;
+          flightAnimationTimer = null;
+        }
+        if (prepared.event?.completion_type === "holed") {
+          if (challengeActive()) challengeAudio.dispatch({ kind: "cup" });
+          else playBallInHoleSound();
+        }
+        if (challengeActive() && prepared.event) {
+          challengeAudio.dispatch({
+            kind: "gm_shot_result",
+            lie: prepared.event.resolved_lie || gmShot?.lie,
+            penalty_strokes: prepared.event.penalty_strokes || 0,
+            completion_type: prepared.event.completion_type || null,
+            putt: Boolean(gmShot?.puttPacket)
+          });
+        }
+        renderMap();
+        onFinished();
+      };
       if (gmPuttAnimation) {
-        puttAnimationTimer = window.setTimeout(() => finishGameMasterPlayback(gmAnimation), gmPuttAnimation.durationMs + 80);
+        puttAnimationTimer = window.setTimeout(finishGameMasterPlayback, gmPuttAnimation.durationMs + 80);
       } else if (gmFlightAnimation) {
-        flightAnimationTimer = window.setTimeout(() => finishGameMasterPlayback(gmAnimation), gmFlightAnimation.durationMs + 80);
+        flightAnimationTimer = window.setTimeout(finishGameMasterPlayback, gmFlightAnimation.durationMs + 80);
       } else {
-        window.setTimeout(() => finishGameMasterPlayback(gmAnimation), 450);
+        window.setTimeout(finishGameMasterPlayback, 450);
       }
     }, 500);
   };
-  const finishHumanPlayback = competitionTurn ? playGameMasterShot : presentShotResult;
-  if (puttRollAnimation) {
-    puttAnimationTimer = window.setTimeout(finishHumanPlayback, puttRollAnimation.durationMs + 80);
-  } else if (fullShotFlightAnimation) {
-    flightAnimationTimer = window.setTimeout(finishHumanPlayback, fullShotFlightAnimation.durationMs + 80);
+  const finishGameMasterHoleBeforeHuman = () => {
+    const strategist = activeStrategistHoleState();
+    if (!completionType || strategist?.hole_finished) {
+      playHumanShot();
+      return;
+    }
+    if (state.competition.phase === CompetitionPhase.COMPARISON_READY) {
+      state.competition = continueCompetition(state.competition);
+      cacheActiveCompetition();
+    }
+    const prepared = prepareCompetitionTurn({
+      kind: "human_holed_out",
+      club: null,
+      power_percent: null,
+      target: null,
+      target_label: "Human already holed"
+    });
+    if (!prepared) {
+      playHumanShot();
+      return;
+    }
+    playPreparedGameMasterShot(prepared, () => {
+      finalizeCompetitionTurn(null, 100);
+      finishGameMasterHoleBeforeHuman();
+    });
+  };
+  if (competitionTurn) {
+    playPreparedGameMasterShot(competitionTurn, () => {
+      finalizeCompetitionTurn(shotRecord, competitionHumanDecisionScore);
+      finishGameMasterHoleBeforeHuman();
+    });
   } else {
-    finishHumanPlayback();
+    if (puttRollAnimation) {
+      puttAnimationTimer = window.setTimeout(finishHumanPlayback, puttRollAnimation.durationMs + 80);
+    } else if (fullShotFlightAnimation) {
+      flightAnimationTimer = window.setTimeout(finishHumanPlayback, fullShotFlightAnimation.durationMs + 80);
+    } else {
+      finishHumanPlayback();
+    }
   }
 }
 
 function finishHole(extraStroke = 0, completionType = "holed", messageMetadata = {}) {
   const strokes = state.scores[state.holeIndex] ?? (state.shots.reduce((sum, shot) => sum + 1 + shot.penalty, 0) + extraStroke);
-  if (completionType === "holed" && !state.puttAnimation) playBallInHoleSound();
+  if (completionType === "holed" && !state.puttAnimation && !state.flightAnimation && !state.competitionBusy) {
+    if (challengeActive()) challengeAudio.dispatch({ kind: "cup" });
+    else playBallInHoleSound();
+  }
   addGmMessage(holeCompletionMessage(strokes), "gm", messageMetadata);
+}
+
+function activeDisplayHoleNumber() {
+  return challengeActive()
+    ? state.challenge.holes[challengeSlot()].source_hole_number
+    : state.holeIndex + 1;
 }
 
 function openHoleCompleteDialog() {
@@ -5952,7 +8113,9 @@ function openHoleCompleteDialog() {
   $("#hole-complete-copy").textContent = state.completionType === "gimme"
     ? `That finished ${gimmeDistance} from the cup, so the next putt is conceded as a gimme. You completed Hole ${state.holeIndex + 1} in ${strokes} strokes for ${golfScoreName(relative)}.`
     : `It is holed. You completed Hole ${state.holeIndex + 1} in ${strokes} strokes for ${golfScoreName(relative)}.`;
-  nextButton.textContent = state.holeIndex < 17 ? `Play Hole ${state.holeIndex + 2}` : "Review round";
+  nextButton.textContent = challengeActive()
+    ? challengeSlot() < 2 ? `Play challenge hole ${challengeSlot() + 2}` : "See match result"
+    : state.holeIndex < 17 ? `Play Hole ${state.holeIndex + 2}` : "Game finished";
   // Mobile Safari can leave the fixed enlarged-green layer above a newly
   // opened dialog. Remove that layer first, then open on the next frame.
   if (state.greenEnlarged) closeEnlargedGreen();
@@ -5985,9 +8148,11 @@ function holeCompletionMessage(strokes) {
   const puttLead = state.completionType === "gimme"
     ? "That finished inside two feet, so the next putt is conceded as a gimme. "
     : state.shots.at(-1)?.club === "Putter" ? "Good putt! " : "";
-  const next = state.holeIndex < 17
+  const next = challengeActive()
+    ? `Challenge hole ${challengeSlot() + 1} complete in ${strokes} strokes for ${scoreName}.`
+    : state.holeIndex < 17
     ? `Hole complete. You finished in ${strokes} strokes for ${scoreName}. Move on to Hole ${state.holeIndex + 2} when you’re ready.`
-    : `Round complete. You finished the 18th in ${strokes} strokes for ${scoreName}. Open the scorecard to review your round.`;
+    : `Round complete. You finished the 18th in ${strokes} strokes for ${scoreName}. Tap Game finished to save and review your round.`;
   return `${puttLead}${next}`;
 }
 
@@ -6009,25 +8174,27 @@ function showResult(lie, remaining, penalty) {
         ? " One penalty stroke; unplayable-ball relief applied."
         : penalty ? " One penalty stroke added." : "";
   const resultCopy = state.holeFinished
-    ? `${fmtScore(state.scores[state.holeIndex] - card().Par)} on the hole. ${state.holeIndex < 17 ? "Move to the next tee when ready." : "Your round is complete."}`
+    ? `${fmtScore(state.scores[state.holeIndex] - card().Par)} on the hole. ${challengeActive() ? "Finish the paired hole, then continue the challenge." : state.holeIndex < 17 ? "Move to the next tee when ready." : "Your round is complete."}`
     : last.club === "Putter"
       ? `${formatPuttDistance(remaining * 3)} remain.${reliefCopy}`
       : `${Math.round(remaining)} yards remain.${reliefCopy}`;
   showMobileShotToast(resultTitle, resultCopy);
   announceLatestShotResult();
+  if (academyActive()) completeAcademyShot();
   $("#declare-unplayable").hidden = !(
     last.resultPacket && last.resultRequest && last.resultRequest.engine !== "greenside" &&
     !last.resultPacket.relief && !state.holeFinished &&
     !["green", "tee", "water", "out_of_bounds"].includes(last.resultPacket.landing_surface)
   );
-  if (state.holeFinished) openHoleCompleteDialog();
+  if (state.holeFinished && !academyActive()) openHoleCompleteDialog();
 }
 
 function declareLastShotUnplayable() {
   const shot = state.shots.at(-1);
   if (!shot?.resultPacket || shot.resultRequest?.engine === "greenside" ||
     shot.resultPacket.relief || state.holeFinished) return;
-  const context = shot.resultRequest.context;
+  const context = hydrateResultRequestContext(shot.resultRequest);
+  if (!context) return;
   const relief = resolveUnplayableRelief(context, shot.resultPacket);
   const resolvedLie = resultLieFromSurface(relief.resulting_surface).type;
   const remaining = Math.round(Math.hypot(
@@ -6056,7 +8223,7 @@ function declareLastShotUnplayable() {
 }
 
 function renderPuttAnalysis(evaluation, remainingYards) {
-  const recommendedRead = `${formatInches(evaluation.read.breakInches)} ${evaluation.read.startDirection}`;
+  const recommendedRead = `${formatBreak(evaluation.read.breakInches)} ${evaluation.read.startDirection}`;
   const playerRead = evaluation.playerOffsetInches < .5
     ? "At the cup"
     : `${formatInches(Math.round(evaluation.playerOffsetInches))} ${evaluation.playerOffsetDirection}`;
@@ -6129,9 +8296,9 @@ function updateHoleBrief() {
   mapStatus.classList.toggle("custom", state.course.isCustomMap === true);
   $("#course-select").value = state.courseId;
   $("#scorecard-course-name").textContent = state.course.name;
-  $("#header-hole").textContent = state.holeIndex + 1;
-  $("#hole-number").textContent = String(state.holeIndex + 1).padStart(2, "0");
-  $("#hole-name").textContent = state.courseId === "meadows" ? holeNames[state.holeIndex] : h.layout_type;
+  $("#header-hole").textContent = challengeActive() ? `${challengeSlot() + 1}/3` : state.holeIndex + 1;
+  $("#hole-number").textContent = String(activeDisplayHoleNumber()).padStart(2, "0");
+  $("#hole-name").textContent = state.courseId === "meadows" && !challengeActive() ? holeNames[state.holeIndex] : h.layout_type;
   $("#hole-layout").textContent = h.layout_type;
   $("#hole-facts").textContent = `Par ${card().Par} · HCP ${card().Handicap} · ${teeYards()} yards`;
   const totalElevation = hole().elevation_profile.points.at(-1).elevation_m * 3.28084;
@@ -6146,7 +8313,7 @@ function updateHoleBrief() {
   $("#reset-view").hidden = state.liveGpsView;
   $("#mobile-reset-view").hidden = state.liveGpsView;
   $(".map-hint").innerHTML = state.liveGpsView
-    ? "<i></i> Actual GPS positions · refreshes every 5 seconds"
+    ? "<i></i> Live GPS · hold the map to measure from your ball"
     : automaticGreenReliefActive()
     ? "<i></i> Green 3D · click to aim · drag to read the contour"
     : viewMode === "putting"
@@ -6156,8 +8323,8 @@ function updateHoleBrief() {
     : viewMode === "approach"
       ? "<i></i> Approach view · move for distance · click to set line"
       : "<i></i> Move for distance · click to set line";
-  $("#previous-hole").disabled = state.holeIndex === 0;
-  $("#next-hole").disabled = state.holeIndex === 17;
+  $("#previous-hole").disabled = challengeActive() || state.holeIndex === 0;
+  $("#next-hole").disabled = challengeActive() || state.holeIndex === 17;
   syncMobileSheetUI();
   renderRoundNavigation();
   $$(".tee-switch button").forEach(button => {
@@ -6175,6 +8342,7 @@ function openEnlargedGreen() {
   alignGreenToPlayerView();
   state.greenViewTilt = 52;
   $(".course-stage").classList.add("enlarged-green");
+  syncEnlargedGreenViewportTop();
   document.body.classList.add("green-view-open");
   $("#green-toolbar").hidden = false;
   $("#close-enlarged-green").hidden = false;
@@ -6186,6 +8354,19 @@ function openEnlargedGreen() {
   $("#mobile-enlarge-green").hidden = true;
   renderMap();
   updateEnlargedPuttControls();
+}
+
+function enlargedGreenViewportTop() {
+  const viewportTop = window.visualViewport?.offsetTop || 0;
+  const topbar = $(".topbar");
+  if (!topbar || getComputedStyle(topbar).display === "none") return viewportTop;
+  return Math.max(viewportTop, topbar.getBoundingClientRect().bottom);
+}
+
+function syncEnlargedGreenViewportTop() {
+  const stage = $(".course-stage");
+  if (!stage || !state.greenEnlarged) return;
+  stage.style.setProperty("--green-view-top", `${Math.ceil(enlargedGreenViewportTop())}px`);
 }
 
 function updateEnlargedPuttControls() {
@@ -6204,7 +8385,7 @@ function updateEnlargedPuttControls() {
   aimForm.hidden = !putting;
   fullShotClub.hidden = putting;
   $("#green-shot-line-label").textContent = putting ? "Putting line" : "Approach preview";
-  $("#green-power-label").textContent = putting ? "Pace" : "Swing";
+  $("#green-power-label").textContent = putting ? "Pace" : landingTargetActive() ? "Auto Power" : "Swing";
   $("#green-putt-play").textContent = putting ? "Play putt" : "Play shot";
 
   const toPinYards = distance(state.ball, pin().center_point);
@@ -6217,7 +8398,7 @@ function updateEnlargedPuttControls() {
   $("#green-putt-status").textContent = state.target
     ? putting
       ? `${Math.max(1, Math.round(distance(state.ball, state.target) * 3))} ft line selected · click again to refine`
-      : `${Math.max(1, Math.round(distance(state.ball, state.target)))} yd landing target · ${currentLieType()} lie`
+      : `${Math.max(1, Math.round(distance(state.ball, state.target)))} yd ${landingTargetActive() ? "landing target" : "direction line"} · ${currentLieType()} lie`
     : putting
       ? "Tap or drag on the green to set your line"
       : `Tap the green to choose a landing point · ${currentLieType()} lie`;
@@ -6227,11 +8408,15 @@ function updateEnlargedPuttControls() {
     ).join("");
   }
   $("#green-putt-power").min = putting ? "5" : "25";
-  $("#green-putt-power").step = putting ? "1" : "25";
-  $("#green-putt-power").setAttribute("aria-label", putting ? "Putt pace percentage" : "Swing length");
+  const autoPower = !putting && landingTargetActive();
+  $("#green-putt-power").step = putting || autoPower ? "1" : "25";
+  $("#green-putt-power").disabled = autoPower;
+  $("#green-putt-power").setAttribute("aria-label", putting ? "Putt pace percentage" : autoPower ? "Automatic landing-target power" : "Swing length");
   $("#green-putt-power").value = String(powerPercentage);
   $("#green-putt-power-readout").textContent = putting
     ? `${powerPercentage}% · ${rollFeet} ft`
+    : autoPower
+      ? `${powerPercentage}% Auto · ${state.shortGamePlan?.expected_carry ?? "—"} yd carry`
     : `${swingLengthLabel(state.swingPower)} · ${clubPowerDistanceLabel(currentClub())}`;
   $("#green-putt-play").disabled = !state.target;
   renderGreenCaddieReadUI();
@@ -6274,8 +8459,10 @@ function closeEnlargedGreen() {
   state.greenZoom = 1;
   state.greenViewMode = "top";
   state.greenCaddieRead = null;
-  $(".course-stage")?.classList.remove("enlarged-green");
-  $(".course-stage")?.classList.remove("green-3d");
+  const stage = $(".course-stage");
+  stage?.classList.remove("enlarged-green");
+  stage?.classList.remove("green-3d");
+  stage?.style.removeProperty("--green-view-top");
   document.body.classList.remove("green-view-open");
   document.body.classList.remove("green-aim-editing");
   document.body.classList.remove("green-putt-panel-moved");
@@ -6348,7 +8535,7 @@ function onGreenAimPanelPointerMove(event) {
   const viewport = window.visualViewport;
   const viewportTop = viewport?.offsetTop || 0;
   const viewportHeight = viewport?.height || window.innerHeight;
-  const minimumTop = viewportTop + 8;
+  const minimumTop = Math.max(viewportTop, enlargedGreenViewportTop()) + 8;
   const maximumTop = Math.max(minimumTop, viewportTop + viewportHeight - greenAimPanelDrag.height - 8);
   const nextTop = bounded(
     greenAimPanelDrag.startTop + event.clientY - greenAimPanelDrag.startY,
@@ -6359,14 +8546,16 @@ function onGreenAimPanelPointerMove(event) {
 }
 
 function keepGreenAimPanelInView() {
-  if (!state.greenEnlarged || !document.body.classList.contains("green-aim-editing")) return;
+  if (!state.greenEnlarged) return;
+  syncEnlargedGreenViewportTop();
+  if (!document.body.classList.contains("green-aim-editing")) return;
   const panel = $("#green-putt-controls");
   if (!panel || panel.hidden) return;
   const rect = panel.getBoundingClientRect();
   const viewport = window.visualViewport;
   const viewportTop = viewport?.offsetTop || 0;
   const viewportHeight = viewport?.height || window.innerHeight;
-  const minimumTop = viewportTop + 8;
+  const minimumTop = Math.max(viewportTop, enlargedGreenViewportTop()) + 8;
   const maximumTop = Math.max(minimumTop, viewportTop + viewportHeight - rect.height - 8);
   const nextTop = bounded(rect.top, minimumTop, maximumTop);
   if (Math.abs(nextTop - rect.top) < 1) return;
@@ -6403,6 +8592,10 @@ function clubPowerDistanceLabel(club) {
 }
 
 function clubPowerLabel(club) {
+  if (landingTargetActive() && state.shortGamePlan) {
+    const candidate = state.shortGamePlan.candidate_clubs.find(item => item.club_name === club.name);
+    if (candidate) return `${club.name} · ${candidate.power_percent ?? "—"}% Auto`;
+  }
   return `${club.name} · ${clubPowerDistanceLabel(club)}`;
 }
 
@@ -6471,7 +8664,14 @@ function renderMobileGmHistory() {
   history.innerHTML = conversationMessages()
     .map(message => `<p class="gm-message ${message.role === "player" ? "player" : ""} ${message.kind || ""}">${escapeHtml(message.text)}</p>`)
     .join("");
-  sizeForTwoRecentMessages(history, 150);
+  if (window.matchMedia?.("(max-width: 760px)").matches) {
+    // The expanded mobile controls are one continuous document. Let the full
+    // conversation participate in normal flow so it cannot cover the next
+    // control section.
+    history.style.removeProperty("height");
+  } else {
+    sizeForTwoRecentMessages(history, 150);
+  }
   history.scrollTop = history.scrollHeight;
   renderShotFeedback("mobile");
 }
@@ -6490,21 +8690,15 @@ function syncStructuredShotControls() {
   const putting = structuredShotIsPutt();
   const offsets = putting ? Array.from({ length: 12 }, (_, index) => index + 1) : [1, 2, 3, 4, 5];
   if (!offsets.includes(Number(state.structuredShot.offset))) state.structuredShot.offset = offsets.at(-1);
+  const automatic = automaticShotType();
   $$('[data-structured-shot-form]').forEach(form => {
-    const aim = form.querySelector('[data-shot-field="aim"]');
+    const shotType = form.querySelector('[data-shot-field="shotType"]');
     const adjustment = form.querySelector('[data-shot-field="adjustment"]');
     const offset = form.querySelector('[data-shot-field="offset"]');
     const unit = form.querySelector('[data-shot-offset-unit]');
-    const selectedOption = aim?.querySelector('option[value="selected"]');
-    const pinOption = aim?.querySelector('option[value="pin"]');
-    if (selectedOption) {
-      selectedOption.disabled = false;
-      selectedOption.textContent = state.structuredShot.selectedTarget
-        ? (putting ? "Selected line" : "Selected target")
-        : (putting ? "Selected line · tap green" : "Selected target · tap map");
-    }
-    if (pinOption) pinOption.textContent = putting ? "Cup" : "Pin";
-    if (aim) aim.value = state.structuredShot.aim;
+    const autoOption = shotType?.querySelector('option[value="auto"]');
+    if (autoOption) autoOption.textContent = `${SHOT_TYPE_LABELS[automatic]} — Auto`;
+    if (shotType) shotType.value = state.structuredShot.shotType || "auto";
     if (adjustment) adjustment.value = state.structuredShot.adjustment;
     if (offset) {
       const values = [...offset.options].map(option => Number(option.value));
@@ -6557,21 +8751,19 @@ function rememberStructuredTarget(target, { resetAdjustment = false } = {}) {
 }
 
 function updateStructuredShotField(field, value) {
-  if (field === "aim" && ["", "selected", "pin"].includes(value)) state.structuredShot.aim = value;
+  if (field === "shotType" && ["auto", ...Object.values(ShotType)].includes(value)) {
+    state.structuredShot.shotType = value;
+    clearStrategyPlan();
+    if (landingTargetActive()) syncLandingTargetPower();
+    updateAll();
+    return;
+  }
   if (field === "adjustment" && ["none", "left", "right"].includes(value)) state.structuredShot.adjustment = value;
   if (field === "offset") state.structuredShot.offset = bounded(Math.round(Number(value)), 1, structuredShotIsPutt() ? 12 : 5);
   clearStrategyPlan();
   if (previewStructuredShot()) {
     renderMap();
     updateShotDesk();
-  } else if (field === "aim" && value === "selected") {
-    const instruction = structuredShotIsPutt()
-      ? "Selected line is ready. Tap the intended starting line on the green."
-      : "Selected target is ready. Tap the intended landing point on the map.";
-    const desktopHelp = $("#gm-command-help");
-    const mobileHelp = $("#mobile-gm-help");
-    if (desktopHelp) desktopHelp.textContent = instruction;
-    if (mobileHelp) mobileHelp.textContent = instruction;
   }
 }
 
@@ -6579,34 +8771,53 @@ function playStructuredShot(prefix) {
   const form = $(`[data-structured-shot-form="${prefix}"]`)?.closest("form");
   const noteInput = prefix === "mobile" ? $("#mobile-gm-input") : $("#gm-input");
   const note = noteInput?.value.trim().slice(0, 240) || "";
-  if (!state.structuredShot.aim) {
-    addGmMessage("Choose Pin, or tap the map and use Selected target before playing.");
-    if (prefix === "mobile") setMobileCarouselPage(0);
-    return false;
-  }
-  if (state.structuredShot.aim === "selected" && !state.structuredShot.selectedTarget) {
-    addGmMessage("Selected target needs a point on the map. Tap the landing point, then press Play.");
+  if (!state.structuredShot.aim && state.target) rememberStructuredTarget(state.target);
+  if (!state.structuredShot.aim || !state.structuredShot.selectedTarget) {
+    addGmMessage(structuredShotIsPutt()
+      ? "Set a putting line on the green or use Aim at cup before playing."
+      : "Set a target on the map or use the target button before playing.");
     if (prefix === "mobile") setMobileCarouselPage(0);
     return false;
   }
   if (!previewStructuredShot()) return false;
+  if (landingTargetActive()) syncLandingTargetPower();
 
   const putting = structuredShotIsPutt();
   const aimName = state.structuredShot.aim === "pin" ? (putting ? "cup" : "pin") : "selected target";
   const targetDistance = distance(state.ball, state.target);
   const targetDistanceLabel = putting ? formatPuttDistance(targetDistance * 3) : `${Math.round(targetDistance)} yards`;
+  const shotType = currentShotType();
+  const shotTypeLabel = SHOT_TYPE_LABELS[shotType] || "Shot";
+  const shotTypeValidation = validateShotType({
+    shotType,
+    lie: currentLieType(),
+    clubName: currentClub().name,
+    targetDistanceYards: targetDistance
+  });
+  if (!shotTypeValidation.valid) {
+    addGmMessage(shotTypeValidation.message);
+    updateShotDesk();
+    return false;
+  }
   const adjustment = state.structuredShot.adjustment === "none"
     ? "no lie adjustment"
     : `aim ${state.structuredShot.offset} ${putting ? (state.structuredShot.offset === 1 ? "inch" : "inches") : (state.structuredShot.offset === 1 ? "yard" : "yards")} ${state.structuredShot.adjustment}`;
-  const structuredInstruction = `Aim at ${aimName}; ${adjustment}.`;
+  const structuredInstruction = landingTargetActive()
+    ? `Land at ${aimName}; ${adjustment}.`
+    : `Aim at ${aimName}; ${adjustment}.`;
   state.pendingPlayerInstructions = [structuredInstruction];
   state.pendingPlayerNote = note;
   if (noteInput) noteInput.value = "";
-  addGmMessage(`${structuredInstruction} Target line: ${targetDistanceLabel} from the ball.${note ? ` Note: ${note}` : ""}`, "player");
-  addGmMessage(`Confirmed: ${currentClub().name} · ${finePaceControl() ? `${Math.round(state.swingPower * 100)}% pace` : swingLengthLabel(state.swingPower)} · ${aimName} · ${adjustment}.`);
+  addGmMessage(`${structuredInstruction} ${landingTargetActive() ? "Landing target" : "Target line"}: ${targetDistanceLabel} from the ball.${note ? ` Note: ${note}` : ""}`, "player");
+  const powerDescription = finePaceControl()
+    ? `${Math.round(state.swingPower * 100)}% pace`
+    : landingTargetActive()
+      ? `${Math.round(state.swingPower * 100)}% Auto Power`
+      : swingLengthLabel(state.swingPower);
+  addGmMessage(`Confirmed: ${shotTypeLabel} · ${currentClub().name} · ${powerDescription} · ${aimName} · ${adjustment}.`);
   acceptCurrentShotSetup();
   playCurrentShotFromMobile();
-  form?.querySelector('[data-shot-field="aim"]')?.setCustomValidity("");
+  form?.querySelector('[data-shot-field="shotType"]')?.setCustomValidity("");
   return true;
 }
 
@@ -6616,23 +8827,69 @@ function acceptCurrentShotSetup() {
   if (state.target) state.shotDraft.target = true;
 }
 
+function syncMobileCarouselSafeTop() {
+  const sheet = $("#mobile-shot-sheet");
+  if (!sheet) return;
+  const dockTargets = mobileCarouselDockTargets(sheet);
+  sheet.style.setProperty("--mobile-carousel-safe-top", `${Math.round(dockTargets.top)}px`);
+}
+
+function mobileShotSheetExpanded() {
+  return state.mobileSheetState === "expanded";
+}
+
+function mobileShotSheetSummary() {
+  if (academyActive()) {
+    const status = state.academy?.status;
+    if (status === "LOADING") return "Reading the hole";
+    if (status === "PLAYING") return "Watch the shot";
+    if (status === "RESULT") return state.academy?.finalReport ? "View lesson score" : "Review the decision";
+    const selected = state.academy?.choices?.find(choice => choice.id === state.academy?.selectedId);
+    return selected ? academyChoiceTitle(selected) : "Choose a plan";
+  }
+  const power = finePaceControl()
+    ? `${Math.round(state.swingPower * 100)}% pace`
+    : swingLengthLabel(state.swingPower);
+  const target = state.target
+    ? `${Math.round(distance(state.ball, state.target))} yd target`
+    : "Set target";
+  return `${currentClub().name} · ${power} · ${target}`;
+}
+
+function setMobileShotSheetState(nextState, { focus = true } = {}) {
+  const normalized = nextState === "expanded" ? "expanded" : "minimized";
+  state.mobileSheetState = normalized;
+  state.mobileQuickPanel = null;
+  syncMobileSheetUI();
+  if (!focus || !window.matchMedia?.("(max-width: 760px)").matches) return;
+  window.requestAnimationFrame(() => {
+    if (normalized === "expanded") {
+      (academyActive() ? $("#academy-minimize") : $("#mobile-shot-sheet-minimize"))?.focus({ preventScroll: true });
+    } else {
+      $("#mobile-shot-sheet-expand")?.focus({ preventScroll: true });
+    }
+  });
+}
+
 function syncMobileSheetUI() {
   const sheet = $("#mobile-shot-sheet");
   if (!sheet) return;
+  const mobile = window.matchMedia?.("(max-width: 760px)").matches ?? false;
+  const expanded = mobileShotSheetExpanded();
   const page = bounded(Math.round(state.mobileCarouselPage || 0), 0, MOBILE_CAROUSEL_SECTIONS.length - 1);
-  const dock = MOBILE_CAROUSEL_DOCKS.includes(state.mobileCarouselDock) ? state.mobileCarouselDock : "bottom";
   state.mobileCarouselPage = page;
-  state.mobileCarouselDock = dock;
-  sheet.dataset.sheetState = "carousel";
+  state.mobileCarouselDock = "bottom";
+  sheet.dataset.sheetState = expanded ? "expanded" : "minimized";
   sheet.dataset.carouselPage = String(page);
-  sheet.dataset.dock = dock;
+  sheet.dataset.dock = "bottom";
   sheet.style.removeProperty("--mobile-carousel-drag-top");
   sheet.removeAttribute("data-dragging");
-  $("#mobile-carousel-track").style.transform = `translateY(-${page * 100}%)`;
+  $("#mobile-carousel-track").style.transform = mobile ? "none" : `translateY(-${page * 100}%)`;
   const pages = $$('[data-mobile-carousel-section]');
   pages.forEach((item, index) => {
-    item.setAttribute("aria-hidden", String(index !== page));
-    item.inert = index !== page;
+    const hidden = !mobile && index !== page;
+    item.setAttribute("aria-hidden", String(hidden));
+    item.inert = hidden;
   });
   const titles = [
     ["Shot plan", sheet.dataset.planTitle || "Plan this shot"],
@@ -6643,14 +8900,43 @@ function syncMobileSheetUI() {
   ];
   const flight = activeFlightAnimation();
   sheet.dataset.flight = flight ? "true" : "false";
-  $("#mobile-carousel-kicker").textContent = flight ? "Ball in flight" : titles[page][0];
+  $("#mobile-carousel-kicker").textContent = flight ? "Ball in flight" : mobile ? "Shot controls" : titles[page][0];
   $("#mobile-carousel-title").textContent = flight
     ? `${state.shots.at(-1)?.club || "Shot"} · watch the ball`
-    : titles[page][1];
-  $("#mobile-carousel-position").textContent = flight ? "LIVE" : `${page + 1}/${pages.length}`;
+    : mobile ? (sheet.dataset.planTitle || "Plan this shot") : titles[page][1];
+  $("#mobile-carousel-position").textContent = flight ? "LIVE" : mobile ? "ALL" : `${page + 1}/${pages.length}`;
   $("#mobile-carousel-dock-label").textContent = "Move";
   $("#mobile-carousel-previous").disabled = Boolean(flight) || page === 0;
   $("#mobile-carousel-next").disabled = Boolean(flight) || page === pages.length - 1;
+  sheet.setAttribute("aria-hidden", String(mobile && !expanded));
+  sheet.inert = mobile && !expanded;
+  const peek = $("#mobile-shot-sheet-expand");
+  if (peek) {
+    peek.hidden = !mobile || expanded || state.greenEnlarged || state.liveGpsView;
+    peek.disabled = Boolean(flight) || (academyActive() && state.academy?.status === "PLAYING");
+    peek.setAttribute("aria-expanded", String(expanded));
+    $("#mobile-sheet-peek-kicker").textContent = academyActive()
+      ? "Golf Academy · Tap to open"
+      : "Shot plan · Tap to open";
+    $("#mobile-sheet-peek-summary").textContent = mobileShotSheetSummary();
+  }
+  const academyDesk = $("#academy-decision-desk");
+  if (academyDesk && academyActive()) academyDesk.inert = mobile && !expanded;
+  const backgroundLocked = mobile && expanded;
+  [$(".topbar"), $(".mobile-round-nav")].forEach(element => {
+    if (element) element.inert = backgroundLocked;
+  });
+  const stage = sheet.closest(".course-stage");
+  if (stage) {
+    stage.inert = backgroundLocked && academyActive();
+    if (!academyActive()) {
+      [$("#course-map"), $(".map-top-controls"), $(".map-toolbar"), $(".map-key")].forEach(element => {
+        if (element) element.inert = backgroundLocked;
+      });
+    }
+  }
+  document.body.classList.toggle("mobile-shot-plan-expanded", mobile && expanded);
+  document.body.classList.toggle("mobile-shot-plan-minimized", mobile && !expanded);
   sheet.closest(".course-stage")?.classList.remove("mobile-shot-setup-open");
 }
 
@@ -6658,8 +8944,21 @@ function mobileCarouselDockTargets(sheet) {
   const stage = sheet.closest(".course-stage");
   const stageRect = stage?.getBoundingClientRect() || { top: 0, height: window.innerHeight };
   const height = sheet.getBoundingClientRect().height;
-  const top = Math.min(48, Math.max(8, stageRect.height - height - 58));
-  const bottom = Math.max(top, stageRect.height - height - 58);
+  const mobileRoundNav = $(".mobile-round-nav");
+  const navTop = mobileRoundNav?.getBoundingClientRect().top ?? (stageRect.top + stageRect.height - 50);
+  const bottomClearance = Math.max(0, stageRect.top + stageRect.height - navTop) + 46;
+  const challengeCard = $("#challenge-match-card");
+  const protectedElements = [challengeCard, $("#competition-score-header")];
+  if (challengeCard && !challengeCard.hidden && getComputedStyle(challengeCard).display !== "none") {
+    protectedElements.push($(".map-top-controls"));
+  }
+  const protectedBottom = protectedElements
+    .filter(element => element && !element.hidden && getComputedStyle(element).display !== "none")
+    .reduce((bottom, element) => Math.max(bottom, element.getBoundingClientRect().bottom - stageRect.top), 0);
+  const minimumTop = Math.max(48, protectedBottom ? protectedBottom + 8 : 48);
+  const maximumTop = Math.max(8, stageRect.height - height - bottomClearance);
+  const top = Math.min(minimumTop, maximumTop);
+  const bottom = Math.max(top, maximumTop);
   return { stageTop: stageRect.top, top, bottom };
 }
 
@@ -6673,6 +8972,14 @@ function setMobileCarouselDock(dock) {
 function setMobileCarouselPage(index) {
   state.mobileCarouselPage = bounded(Math.round(index), 0, MOBILE_CAROUSEL_SECTIONS.length - 1);
   syncMobileSheetUI();
+  if (!window.matchMedia?.("(max-width: 760px)").matches || !mobileShotSheetExpanded()) return;
+  const viewport = $("#mobile-carousel-viewport");
+  const section = $$('[data-mobile-carousel-section]')[state.mobileCarouselPage];
+  if (!viewport || !section) return;
+  window.requestAnimationFrame(() => viewport.scrollTo({
+    top: Math.max(0, section.offsetTop - 10),
+    behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+  }));
 }
 
 function onMobileMapPlanPointerDown(event) {
@@ -6767,6 +9074,7 @@ function toggleMobileQuickPanel(panel) {
 }
 
 function onMobileCarouselWheel(event) {
+  if (window.matchMedia?.("(max-width: 760px)").matches) return;
   if (Math.abs(event.deltaY) < 8 || performance.now() < mobileCarouselWheelUntil) return;
   event.preventDefault();
   mobileCarouselWheelUntil = performance.now() + 280;
@@ -6774,6 +9082,7 @@ function onMobileCarouselWheel(event) {
 }
 
 function onMobileCarouselPointerDown(event) {
+  if (window.matchMedia?.("(max-width: 760px)").matches) return;
   if (event.target.closest("button, input, select, textarea, a")) return;
   cancelTargetPointerDrag();
   mobileCarouselSwipe = {
@@ -6800,11 +9109,13 @@ function onMobileCarouselPointerCancel(event) {
 }
 
 function onMobileCarouselKeyDown(event) {
+  if (window.matchMedia?.("(max-width: 760px)").matches) return;
   if (event.key === "ArrowDown") { event.preventDefault(); setMobileCarouselPage(state.mobileCarouselPage + 1); }
   if (event.key === "ArrowUp") { event.preventDefault(); setMobileCarouselPage(state.mobileCarouselPage - 1); }
 }
 
 function setSwingPowerFromMobile(percentage) {
+  if (landingTargetActive()) return;
   clearStrategyPlan();
   const requestedPower = Math.max(.05, Math.min(1, Number(percentage) / 100));
   state.swingPower = finePaceControl() ? requestedPower : nearestSwingPower(requestedPower);
@@ -6815,25 +9126,35 @@ function setSwingPowerFromMobile(percentage) {
 }
 
 function suggestedMobileTarget() {
-  if (mapViewMode() === "putting") return pinPoint();
-  if (distance(state.ball, pin().center_point) <= 210) return pinPoint();
-  return fairwayCenterTarget() || pinPoint();
+  if (mapViewMode() === "putting") return { point: pinPoint(), label: "the cup" };
+  if (distance(state.ball, pin().center_point) <= 210) return { point: pinPoint(), label: "the pin" };
+  const fairwayTarget = fairwayCenterTarget();
+  return fairwayTarget
+    ? { point: fairwayTarget, label: "fairway center" }
+    : { point: pinPoint(), label: "the pin" };
 }
 
 function playCurrentShotFromMobile() {
   ensureAudio();
   if (state.holeFinished) return;
   if (!state.target) {
-    const target = suggestedMobileTarget();
-    if (!target) {
+    const suggestion = suggestedMobileTarget();
+    if (!suggestion?.point) {
       addGmMessage("Set the target on the map first, then play the shot.");
       setMobileCarouselPage(0);
       return;
     }
-    state.target = target;
+    state.target = suggestion.point;
     state.manualTargetPreview = false;
     state.shotDraft.target = true;
-    addGmMessage("No target was selected, so I used the recommended line for this shot.");
+    renderMap();
+    updateShotDesk();
+    const suggestedDistance = mapViewMode() === "putting"
+      ? formatPuttDistance(distance(state.ball, state.target) * 3)
+      : `${Math.round(distance(state.ball, state.target))} yards`;
+    addGmMessage(`No target was selected. I set the recommended line to ${suggestion.label}, ${suggestedDistance} from the ball. Review the marker, then press Play again to confirm.`);
+    setMobileCarouselPage(0);
+    return;
   }
   state.shotDraft.club = true;
   state.shotDraft.target = true;
@@ -6841,8 +9162,12 @@ function playCurrentShotFromMobile() {
   renderMap();
   updateShotDesk();
   addGmMessage(`${currentClub().name} selected at ${finePaceControl() ? `${Math.round(state.swingPower * 100)}% pace` : swingLengthLabel(state.swingPower)}.`);
+  const mobilePlanViewport = $("#mobile-carousel-viewport");
+  if (mobilePlanViewport) mobilePlanViewport.scrollTop = 0;
+  setMobileShotSheetState("minimized", { focus: false });
   void playShot().catch(error => {
     console.error(error);
+    setMobileShotSheetState("expanded");
     showMobileShotToast("Shot could not be played", "The mobile shot action hit an error. Try setting the line again.");
   });
   if (!state.holeFinished) {
@@ -6853,6 +9178,9 @@ function playCurrentShotFromMobile() {
 function selectedShotExpectedYards() {
   const club = currentClub();
   const putting = currentLieType() === "Green" && club.name === "Putter";
+  if (!putting && landingTargetActive() && state.shortGamePlan?.expected_carry != null) {
+    return state.shortGamePlan.expected_carry;
+  }
   return putting
     ? PUTTER_RANGE_FEET * state.swingPower / 3
     : club.carry * liePenalty() * state.swingPower;
@@ -6861,6 +9189,7 @@ function selectedShotExpectedYards() {
 function syncManualTargetPreview() {
   if (!state.ball || state.holeFinished) return;
   if (!state.shotDraft.club) return;
+  if (landingTargetActive()) return;
   if (state.target && !state.manualTargetPreview) return;
   const referenceTarget = mapViewMode() === "putting" ? pinPoint() : normalShotTarget(state.ball);
   state.target = projectPointToward(state.ball, referenceTarget, selectedShotExpectedYards());
@@ -6900,10 +9229,15 @@ function expectedShotProjection() {
         state.ball[1] + dy / lineLength * expectedYards / scale
       ]
     : [...state.ball];
-  const toPinYards = distance(projectedLanding, pin().center_point);
+  const projectedFinish = landingTargetActive() && state.shortGamePlan?.expected_roll != null
+    ? projectPointToward(projectedLanding, pin().center_point, state.shortGamePlan.expected_roll)
+    : projectedLanding;
+  const toPinYards = distance(projectedFinish, pin().center_point);
   const expectedLabel = putting
     ? `${Math.round(expectedYards * 3)} ft roll`
-    : `${Math.round(expectedYards)} yd carry`;
+    : landingTargetActive() && state.shortGamePlan?.expected_roll != null
+      ? `${Math.round(expectedYards)} carry + ${Math.round(state.shortGamePlan.expected_roll)} roll`
+      : `${Math.round(expectedYards)} yd carry`;
   const toPinLabel = putting
     ? (toPinYards * 3 < 1 ? `${Math.max(1, Math.round(toPinYards * 36))} in` : `${Math.round(toPinYards * 3)} ft`)
     : `${Math.round(toPinYards)} yd`;
@@ -6914,7 +9248,57 @@ function expectedShotProjection() {
   return { expectedLabel, toPinLabel, toPinHeading: putting ? "To cup after" : "To pin after", copy };
 }
 
+function renderShortGamePlan() {
+  const putting = currentLieType() === "Green" || currentClub().name === "Putter";
+  $$('[data-aim-mode-control]').forEach(control => { control.hidden = putting; });
+  $$('[data-aim-type]').forEach(button => {
+    const active = button.dataset.aimType === state.aimType;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-checked", String(active));
+    button.disabled = button.dataset.aimType === AimType.LANDING_TARGET && !landingTargetAvailable();
+  });
+  const plan = state.shortGamePlan;
+  for (const prefix of ["desktop", "mobile"]) {
+    const container = $(`#${prefix}-short-game-plan`);
+    if (!container) continue;
+    container.hidden = !landingTargetActive();
+    if (!landingTargetActive()) continue;
+    if (!plan) {
+      container.innerHTML = `<strong>Landing Target · Auto Power</strong><p>Place the marker where the ball should first land, then choose a club.</p>`;
+      continue;
+    }
+    if (plan.shot_model === "invalid") {
+      container.innerHTML = `<strong>${escapeHtml(SHOT_TYPE_LABELS[plan.shot_type] || "Shot")} unavailable</strong><p>${escapeHtml(plan.validation_message)}</p>`;
+      continue;
+    }
+    const candidates = plan.candidate_clubs
+      .filter(candidate => candidate.status !== PowerStatus.UNREACHABLE || candidate.club_name === plan.selected_club);
+    const statusCopy = plan.power_status === PowerStatus.REACHABLE
+      ? "Reachable"
+      : plan.power_status === PowerStatus.MARGINAL
+        ? "Marginal distance-control range"
+        : plan.power_status === PowerStatus.UNSAFE_TRAJECTORY
+          ? "Unsafe trajectory over the intervening hazard"
+          : "Outside this club’s supported power range";
+    if (plan.shot_model === "full_flight") {
+      const shotTypeLabel = SHOT_TYPE_LABELS[plan.shot_type] || "Approach";
+      container.innerHTML = `
+        <strong>${escapeHtml(shotTypeLabel)} · Landing Target ${plan.landing_target_distance} yd · Auto Power ${plan.auto_calculated_power ?? "—"}%</strong>
+        <p>${escapeHtml(statusCopy)} · Expected carry ${plan.expected_carry ?? "—"} yd · normal rollout ${plan.expected_roll ?? "—"} yd · finish about ${plan.expected_finish ?? "—"} yd. This shot uses the full-flight model; Rule of 12 is reserved for shots of 30 yards or less.</p>`;
+      continue;
+    }
+    container.innerHTML = `
+      <strong>Landing Target ${plan.landing_target_distance} yd · Auto Power ${plan.auto_calculated_power ?? "—"}%</strong>
+      <p>${escapeHtml(statusCopy)} · Expected carry ${plan.expected_carry ?? "—"} yd · roll ${plan.expected_roll ?? "—"} yd · finish about ${plan.expected_finish ?? "—"} yd. Rule of 12 proposes ${escapeHtml(plan.rule_of_12_candidate || "no club")}. Across ${plan.sample_count || "multiple"} simulations: Safe & Smart ${escapeHtml(plan.safe_smart_choice || "none")}; Aggressive proximity ${escapeHtml(plan.aggressive_choice || "none")}.</p>
+      <table aria-label="Landing target club comparison"><thead><tr><th>Club</th><th>Auto</th><th>Carry</th><th>Roll</th><th>Good</th><th>Leave</th></tr></thead><tbody>
+      ${candidates.map(candidate => `<tr class="${candidate.club_name === plan.selected_club ? "selected" : ""} ${candidate.club_name === plan.recommended_choice ? "recommended" : ""}"><td>${escapeHtml(candidate.club_name)}</td><td>${candidate.power_percent == null ? "—" : `${candidate.power_percent}%`}</td><td>${candidate.expected_carry_yards ?? "—"}</td><td>${candidate.expected_roll_yards ?? "—"}</td><td>${candidate.probability_analysis ? `${candidate.probability_analysis.target_percent}%` : "—"}</td><td>${candidate.status === PowerStatus.UNSAFE_TRAJECTORY ? "Unsafe" : candidate.probability_analysis?.median_leave_yards ?? candidate.expected_leave_yards ?? "—"}</td></tr>`).join("")}
+      </tbody></table>`;
+  }
+}
+
 function updateShotDesk() {
+  if (landingTargetActive()) syncLandingTargetPower();
+  else state.shortGamePlan = null;
   const remaining = distance(state.ball, pin().center_point);
   const club = currentClub();
   const putting = currentLieType() === "Green";
@@ -6932,18 +9316,22 @@ function updateShotDesk() {
   $("#desktop-shot-to-pin-label").textContent = projection.toPinHeading;
   $("#desktop-shot-to-pin").textContent = projection.toPinLabel;
   const paceControl = finePaceControl();
+  const autoPower = landingTargetActive();
   const powerPercentage = Math.round(state.swingPower * 100);
   for (const prefix of ["desktop", "mobile"]) {
     const slider = $(`#${prefix}-power-slider`);
-    slider.min = paceControl ? "5" : "25";
-    slider.step = paceControl ? "1" : "25";
-    slider.setAttribute("aria-label", paceControl ? "Putt pace percentage" : "Swing length");
+    slider.min = paceControl || autoPower ? "5" : "25";
+    slider.step = paceControl || autoPower ? "1" : "25";
+    slider.disabled = autoPower;
+    slider.setAttribute("aria-label", paceControl ? "Putt pace percentage" : autoPower ? "Automatic landing-target power" : "Swing length");
     slider.value = String(powerPercentage);
-    $(`#${prefix}-power-label`).textContent = paceControl ? "Pace" : "Swing";
-    $(`#${prefix}-swing-scale`).hidden = paceControl;
+    $(`#${prefix}-power-label`).textContent = paceControl ? "Pace" : autoPower ? "Auto Power" : "Swing";
+    $(`#${prefix}-swing-scale`).hidden = paceControl || autoPower;
   }
   $("#desktop-power-readout").textContent = paceControl
     ? `${powerPercentage}% pace`
+    : autoPower
+      ? `${powerPercentage}% Auto · ${state.shortGamePlan?.power_status || "Select target"}`
     : `${swingLengthLabel(state.swingPower)} · ${clubPowerDistanceLabel(club)}`;
   const score = state.scores[state.holeIndex];
   $("#hole-score").textContent = score == null ? (state.shots.length || "—") : score;
@@ -6951,10 +9339,12 @@ function updateShotDesk() {
   $("#round-score").textContent = fmtScore(played);
   $("#header-score").textContent = fmtScore(played);
   $("#mobile-previous-hole").disabled = state.holeIndex === 0;
-  $("#mobile-next-hole").disabled = state.holeIndex === 17;
+  $("#mobile-next-hole").disabled = false;
   $("#mobile-previous-hole").setAttribute("aria-label", state.holeIndex === 0 ? "Previous hole unavailable" : `Go to hole ${state.holeIndex}`);
-  $("#mobile-next-hole").setAttribute("aria-label", state.holeIndex === 17 ? "Next hole unavailable" : `Go to hole ${state.holeIndex + 2}`);
-  $("#mobile-round-current strong").textContent = `Hole ${state.holeIndex + 1} of 18`;
+  $("#mobile-next-hole").setAttribute("aria-label", `Go to hole ${nextGpsHoleIndex(state.holeIndex) + 1}`);
+  $("#mobile-round-current strong").textContent = challengeActive()
+    ? `Challenge hole ${challengeSlot() + 1} of 3`
+    : `Hole ${state.holeIndex + 1} of 18`;
   $("#mobile-round-current small").textContent = `Round ${fmtScore(played)} · open card`;
   $("#mobile-hole-label").textContent = `Hole ${state.holeIndex + 1}`;
   $("#mobile-hole-facts").textContent = `P${card().Par} · ${teeYards()}`;
@@ -6976,7 +9366,10 @@ function updateShotDesk() {
   renderMobileGmHistory();
   $("#mobile-power-readout").textContent = paceControl
     ? `${powerPercentage}% · ${clubPowerDistanceLabel(club)}`
+    : autoPower
+      ? `${powerPercentage}% Auto · ${state.shortGamePlan?.expected_carry ?? "—"} yd carry`
     : `${swingLengthLabel(state.swingPower)} · ${clubPowerDistanceLabel(club)}`;
+  renderShortGamePlan();
   syncStructuredShotControls();
   updateEnlargedPuttControls();
   syncMobileSheetUI();
@@ -7019,11 +9412,44 @@ function updateAll(redraw = true) {
   updateHoleBrief();
   updateProfileUI();
   updateShotDesk();
+  updateGameFinishedControls();
   renderGmConversation();
   updateFullscreenButton();
   updateCourseMapModeUI();
   renderCompetitionStatus();
+  renderAcademyDecisionDesk();
   if (redraw) renderMap();
+}
+
+function regularRoundIsComplete() {
+  return state.scorecard.length > 0 &&
+    state.scores.length >= state.scorecard.length &&
+    state.scores.slice(0, state.scorecard.length).every(Number.isInteger);
+}
+
+function updateGameFinishedControls() {
+  const specialMode = challengeActive() || academyActive();
+  const ready = regularRoundIsComplete() && !specialMode;
+  const finalized = ready && state.postRoundReport?.round?.status === "completed";
+  for (const button of [$("#game-finished-button"), $("#mobile-game-finished-button")]) {
+    if (!button) continue;
+    button.hidden = specialMode;
+    button.disabled = !ready;
+    button.dataset.state = finalized ? "saved" : ready ? "ready" : "waiting";
+    button.setAttribute("aria-pressed", String(finalized));
+    button.title = ready
+      ? finalized ? "This game is complete. Open the finished-round report." : "Confirm the completed game and open its report."
+      : "Complete all 18 holes to finish the game.";
+  }
+}
+
+function finishGame() {
+  if (!regularRoundIsComplete() || challengeActive() || academyActive()) return;
+  currentPostRoundReport({ freezeCompleted: true });
+  persistRoundState();
+  schedulePlayerRoundSync(0);
+  updateGameFinishedControls();
+  openRoundReview();
 }
 
 function gpsRoundStorageKey() {
@@ -7101,7 +9527,12 @@ async function syncGpsRound() {
     return result;
   } catch (error) {
     console.error("Could not sync on-course GPS round", error);
-    setGpsSyncDisplay(navigator.onLine === false ? "Offline · on phone" : "Server unavailable", "error");
+    setGpsSyncDisplay(
+      navigator.onLine === false
+        ? "Offline · on phone"
+        : `Sync rejected · ${error.message || "server error"}`,
+      "error"
+    );
     return { saved: false, error };
   }
 }
@@ -7158,6 +9589,11 @@ function liveGpsHoleState() {
 }
 
 function liveGpsCurrentFix(holeState = liveGpsHoleState()) {
+  if (state.gpsReplay && state.gpsReplay.holeIndex === state.holeIndex) {
+    return state.gpsReplay.shotIndex >= 0
+      ? holeState?.shots?.[state.gpsReplay.shotIndex]?.end || holeState?.tee || null
+      : holeState?.tee || null;
+  }
   return holeState?.shots?.at(-1)?.end || holeState?.tee || null;
 }
 
@@ -7166,11 +9602,15 @@ function liveGpsBallPoint() {
 }
 
 function liveGpsShotSegments() {
-  return (liveGpsHoleState()?.shots || []).map((shot, index) => ({
+  const visibleShots = state.gpsReplay && state.gpsReplay.holeIndex === state.holeIndex
+    ? (liveGpsHoleState()?.shots || []).slice(0, state.gpsReplay.shotIndex + 1)
+    : liveGpsHoleState()?.shots || [];
+  return visibleShots.map((shot, index) => ({
     number: Number(shot.number) || index + 1,
     shot,
     start: gpsFixCoursePoint(shot.start),
-    end: gpsFixCoursePoint(shot.end)
+    end: gpsFixCoursePoint(shot.end),
+    replayCurrent: Boolean(state.gpsReplay && index === state.gpsReplay.shotIndex)
   })).filter(segment => segment.start && segment.end);
 }
 
@@ -7330,7 +9770,11 @@ function updateCourseMapModeUI() {
     shotDesk.setAttribute("aria-hidden", String(state.liveGpsView));
   }
   const panel = $("#live-round-panel");
+  const measureHint = $("#live-map-measure-hint");
+  if (measureHint) measureHint.hidden = !state.liveGpsView || Boolean(state.gpsReplay);
   if (!panel) return;
+  const panelLabel = panel.querySelector("header > span");
+  if (panelLabel) panelLabel.innerHTML = `<i aria-hidden="true"></i>${state.gpsReplay ? "Round replay" : "On Course Live"}`;
   const livePanelDock = ["top", "bottom"].includes(state.livePanelDock) ? state.livePanelDock : "bottom";
   state.livePanelDock = livePanelDock;
   panel.dataset.dock = parseLivePanelPosition() ? "free" : livePanelDock;
@@ -7351,6 +9795,12 @@ function updateCourseMapModeUI() {
   const holeState = liveGpsHoleState();
   const currentFix = liveGpsCurrentFix(holeState);
   const currentPoint = gpsFixCoursePoint(currentFix);
+  if (measureHint) {
+    $("#live-map-measure-copy").textContent = currentPoint
+      ? "Touch the map to measure; drag to move the point."
+      : "Record GPS first, then touch the map to measure.";
+    $("#live-map-measure-record").hidden = Boolean(currentPoint);
+  }
   $("#live-round-sync").textContent = state.liveGpsLoading ? "Refreshing…" : liveGpsAgeLabel(round);
   $("#live-round-title").textContent = `${state.course?.shortName || state.course?.name || "Course"} · Hole ${state.holeIndex + 1}`;
   if (!round) {
@@ -7371,6 +9821,122 @@ function updateCourseMapModeUI() {
   const lastShot = holeState?.shots?.at(-1);
   const shotName = lastShot?.strategy?.club_name || lastShot?.strategy?.title || "Shot";
   $("#live-last-shot").textContent = lastShot ? `${shotName} · ${Math.round(lastShot.distance_yards || 0)} yd` : "—";
+  renderGpsReplayControls();
+}
+
+function gpsReplayNavigation(round = state.gpsReplay?.round) {
+  return (round?.holes || []).flatMap((holeState, holeIndex) => (holeState?.shots || []).map((shot, shotIndex) => ({
+    holeIndex,
+    shotIndex,
+    shot
+  })));
+}
+
+function currentGpsReplayEvidence() {
+  const replay = state.gpsReplay;
+  if (!replay) return null;
+  const shot = replay.round?.holes?.[replay.holeIndex]?.shots?.[replay.shotIndex];
+  if (!shot) return null;
+  return gpsReplayShotEvidence({
+    shot,
+    holeNumber: replay.holeIndex + 1,
+    shotIndex: replay.shotIndex,
+    pinPoint: replay.round.holes[replay.holeIndex]?.pin_course_point
+  });
+}
+
+function renderGpsReplayControls() {
+  const controls = $("#gps-replay-controls");
+  if (!controls) return;
+  const replay = state.gpsReplay;
+  controls.hidden = !replay;
+  const liveActions = $(".live-round-actions");
+  if (liveActions) liveActions.hidden = Boolean(replay);
+  if (!replay) return;
+  const evidence = currentGpsReplayEvidence();
+  if (!evidence) return;
+  const navigation = gpsReplayNavigation();
+  const position = navigation.findIndex(item => item.holeIndex === replay.holeIndex && item.shotIndex === replay.shotIndex);
+  $("#gps-replay-result").textContent = evidence.result.label;
+  $("#gps-replay-result-card").dataset.result = evidence.result.id;
+  $("#gps-replay-result-detail").textContent = evidence.endLie;
+  $("#gps-replay-decision").textContent = evidence.decision.label;
+  $("#gps-replay-decision-detail").textContent = evidence.decision.detail;
+  $("#gps-replay-target").textContent = evidence.outcomeVsTarget.lateralLabel;
+  $("#gps-replay-target-detail").textContent = evidence.outcomeVsTarget.distanceLabel;
+  $("#gps-replay-recorded").textContent = evidence.recorded;
+  $("#gps-replay-comment").textContent = evidence.comment;
+  $("#gps-replay-previous").disabled = position <= 0;
+  $("#gps-replay-next").disabled = position < 0 || position >= navigation.length - 1;
+  $("#gps-replay-play").textContent = replay.playing ? "Pause" : position >= navigation.length - 1 ? "Replay" : "Play";
+  $("#live-round-title").textContent = `${state.course.shortName} · Hole ${replay.holeIndex + 1} · ${evidence.shotLabel}`;
+  $("#live-round-position").textContent = evidence.finish
+    ? `${evidence.endLie} · ${evidence.finish}`
+    : `${evidence.endLie} · recorded GPS finish`;
+  $("#live-round-sync").textContent = `Shot ${position + 1} of ${navigation.length}`;
+  $("#live-last-shot").textContent = `${evidence.club}${evidence.power ? ` · ${evidence.power}%` : ""} · ${evidence.distance} yd`;
+}
+
+function stopGpsReplayPlayback() {
+  window.clearTimeout(gpsReplayTimer);
+  gpsReplayTimer = null;
+  if (state.gpsReplay) state.gpsReplay.playing = false;
+}
+
+function showGpsReplayPosition(position, { continuePlaying = false } = {}) {
+  const replay = state.gpsReplay;
+  if (!replay) return false;
+  const navigation = gpsReplayNavigation(replay.round);
+  const next = navigation[position];
+  if (!next) {
+    stopGpsReplayPlayback();
+    updateCourseMapModeUI();
+    return false;
+  }
+  replay.holeIndex = next.holeIndex;
+  replay.shotIndex = next.shotIndex;
+  replay.playing = continuePlaying;
+  const holeChanged = state.holeIndex !== next.holeIndex;
+  state.holeIndex = next.holeIndex;
+  state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
+  if (holeChanged) resetHole();
+  else updateAll();
+  if (continuePlaying) {
+    window.clearTimeout(gpsReplayTimer);
+    gpsReplayTimer = window.setTimeout(() => showGpsReplayPosition(position + 1, { continuePlaying: true }), 2200);
+  }
+  return true;
+}
+
+function moveGpsReplay(direction) {
+  const replay = state.gpsReplay;
+  if (!replay) return;
+  stopGpsReplayPlayback();
+  const navigation = gpsReplayNavigation(replay.round);
+  const position = navigation.findIndex(item => item.holeIndex === replay.holeIndex && item.shotIndex === replay.shotIndex);
+  showGpsReplayPosition(position + direction);
+}
+
+function toggleGpsReplayPlayback() {
+  const replay = state.gpsReplay;
+  if (!replay) return;
+  if (replay.playing) {
+    stopGpsReplayPlayback();
+    renderGpsReplayControls();
+    return;
+  }
+  const navigation = gpsReplayNavigation(replay.round);
+  let position = navigation.findIndex(item => item.holeIndex === replay.holeIndex && item.shotIndex === replay.shotIndex);
+  if (position >= navigation.length - 1) position = -1;
+  showGpsReplayPosition(position + 1, { continuePlaying: true });
+}
+
+function exitGpsReplay() {
+  stopGpsReplayPlayback();
+  state.gpsReplay = null;
+  const liveActions = $(".live-round-actions");
+  if (liveActions) liveActions.hidden = false;
+  void refreshLiveGpsRound({ followHole: false });
 }
 
 async function fetchLatestGpsRoundForCourse() {
@@ -7386,12 +9952,17 @@ async function fetchLatestGpsRoundForCourse() {
 
 function scheduleLiveGpsPoll(delay = LIVE_GPS_POLL_MS) {
   window.clearTimeout(liveGpsPollTimer);
-  if (!state.liveGpsView) return;
+  if (!state.liveGpsView || state.gpsReplay) return;
   liveGpsPollTimer = window.setTimeout(() => void refreshLiveGpsRound({ silent: true }), delay);
 }
 
 async function refreshLiveGpsRound({ followHole = state.liveGpsFollowHole, silent = false } = {}) {
   if (!state.liveGpsView) return;
+  if (state.gpsReplay) {
+    state.liveGpsRound = state.gpsReplay.round;
+    updateAll();
+    return;
+  }
   state.liveGpsLoading = true;
   if (!silent) state.liveGpsStatus = "Loading the latest GPS round for this course…";
   let candidate = newerGpsRound(gpsRound?.course_id === state.courseId ? gpsRound : null, peekLocalGpsRound());
@@ -7430,11 +10001,23 @@ async function refreshLiveGpsRound({ followHole = state.liveGpsFollowHole, silen
 function setCourseMapMode(mode) {
   const live = mode === "live";
   if (state.liveGpsView === live) {
-    if (live) void refreshLiveGpsRound();
+    if (live) {
+      state.liveGpsRound = newerGpsRound(state.liveGpsRound, newerGpsRound(
+        gpsRound?.course_id === state.courseId ? gpsRound : null,
+        peekLocalGpsRound()
+      ));
+      updateCourseMapModeUI();
+      speakLiveMapInstruction();
+      void refreshLiveGpsRound();
+    }
     return;
   }
   state.liveGpsView = live;
   window.clearTimeout(liveGpsPollTimer);
+  if (!live) {
+    stopGpsReplayPlayback();
+    state.gpsReplay = null;
+  }
   if (live) {
     state.liveGpsFollowHole = true;
     closeEnlargedGreen();
@@ -7444,6 +10027,7 @@ function setCourseMapMode(mode) {
       state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
     }
     resetHole();
+    speakLiveMapInstruction();
     void refreshLiveGpsRound();
   } else {
     updateCourseMapModeUI();
@@ -7467,19 +10051,6 @@ function gpsShotDistanceMultiplier(lie, conditions) {
   const lieMultiplier = { Fairway: 1, Tee: 1, Rough: .9, "Rough medium": .82, "Heavy rough": .7, Bunker: .72 }[strategyLie] || .82;
   const slopeMultiplier = conditions.slope === "uphill" ? .92 : conditions.slope === "downhill" ? 1.06 : 1;
   return lieMultiplier * slopeMultiplier;
-}
-
-function gpsConditionSummary(conditions, lie) {
-  const stance = {
-    tbd: "Ball TBD", level: "Level ball", above_feet: "Ball above feet", below_feet: "Ball below feet"
-  }[conditions.stance];
-  const slope = { tbd: "Hill TBD", level: "Level ground", uphill: "Uphill", downhill: "Downhill" }[conditions.slope];
-  const rough = lie === "Rough" || lie === "Heavy rough"
-    ? conditions.rough_depth === "tbd"
-      ? " · Rough TBD"
-      : ` · ${conditions.rough_depth[0].toUpperCase()}${conditions.rough_depth.slice(1)} rough`
-    : "";
-  return `${stance} · ${slope}${rough}`;
 }
 
 function setGpsStatus(message, tone = "neutral") {
@@ -7688,6 +10259,33 @@ function renderGpsMode() {
     : currentFix && pinGps
       ? gpsDistanceYards(currentFix, pinGps)
       : teeYards();
+  const availableClubs = state.profile.clubs
+    .map((club, index) => ({ ...club, index }))
+    .filter(club => club.name !== "Putter");
+  const teeSetupVisible = !holeState.tee && !holeState.finished;
+  if (teeSetupVisible && !holeState.pending_strategy) {
+    const match = recommendGpsClub(state.profile.clubs, remainingYards, { lie: "Tee" });
+    if (match) {
+      holeState.pending_strategy = {
+        id: "yardage-match",
+        title: "Tee yardage match",
+        club_name: match.clubName,
+        club_index: match.clubIndex,
+        power: match.power,
+        target_label: "Tee shot",
+        expected_yards: match.expectedYards,
+        ball_conditions: normalizeGpsBallConditions(null, "Tee")
+      };
+      if (!previewing) persistGpsRound();
+    }
+  }
+  const pendingClubIndex = availableClubs.find(club => club.name === holeState.pending_strategy?.club_name)?.index;
+  const selectedClubIndex = Number.isInteger(holeState.pending_strategy?.club_index)
+    ? holeState.pending_strategy.club_index
+    : pendingClubIndex ?? null;
+  const clubOptions = `<option value="" disabled>Choose club</option>` + availableClubs.map(club =>
+    `<option value="${club.index}">${escapeHtml(club.name)} · ${Math.round(club.carry)} yd</option>`
+  ).join("");
 
   $("#gps-page-view").value = state.gpsPageView;
   $("#gps-preview-note").hidden = !previewing;
@@ -7697,10 +10295,10 @@ function renderGpsMode() {
   $("#gps-hole-facts").textContent = `Par ${card().Par} · ${teeYards()} yd · HCP ${card().Handicap}`;
   $("#gps-previous-hole").disabled = state.holeIndex === 0;
   const gpsNextHole = $("#gps-next-hole");
-  gpsNextHole.disabled = state.holeIndex === 17 && (previewing || !holeState.tee);
-  gpsNextHole.setAttribute("aria-label", !previewing && holeState.tee
-    ? (state.holeIndex === 17 ? "Finish hole and complete round" : "Finish hole and go to next hole")
-    : "Next hole");
+  gpsNextHole.disabled = false;
+  gpsNextHole.setAttribute("aria-label", state.holeIndex === 17
+    ? "Go to hole 1"
+    : `Go to hole ${state.holeIndex + 2}`);
   $("#gps-round-total").textContent = previewing ? "Preview" : `${gpsRoundScore(gpsRound)} shots`;
   const showPlayMetrics = Boolean(holeState.tee && !holeState.finished);
   $("#gps-shot-metrics").hidden = !showPlayMetrics;
@@ -7723,17 +10321,30 @@ function renderGpsMode() {
   $("#gps-accuracy-label").textContent = currentFix?.accuracy_meters
     ? `GPS accuracy ±${Math.round(currentFix.accuracy_meters * METERS_TO_YARDS)} yd`
     : "GPS accuracy —";
+  $("#gps-tee-club-setup").hidden = !teeSetupVisible;
+  $("#gps-tee-club-select").innerHTML = clubOptions;
+  $("#gps-tee-club-select").value = Number.isInteger(selectedClubIndex) ? String(selectedClubIndex) : "";
+  $("#gps-tee-club-select").disabled = previewing;
+  $("#gps-tee-club-status").textContent = Number.isInteger(selectedClubIndex)
+    ? `${availableClubs.find(club => club.index === selectedClubIndex)?.name || "Selected club"} is ready for Shot 1.`
+    : "Choose the club you will hit before recording the tee location.";
 
   const locationButton = $("#gps-location-button");
+  const locationActions = $("#gps-location-actions");
+  const onGreenButton = $("#gps-on-green");
   const reviewingHole = holeState.finished;
   $(".gps-yardage-board").hidden = reviewingHole;
-  locationButton.hidden = reviewingHole;
+  locationActions.hidden = reviewingHole || onGreen;
   $("#gps-mode-status").hidden = reviewingHole;
   locationButton.disabled = previewing || !pinGps || holeState.finished;
+  const showOnGreenAction = Boolean(holeState.tee && !onGreen && !holeState.finished);
+  onGreenButton.hidden = !showOnGreenAction;
+  onGreenButton.disabled = previewing || !pinGps;
+  locationActions.classList.toggle("has-on-green", showOnGreenAction);
   $("#gps-location-title").textContent = holeState.tee ? "Ball location" : "Tee location";
   $("#gps-location-help").textContent = holeState.tee
     ? "At your ball? Tap to complete the last shot"
-    : "Stand at the white tee, then tap";
+    : "Choose your club above, then tap";
   if (previewing) {
     const pageLabel = { tee: "Tee setup", shot: "Shot page", green: "Green page", complete: "Hole Review" }[state.gpsPageView];
     setGpsStatus(`${pageLabel} preview. Controls are read-only and your GPS round will not change.`);
@@ -7742,9 +10353,11 @@ function renderGpsMode() {
   } else if (holeState.finished) {
     setGpsStatus("Hole saved. Use Next hole when your group moves on.");
   } else if (!holeState.tee) {
-    setGpsStatus("Tee location starts this hole and does not add a stroke.");
+    setGpsStatus("Select your club first, then Tee location starts the hole without adding a stroke.");
+  } else if (onGreen) {
+    setGpsStatus("On green. Tap +1 Putt for every putt that stays out, then Holed Out for the final putt.");
   } else {
-    setGpsStatus("Each Ball location completes the previous shot and adds one stroke.");
+    setGpsStatus("Ball Location records the next lie. On Green records the shot and opens putting.");
   }
 
   const lastShot = holeState.shots.at(-1);
@@ -7759,17 +10372,8 @@ function renderGpsMode() {
   $("#gps-lie-controls").hidden = !currentFix || onGreen || holeState.finished;
   $$('[data-gps-lie]').forEach(button => button.classList.toggle("active", button.dataset.gpsLie === currentLie));
   const ballConditions = gpsBallConditions(currentFix, currentLie);
-  $("#gps-stance-select").disabled = previewing || onGreen;
-  $("#gps-slope-select").disabled = previewing || onGreen;
-  $("#gps-stance-select").value = ballConditions.stance;
-  $("#gps-slope-select").value = ballConditions.slope;
-  const roughConditionAvailable = currentLie === "Rough" || currentLie === "Heavy rough";
-  $("#gps-rough-select").disabled = previewing || !roughConditionAvailable;
-  $("#gps-rough-select").value = roughConditionAvailable ? ballConditions.rough_depth : "tbd";
-  $("#gps-condition-summary").textContent = gpsConditionSummary(ballConditions, currentLie);
-  $("#gps-condition-fields").hidden = onGreen;
-  $("#gps-condition-summary").hidden = onGreen;
   const showGpsShotPlanner = Boolean(holeState.tee && !onGreen && !holeState.finished);
+  $("#gps-mode-screen").classList.toggle("gps-shot-page", showGpsShotPlanner);
   const choices = holeState.finished ? [] : gpsStrategyChoices(currentPoint, currentLie, ballConditions);
   if (!holeState.pending_strategy && showGpsShotPlanner) {
     const match = recommendGpsClub(state.profile.clubs, remainingYards, {
@@ -7811,17 +10415,8 @@ function renderGpsMode() {
       if (!$("#gps-mode-screen").hidden && gpsStrategyAnalysisKey(currentPoint, currentLie, ballConditions, choices) === gpsAnalysisKey) renderGpsMode();
     }).catch(error => console.warn("GPS probability comparison could not be generated.", error));
   }
-  const availableClubs = state.profile.clubs
-    .map((club, index) => ({ ...club, index }))
-    .filter(club => club.name !== "Putter");
-  const pendingClubIndex = availableClubs.find(club => club.name === holeState.pending_strategy?.club_name)?.index;
-  const selectedClubIndex = Number.isInteger(holeState.pending_strategy?.club_index)
-    ? holeState.pending_strategy.club_index
-    : pendingClubIndex ?? null;
   const selectedPower = Math.round((Number(holeState.pending_strategy?.power) || 100) / 25) * 25;
-  $("#gps-club-select").innerHTML = `<option value="" disabled>Choose club</option>` + availableClubs.map(club =>
-    `<option value="${club.index}">${escapeHtml(club.name)} · ${Math.round(club.carry)} yd</option>`
-  ).join("");
+  $("#gps-club-select").innerHTML = clubOptions;
   $("#gps-club-select").value = Number.isInteger(selectedClubIndex) ? String(selectedClubIndex) : "";
   $("#gps-club-select").disabled = previewing;
   $("#gps-power-select").value = String(selectedPower);
@@ -7836,25 +10431,69 @@ function renderGpsMode() {
       : "Choose a club before hitting. Shots without a recorded club cannot update on-course statistics.";
   $("#gps-green-controls").hidden = !onGreen || holeState.finished;
   $("#gps-add-putt").disabled = previewing;
+  $("#gps-holed-out").disabled = previewing;
   $("#gps-putt-count").textContent = `${holeState.putts} putt${holeState.putts === 1 ? "" : "s"}`;
 
   $("#gps-hole-summary").hidden = !holeState.finished;
   if (holeState.finished) {
+    const reviewAction = gpsRoundReviewAction(gpsRound, state.holeIndex);
+    const reviewButton = $("#gps-review-next");
+    reviewButton.disabled = gpsCompletingRound;
+    reviewButton.innerHTML = reviewAction.kind === "complete"
+      ? `${gpsCompletingRound ? "Completing…" : "Complete round"} <span aria-hidden="true">✓</span>`
+      : `Hole ${reviewAction.holeIndex + 1} <span aria-hidden="true">→</span>`;
+    reviewButton.setAttribute("aria-label", reviewAction.kind === "complete"
+      ? "Complete and save this on-course round"
+      : reviewAction.kind === "unfinished"
+        ? `Finish the round by returning to hole ${reviewAction.holeIndex + 1}`
+        : `Leave review and go to hole ${reviewAction.holeIndex + 1}`);
     renderGpsHoleReview($("#gps-hole-summary"), holeState, state.holeIndex);
   }
 
   $("#gps-undo").disabled = previewing || !holeState.tee;
-  $("#gps-hole-review").disabled = previewing || latestCompletedGpsHoleIndex(gpsRound, state.holeIndex) < 0;
+  const currentHoleHasRecord = Boolean(holeState.tee || holeState.shots.length || holeState.putts);
+  $("#gps-hole-review").disabled = previewing
+    || (!currentHoleHasRecord && latestCompletedGpsHoleIndex(gpsRound, state.holeIndex) < 0);
   $$('[data-gps-lie]').forEach(button => { button.disabled = previewing; });
 }
 
-function gpsReviewShotMarkup(review) {
+function gpsReviewClubOptions(selectedClubName) {
+  return state.profile.clubs
+    .map((club, index) => ({ ...club, index }))
+    .filter(club => club.name !== "Putter")
+    .map(club => `<option value="${club.index}" ${club.name === selectedClubName ? "selected" : ""}>${escapeHtml(club.name)} · ${Math.round(club.carry)} yd</option>`)
+    .join("");
+}
+
+function gpsReviewShotMarkup(review, holeIndex) {
   if (!review.shots.length) return `<p class="gps-review-empty">No GPS shots were recorded for this hole.</p>`;
+  const readOnly = gpsPagePreviewActive();
   return review.shots.map(shot => `
-    <div class="gps-review-shot">
+    <div class="gps-review-shot" data-gps-review-hole="${holeIndex}" data-gps-review-shot="${shot.number - 1}">
       <span>${escapeHtml(shot.label)}</span>
-      <strong>${escapeHtml(shot.club_name)}</strong>
+      <div class="gps-review-shot-selection">
+        <strong>${escapeHtml(shot.club_name)}</strong>
+        <small>${shot.power ? escapeHtml(shotPowerLabel(shot.power, shot.club_name)) : "Swing not recorded"}</small>
+      </div>
       <b>${shot.distance_yards} yd</b>
+      <div class="gps-review-shot-actions">
+        <button class="gps-review-edit" type="button" data-gps-review-edit aria-expanded="false" ${readOnly ? "disabled" : ""}>Edit</button>
+        <button class="gps-review-delete" type="button" data-gps-review-delete ${readOnly ? "disabled" : ""}>Delete</button>
+      </div>
+      <div class="gps-review-editor" hidden>
+        <label><span>Club</span><select data-gps-review-club>
+          <option value="" ${shot.club_name === "No shot selected" ? "selected" : ""} disabled>Choose club</option>
+          ${gpsReviewClubOptions(shot.club_name)}
+        </select></label>
+        <label><span>Swing</span><select data-gps-review-power>
+          ${[25, 50, 75, 100].map(power => `<option value="${power}" ${power === (shot.power || 100) ? "selected" : ""}>${escapeHtml(shotPowerLabel(power, shot.club_name))}</option>`).join("")}
+        </select></label>
+        <div class="gps-review-editor-actions">
+          <button type="button" data-gps-review-cancel>Cancel</button>
+          <button type="button" data-gps-review-save>Save correction</button>
+        </div>
+        <small class="gps-review-edit-status" role="status"></small>
+      </div>
     </div>`).join("");
 }
 
@@ -7919,6 +10558,8 @@ function updateGpsHoleAiSections(key, entry) {
 function renderGpsHoleAiSummary(container, holeState, holeIndex, review) {
   const section = container.querySelector("[data-gps-ai-summary]");
   if (!section) return;
+  section.hidden = holeState.finished !== true;
+  if (section.hidden) return;
   const key = gpsHoleAiKey(holeState, holeIndex);
   section.dataset.gpsAiKey = key;
   if (gpsPagePreviewActive()) {
@@ -7955,9 +10596,15 @@ function renderGpsHoleReview(container, holeState, holeIndex) {
     : review.green_reached_in
       ? `No · reached in ${review.green_reached_in}`
       : "No";
-  container.querySelector("[data-gps-review-shots]").innerHTML = gpsReviewShotMarkup(review);
+  container.dataset.gpsReviewHole = String(holeIndex);
+  container.querySelector("[data-gps-review-shots]").innerHTML = gpsReviewShotMarkup(review, holeIndex);
   container.querySelector("[data-gps-review-gir]").textContent = girText;
   container.querySelector("[data-gps-review-putts]").textContent = String(review.putts);
+  const deletePuttButton = container.querySelector("[data-gps-review-delete-putt]");
+  if (deletePuttButton) {
+    deletePuttButton.hidden = gpsPagePreviewActive() || review.putts < 1;
+    deletePuttButton.dataset.gpsReviewHole = String(holeIndex);
+  }
   container.querySelector("[data-gps-review-result]").textContent = result;
   container.querySelector("[data-gps-review-score]").textContent = String(review.score);
   const scoreCard = container.querySelector(".gps-hole-review-score");
@@ -7966,13 +10613,138 @@ function renderGpsHoleReview(container, holeState, holeIndex) {
   renderGpsHoleAiSummary(container, holeState, holeIndex, review);
 }
 
+function toggleGpsReviewShotEditor(row, open) {
+  const editor = row.querySelector(".gps-review-editor");
+  const button = row.querySelector("[data-gps-review-edit]");
+  row.classList.toggle("editing", open);
+  editor.hidden = !open;
+  button.setAttribute("aria-expanded", String(open));
+  button.textContent = open ? "Editing" : "Edit";
+  if (open) row.querySelector("[data-gps-review-club]")?.focus();
+}
+
+function saveGpsReviewShotCorrection(row) {
+  if (gpsPagePreviewActive()) return;
+  const holeIndex = Number(row.dataset.gpsReviewHole);
+  const shotIndex = Number(row.dataset.gpsReviewShot);
+  const clubValue = row.querySelector("[data-gps-review-club]").value;
+  const clubIndex = clubValue === "" ? NaN : Number(clubValue);
+  const power = Number(row.querySelector("[data-gps-review-power]").value);
+  const club = state.profile.clubs[clubIndex];
+  const status = row.querySelector(".gps-review-edit-status");
+  if (!club || club.name === "Putter") {
+    status.textContent = "Choose the club you played.";
+    return;
+  }
+  const holeState = gpsRound?.holes?.[holeIndex];
+  try {
+    const shot = holeState?.shots?.[shotIndex];
+    const priorConditions = shot?.strategy?.ball_conditions || shot?.start?.conditions;
+    const strategy = correctGpsRecordedShot(holeState, shotIndex, { clubName: club.name, clubIndex, power });
+    strategy.ball_conditions = normalizeGpsBallConditions(
+      priorConditions,
+      shot.start?.lie
+    );
+    shot.canonicalAssessment = null;
+    shot.canonicalAssessment = gpsReplayShotEvidence({
+      shot,
+      holeNumber: holeIndex + 1,
+      shotIndex,
+      pinPoint: holeState.pin_course_point || pin().center_point
+    }).canonicalAssessment;
+    persistGpsRound();
+    renderGpsMode();
+    const dialog = $("#gps-hole-review-dialog");
+    if (dialog.open && Number(dialog.dataset.gpsReviewHole) === holeIndex) {
+      renderGpsHoleReview(dialog, holeState, holeIndex);
+    }
+    setGpsSyncDisplay("Correction saved", "local");
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+function deleteGpsReviewShot(row) {
+  if (gpsPagePreviewActive()) return;
+  const holeIndex = Number(row.dataset.gpsReviewHole);
+  const shotIndex = Number(row.dataset.gpsReviewShot);
+  const holeState = gpsRound?.holes?.[holeIndex];
+  const shot = holeState?.shots?.[shotIndex];
+  if (!shot) return;
+  const distance = Math.max(0, Math.round(Number(shot.distance_yards) || 0));
+  const club = shot.strategy?.club_name || "No club selected";
+  if (!window.confirm(`Delete shot ${shotIndex + 1} — ${club}, ${distance} yd? This removes one stroke from hole ${holeIndex + 1}.`)) return;
+  try {
+    deleteGpsRecordedShot(holeState, shotIndex);
+    persistGpsRound();
+    renderGpsMode();
+    const dialog = $("#gps-hole-review-dialog");
+    if (dialog.open && Number(dialog.dataset.gpsReviewHole) === holeIndex) {
+      renderGpsHoleReview(dialog, holeState, holeIndex);
+    }
+    setGpsSyncDisplay("Shot deleted", "local");
+    showMobileShotToast("Shot deleted", `Hole ${holeIndex + 1} now has ${gpsHoleScore(holeState)} strokes.`);
+  } catch (error) {
+    showMobileShotToast("Shot was not deleted", error.message);
+  }
+}
+
+function deleteGpsReviewPutt(button) {
+  if (gpsPagePreviewActive()) return;
+  const holeIndex = Number(button.dataset.gpsReviewHole);
+  const holeState = gpsRound?.holes?.[holeIndex];
+  if (!holeState || !window.confirm(`Delete the last recorded putt from hole ${holeIndex + 1}? This removes one stroke.`)) return;
+  try {
+    deleteLastGpsPutt(holeState);
+    persistGpsRound();
+    renderGpsMode();
+    const dialog = $("#gps-hole-review-dialog");
+    if (dialog.open && Number(dialog.dataset.gpsReviewHole) === holeIndex) {
+      renderGpsHoleReview(dialog, holeState, holeIndex);
+    }
+    setGpsSyncDisplay("Putt deleted", "local");
+    showMobileShotToast("Putt deleted", `Hole ${holeIndex + 1} now has ${gpsHoleScore(holeState)} strokes.`);
+  } catch (error) {
+    showMobileShotToast("Putt was not deleted", error.message);
+  }
+}
+
 function openGpsHoleReview() {
-  const holeIndex = latestCompletedGpsHoleIndex(gpsRound, state.holeIndex);
+  const currentHole = gpsRound?.holes?.[state.holeIndex];
+  const currentHasRecord = Boolean(currentHole?.tee || currentHole?.shots?.length || currentHole?.putts);
+  const holeIndex = currentHasRecord
+    ? state.holeIndex
+    : latestCompletedGpsHoleIndex(gpsRound, state.holeIndex);
   if (holeIndex < 0) return;
   const reviewedHole = gpsRound.holes[holeIndex];
   const dialog = $("#gps-hole-review-dialog");
   renderGpsHoleReview(dialog, reviewedHole, holeIndex);
   dialog.showModal();
+}
+
+function viewGpsHoleTrace(holeIndex) {
+  const sourceRound = gpsRound?.course_id === state.courseId
+    ? gpsRound
+    : state.liveGpsRound?.course_id === state.courseId
+      ? state.liveGpsRound
+      : peekLocalGpsRound();
+  const reviewedHoleIndex = bounded(Math.round(Number(holeIndex) || 0), 0, 17);
+  if (!sourceRound?.holes?.[reviewedHoleIndex]) return;
+  const dialog = $("#gps-hole-review-dialog");
+  if (dialog.open) dialog.close();
+  scheduleGpsRoundSync(0);
+  $("#gps-mode-screen").hidden = true;
+  document.body.classList.remove("gps-mode-open");
+  syncGameModeSelector();
+  state.gpsPageView = "actual";
+  state.liveGpsView = true;
+  state.liveGpsFollowHole = false;
+  state.liveGpsRound = sourceRound;
+  state.holeIndex = reviewedHoleIndex;
+  state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
+  window.clearTimeout(liveGpsPollTimer);
+  resetHole();
+  void refreshLiveGpsRound({ followHole: false, silent: true });
 }
 
 function openGpsMode() {
@@ -7987,6 +10759,7 @@ function openGpsMode() {
   state.gpsCaddieExpanded = false;
   $("#gps-mode-screen").hidden = false;
   document.body.classList.add("gps-mode-open");
+  syncGameModeSelector();
   renderGpsMode();
   scheduleGpsRoundSync(0);
 }
@@ -7995,6 +10768,7 @@ function closeGpsMode(destination = "simulator") {
   scheduleGpsRoundSync(0);
   $("#gps-mode-screen").hidden = true;
   document.body.classList.remove("gps-mode-open");
+  syncGameModeSelector();
   state.gpsPageView = "actual";
   window.clearTimeout(liveGpsPollTimer);
   setCourseMapMode(destination);
@@ -8030,6 +10804,7 @@ async function finalizeGpsRound() {
   gpsCompletingRound = false;
   $("#gps-mode-screen").hidden = true;
   document.body.classList.remove("gps-mode-open");
+  syncGameModeSelector();
   state.liveGpsView = true;
   state.liveGpsFollowHole = false;
   state.liveGpsRound = completedRound;
@@ -8050,26 +10825,17 @@ function gpsChangeHole(index) {
 }
 
 function advanceGpsHole() {
-  if (gpsPagePreviewActive()) {
-    if (state.holeIndex < 17) gpsChangeHole(state.holeIndex + 1);
+  gpsChangeHole(nextGpsHoleIndex(state.holeIndex));
+}
+
+function continueFromGpsHoleReview() {
+  if (gpsPagePreviewActive()) return;
+  const action = gpsRoundReviewAction(gpsRound, state.holeIndex);
+  if (action.kind === "complete") {
+    void finalizeGpsRound();
     return;
   }
-  const holeState = gpsHoleState();
-  if (holeState.tee && !holeState.finished) {
-    completeGpsHole(holeState);
-    persistGpsRound();
-  }
-  if (state.holeIndex < 17) {
-    gpsChangeHole(state.holeIndex + 1);
-    return;
-  }
-  const unfinishedHoleIndex = firstUnfinishedGpsHoleIndex(gpsRound);
-  if (unfinishedHoleIndex >= 0) {
-    gpsChangeHole(unfinishedHoleIndex);
-    setGpsStatus(`Finish hole ${unfinishedHoleIndex + 1} before completing the round.`, "error");
-    return;
-  }
-  void finalizeGpsRound();
+  gpsChangeHole(action.holeIndex);
 }
 
 function readCurrentPosition() {
@@ -8090,32 +10856,51 @@ function readCurrentPosition() {
   ));
 }
 
-async function captureGpsLocation() {
+async function captureGpsLocation({ forcedLie = null } = {}) {
   if (gpsPagePreviewActive()) return;
   const calibration = gpsCalibration();
   if (!calibration) return;
+  const existingHoleState = gpsHoleState();
+  if (gpsCurrentFix(existingHoleState)?.lie === "Green") {
+    renderGpsMode();
+    setGpsStatus("The ball is already on the green. Use +1 Putt or Holed Out; another GPS location would create an extra shot.", "error");
+    return;
+  }
   const indicator = $("#gps-live-indicator");
   indicator.dataset.state = "locating";
   $("#gps-location-button").disabled = true;
-  setGpsStatus("Finding your position… keep the phone still for a moment.");
+  $("#gps-on-green").disabled = true;
+  setGpsStatus(forcedLie === "Green"
+    ? "Marking your position on the green… keep the phone still for a moment."
+    : "Finding your position… keep the phone still for a moment.");
   try {
     const fix = await readCurrentPosition();
     fix.course_point = gpsToCoursePoint(calibration, fix);
-    fix.lie = lieAt(fix.course_point).type;
+    fix.detected_lie = lieAt(fix.course_point).type;
+    fix.lie = forcedLie || fix.detected_lie;
+    if (forcedLie) fix.lie_source = "player_on_green";
     fix.conditions = normalizeGpsBallConditions(null, fix.lie);
     const holeState = gpsHoleState();
     if (!holeState.tee) {
       holeState.tee = fix;
+      holeState.pin_course_point ||= [...pin().center_point];
     } else {
       const start = gpsCurrentFix(holeState);
-      holeState.shots.push({
+      const gpsShot = {
         number: holeState.shots.length + 1,
         start,
         end: fix,
         distance_yards: gpsDistanceYards(start, fix),
         strategy: holeState.pending_strategy,
         recorded_at: fix.recorded_at
-      });
+      };
+      gpsShot.canonicalAssessment = gpsReplayShotEvidence({
+        shot: gpsShot,
+        holeNumber: state.holeIndex + 1,
+        shotIndex: holeState.shots.length,
+        pinPoint: holeState.pin_course_point || pin().center_point
+      }).canonicalAssessment;
+      holeState.shots.push(gpsShot);
       holeState.pending_strategy = null;
     }
     state.gpsCaddieExpanded = false;
@@ -8133,6 +10918,32 @@ async function captureGpsLocation() {
   }
 }
 
+function finishGpsHoleFromGreen() {
+  if (gpsPagePreviewActive()) return;
+  const completedHoleIndex = state.holeIndex;
+  const holeState = gpsHoleState();
+  if (!holeOutGpsHole(holeState)) return;
+  const completedScore = gpsHoleScore(holeState);
+  persistGpsRound();
+  if (completedHoleIndex === 17) {
+    renderGpsMode();
+    const unfinishedHoleIndex = gpsRoundReviewAction(gpsRound, completedHoleIndex).holeIndex;
+    const complete = gpsRoundComplete(gpsRound);
+    showMobileShotToast(
+      "Hole 18 complete",
+      complete
+        ? `${completedScore} strokes recorded. Tap Complete round to save it to your account.`
+        : `${completedScore} strokes recorded. Finish hole ${unfinishedHoleIndex + 1} before completing the round.`
+    );
+    return;
+  }
+  gpsChangeHole(completedHoleIndex + 1);
+  showMobileShotToast(
+    `Hole ${completedHoleIndex + 1} complete`,
+    `${completedScore} strokes recorded. Hole ${state.holeIndex + 1} is ready.`
+  );
+}
+
 function selectGpsStrategy(choiceId) {
   if (gpsPagePreviewActive()) return;
   const holeState = gpsHoleState();
@@ -8144,6 +10955,7 @@ function selectGpsStrategy(choiceId) {
   const choices = gpsStrategyChoices(fix.course_point, fix.lie, conditions);
   const analysis = runGpsStrategyAnalysis(fix.course_point, fix.lie, conditions, choices);
   const probability = analysis.candidates[choice.id];
+  const club = state.profile.clubs[choice.clubIndex];
   holeState.pending_strategy = {
     id: choice.id,
     title: choice.title,
@@ -8155,6 +10967,33 @@ function selectGpsStrategy(choiceId) {
     hybrid_outlook: probability.hybrid_outlook,
     probability_score: probability.probability_score,
     probability_analysis: probability,
+    target_course_point: coursePointFromCanonical(choice.target),
+    club_snapshot: {
+      name: club.name,
+      carry_yards: Number(club.carry),
+      accuracy: Number(club.accuracy),
+      expected_yards: Math.round(Number(club.carry) * gpsShotDistanceMultiplier(fix.lie, conditions) * choice.power) / 100
+    },
+    decision_evidence: {
+      source: "analysis_at_time_of_round",
+      captured_at: new Date().toISOString(),
+      immutable: true,
+      selected_choice_id: choice.id,
+      recommended_choice_id: analysis.recommended_choice_id,
+      version: analysis.version,
+      ranking_version: analysis.ranking_version,
+      analysis_seed: analysis.analysis_seed,
+      sample_count: analysis.sample_count,
+      candidates: choices.map(candidate => ({
+        id: candidate.id,
+        title: candidate.title,
+        club_name: candidate.clubName,
+        power: candidate.power,
+        target_label: candidate.targetLabel,
+        target_course_point: coursePointFromCanonical(candidate.target),
+        analysis: structuredClone(analysis.candidates[candidate.id])
+      }))
+    },
     analysis_identity: {
       version: analysis.version,
       ranking_version: analysis.ranking_version,
@@ -8171,6 +11010,8 @@ function selectGpsStrategy(choiceId) {
 function selectGpsManualShot() {
   if (gpsPagePreviewActive()) return;
   const holeState = gpsHoleState();
+  const fix = gpsCurrentFix(holeState);
+  if (!fix) return;
   const clubValue = $("#gps-club-select").value;
   if (clubValue === "") return;
   const clubIndex = Number(clubValue);
@@ -8182,25 +11023,40 @@ function selectGpsManualShot() {
     clubIndex,
     power
   });
+  holeState.pending_strategy.club_snapshot = {
+    name: club.name,
+    carry_yards: Number(club.carry),
+    accuracy: Number(club.accuracy),
+    expected_yards: Math.round(Number(club.carry) * gpsShotDistanceMultiplier(fix.lie, gpsBallConditions(fix, fix.lie)) * power) / 100
+  };
   holeState.pending_strategy.ball_conditions = gpsBallConditions();
   persistGpsRound();
   renderGpsMode();
 }
 
-function updateGpsBallCondition(field, value) {
+function selectGpsTeeClub() {
   if (gpsPagePreviewActive()) return;
+  const clubValue = $("#gps-tee-club-select").value;
+  if (clubValue === "") return;
+  const clubIndex = Number(clubValue);
+  const club = state.profile.clubs[clubIndex];
+  if (!club || club.name === "Putter") return;
   const holeState = gpsHoleState();
-  const fix = gpsCurrentFix(holeState);
-  if (!fix || holeState.finished || fix.lie === "Green") return;
-  fix.conditions = normalizeGpsBallConditions({ ...gpsBallConditions(fix, fix.lie), [field]: value }, fix.lie);
-  if (holeState.pending_strategy?.id === "manual-choice") {
-    holeState.pending_strategy.ball_conditions = fix.conditions;
-  } else {
-    holeState.pending_strategy = null;
-  }
+  const power = 100;
+  holeState.pending_strategy = manualGpsStrategy(holeState.pending_strategy, {
+    clubName: club.name,
+    clubIndex,
+    power
+  });
+  holeState.pending_strategy.club_snapshot = {
+    name: club.name,
+    carry_yards: Number(club.carry),
+    accuracy: Number(club.accuracy),
+    expected_yards: Math.round(Number(club.carry))
+  };
+  holeState.pending_strategy.ball_conditions = normalizeGpsBallConditions(null, "Tee");
   persistGpsRound();
   renderGpsMode();
-  setGpsStatus(`Conditions saved: ${gpsConditionSummary(fix.conditions, fix.lie)}.`);
 }
 
 function changeHole(index) {
@@ -8209,7 +11065,7 @@ function changeHole(index) {
   state.holeIndex = Math.max(0, Math.min(17, index));
   if (state.competition) {
     state.competition.current_hole = state.holeIndex + 1;
-    saveCompetition(localStorage, state.competition, state.player?.id);
+    cacheActiveCompetition();
   }
   state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
   if (state.liveGpsView) state.liveGpsFollowHole = false;
@@ -8270,6 +11126,420 @@ function replayRecordedShot(holeIndex, shotIndex) {
   return true;
 }
 
+function replayPageShots(holeIndex = replayPageState?.holeIndex) {
+  if (!replayPageState || !Number.isInteger(holeIndex)) return [];
+  return replayPageState.kind === "gps"
+    ? replayPageState.round?.holes?.[holeIndex]?.shots || []
+    : replayPageState.holes?.[holeIndex] || [];
+}
+
+function replayPageHoleAvailable(holeIndex) {
+  if (replayPageState?.kind !== "server-game") return replayPageShots(holeIndex).length > 0;
+  return Number(replayPageState.index?.holes?.[holeIndex]?.shot_count || 0) > 0;
+}
+
+function replayPageShotPoints(shot) {
+  if (replayPageState?.kind === "gps") {
+    const start = gpsFixCoursePoint(shot?.start);
+    const finish = gpsFixCoursePoint(shot?.end);
+    const target = pointArrayOrNull(shot?.strategy?.target_course_point);
+    return { start, finish, target, path: [start, finish].filter(Boolean) };
+  }
+  const packet = shot?.puttPacket || shot?.resultPacket;
+  const path = Array.isArray(packet?.path)
+    ? packet.path.map(coursePointFromCanonical).filter(point => pointArrayOrNull(point))
+    : [];
+  return {
+    start: pointArrayOrNull(shot?.start) || path[0],
+    finish: pointArrayOrNull(shot?.resolvedBall || shot?.landing) || path.at(-1),
+    target: pointArrayOrNull(shot?.intendedTarget),
+    path
+  };
+}
+
+function pointArrayOrNull(point) {
+  try {
+    return pointArray(point);
+  } catch {
+    return null;
+  }
+}
+
+function replayPageShotLabel(shot, shotIndex) {
+  if (replayPageState?.kind === "gps") {
+    const club = shot?.strategy?.club_name || shot?.strategy?.title || "Recorded shot";
+    const power = Number(shot?.strategy?.power);
+    return { club, power: Number.isFinite(power) ? Math.round(power) : null, result: shot?.end?.lie || "Recorded finish" };
+  }
+  return {
+    club: shot?.club || `Shot ${shotIndex + 1}`,
+    power: Number.isFinite(shot?.power) ? Math.round(shot.power) : null,
+    result: shot?.lie || "Saved result"
+  };
+}
+
+function replayCoachForShot(shot, holeIndex, shotIndex) {
+  if (replayPageState?.kind === "gps") {
+    const evidence = gpsReplayShotEvidence({
+      shot,
+      holeNumber: holeIndex + 1,
+      shotIndex,
+      pinPoint: replayPageState.round?.holes?.[holeIndex]?.pin_course_point
+    });
+    const canonical = evidence.canonicalAssessment;
+    const decisionGood = [DecisionLabel.PREFERRED, DecisionLabel.COMPETITIVE].includes(canonical.decision.label);
+    const resultGood = evidence.result.id === "good";
+    const graded = evidence.decision.graded;
+    return {
+      tone: !graded ? "recorded" : decisionGood && resultGood ? "good" : "review",
+      mark: !graded ? "i" : decisionGood && resultGood ? "✓" : "↗",
+      title: !graded ? "Recorded evidence" : decisionGood && resultGood ? "Good plan, good result" : decisionGood ? "Good plan—review the finish" : resultGood ? "Good result—the plan could improve" : "A shot to learn from",
+      result: `Result: ${evidence.result.label.replace(" result", "").toLowerCase()}`,
+      decision: `Decision: ${evidence.decision.label.toLowerCase()}`,
+      execution: "Execution: not graded",
+      summary: evidence.recorded,
+      advice: evidence.comment,
+      evidence: {
+        targetComparison: evidence.outcomeVsTarget?.summary || null,
+        puttAnalysis: null,
+        shotType: shot?.strategy?.shot_type || null,
+        decisionReasons: [],
+        executionDetail: canonical.execution,
+        canonicalAssessment: canonical
+      }
+    };
+  }
+  const canonical = canonicalAssessmentForGameShot(shot);
+  const decisionGood = [DecisionLabel.PREFERRED, DecisionLabel.COMPETITIVE].includes(canonical.decision.label);
+  const executionGood = canonical.execution.label === "ON_PLAN_EXECUTION";
+  const executionAcceptable = canonical.execution.label === "ACCEPTABLE_EXECUTION";
+  const graded = canonical.decision.label !== DecisionLabel.NOT_GRADED;
+  const outcome = canonical.outcome_vs_target.available
+    ? canonical.outcome_vs_target.target_kind === "PUTTING_LINE"
+      ? `${Math.abs(Math.round(canonical.outcome_vs_target.lateral_miss_yards * 36))} in ${canonical.outcome_vs_target.lateral_direction.toLowerCase()} of the putting line; ${Math.abs(Math.round(canonical.outcome_vs_target.depth_miss_yards * 36))} in ${canonical.outcome_vs_target.depth_direction.toLowerCase()} of the planned roll distance.`
+      : canonical.outcome_vs_target.target_kind === "LANDING_TARGET"
+        ? `${Math.abs(Math.round(canonical.outcome_vs_target.lateral_miss_yards))} yd ${canonical.outcome_vs_target.lateral_direction.toLowerCase()} and ${Math.abs(Math.round(canonical.outcome_vs_target.depth_miss_yards))} yd ${canonical.outcome_vs_target.depth_direction.toLowerCase()} of the selected landing target.`
+        : `${Math.abs(Math.round(canonical.outcome_vs_target.lateral_miss_yards))} yd ${canonical.outcome_vs_target.lateral_direction.toLowerCase()} of the selected line; ${Math.abs(Math.round(canonical.outcome_vs_target.depth_miss_yards))} yd ${canonical.outcome_vs_target.depth_direction.toLowerCase()} of the modeled carry distance.`
+    : "The intended target was not preserved, so Outcome vs Target is unavailable.";
+  const intended = String(shot?.intendedLie || "").toLowerCase();
+  const actual = String(shot?.lie || shot?.landingLie || "the recorded position").toLowerCase();
+  const made = shot?.puttPacket?.made === true || Number(shot?.remaining) === 0;
+  const result = made
+    ? "The ball finished in the cup."
+    : executionAcceptable && shot?.strategyPacket?.shot_type === "putt_lag"
+      ? `The lag putt finished about ${Math.round(Number(shot?.remaining) * 3)} feet from the cup, a manageable leave.`
+      : intended && intended === actual
+        ? `${shot?.club || "The shot"} finished in the intended ${actual}.`
+        : `${shot?.club || "The shot"} finished in ${actual}${intended ? ` after targeting ${intended}` : ""}.`;
+  let advice = canonical.outcome_vs_target.available ? outcome : "Use the recorded result without inventing a target comparison.";
+  if (executionAcceptable && shot?.puttAnalysis) {
+    const paceDifference = Math.round(Number(shot.puttAnalysis.playerPace) - Number(shot.puttAnalysis.recommendedPace));
+    const readMatched = shot.puttAnalysis.playerRead === shot.puttAnalysis.recommendedRead;
+    const readCopy = readMatched ? "Keep the same read" : `Use the modeled ${shot.puttAnalysis.recommendedRead} read`;
+    const paceCopy = paceDifference > 0
+      ? `try about ${Math.abs(paceDifference)} percentage points less pace`
+      : paceDifference < 0
+        ? `try about ${Math.abs(paceDifference)} percentage points more pace`
+        : "repeat the same pace";
+    advice = `The leave was manageable. ${readCopy} and ${paceCopy} next time.`;
+  } else if (canonical.refinements?.[0]?.message) {
+    advice = `Keep the overall strategy. ${canonical.refinements[0].message}`;
+  } else if (decisionGood && executionGood) {
+    advice = `The plan and execution agreed. ${outcome}`;
+  } else if (decisionGood) {
+    advice = `Keep the plan, then tighten directional and distance control. ${outcome}`;
+  } else if (!graded) {
+    advice = `The decision was not graded because the original pre-shot evidence is unavailable. ${outcome}`;
+  }
+  const title = !graded
+    ? "Recorded shot"
+    : decisionGood && executionGood
+      ? "Good decision, well executed"
+      : decisionGood && executionAcceptable
+        ? "Good plan—acceptable result"
+        : decisionGood
+          ? "Good plan—execution could improve"
+          : [ResultLabel.GOOD, ResultLabel.MIXED].includes(canonical.result.label)
+            ? "Good result—the decision carried more risk"
+            : "This shot could be better";
+  const decisionLabel = {
+    [DecisionLabel.PREFERRED]: "Decision: preferred plan",
+    [DecisionLabel.COMPETITIVE]: "Decision: competitive plan",
+    [DecisionLabel.HIGHER_RISK]: "Decision: higher-risk plan",
+    [DecisionLabel.NOT_GRADED]: "Decision: not graded"
+  }[canonical.decision.label];
+  const executionLabel = {
+    ON_PLAN_EXECUTION: "Execution: on plan",
+    ACCEPTABLE_EXECUTION: "Execution: slight miss",
+    MISSED_EXECUTION: "Execution: missed",
+    EXECUTION_NOT_GRADED: "Execution: not graded"
+  }[canonical.execution.label];
+  const resultLabel = {
+    [ResultLabel.GOOD]: "Result: good",
+    [ResultLabel.MIXED]: "Result: mixed",
+    [ResultLabel.COSTLY]: "Result: costly",
+    [ResultLabel.RECORDED]: "Result: recorded"
+  }[canonical.result.label];
+  return {
+    tone: decisionGood && (executionGood || executionAcceptable) ? "good" : graded ? "review" : "recorded",
+    mark: decisionGood && (executionGood || executionAcceptable) ? "✓" : graded ? "↗" : "i",
+    title,
+    result: resultLabel,
+    decision: decisionLabel,
+    execution: executionLabel,
+    summary: result,
+    advice,
+    evidence: {
+      targetComparison: outcome,
+      puttAnalysis: shot?.puttAnalysis || null,
+      shotType: shot?.strategyPacket?.shot_type || shot?.shotType || null,
+      decisionReasons: canonical.decision.reason_codes,
+      executionDetail: canonical.execution,
+      canonicalAssessment: canonical
+    }
+  };
+}
+
+function replayCoachSelectionKey(holeIndex, shotIndex) {
+  const sourceId = replayPageState?.kind === "gps"
+    ? replayPageState.round?.round_id
+    : replayPageState?.roundId || state.roundState?.round_id || state.roundSeed;
+  return `${replayPageState?.kind || "game"}:${sourceId || "current"}:${holeIndex}:${shotIndex}`;
+}
+
+function renderReplayCoachCard(coach, source = "verified") {
+  const coachPanel = $("#replay-page-coach");
+  coachPanel.hidden = false;
+  coachPanel.dataset.tone = coach.tone;
+  const sourceLabel = source === "ai" ? "AI replay coach" : source === "pending" ? "Replay coach · AI interpreting…" : "Verified replay coach";
+  coachPanel.innerHTML = `<div class="replay-coach-mark" aria-hidden="true">${escapeHtml(coach.mark)}</div>
+    <div class="replay-coach-copy">
+      <div class="replay-coach-heading"><span>${escapeHtml(sourceLabel)}</span><strong>${escapeHtml(coach.title)}</strong></div>
+      <div class="replay-coach-grades">${coach.result ? `<span>${escapeHtml(coach.result)}</span>` : ""}<span>${escapeHtml(coach.decision)}</span><span>${escapeHtml(coach.execution)}</span></div>
+      <p>${escapeHtml(coach.summary)}</p>
+      <p>${escapeHtml(coach.advice)}</p>
+    </div>`;
+}
+
+async function requestAiReplayCoach(shot, holeIndex, shotIndex, verifiedCoach) {
+  const key = replayCoachSelectionKey(holeIndex, shotIndex);
+  const sequence = ++replayCoachAiSequence;
+  const cached = replayCoachAiCache.get(key);
+  if (cached) {
+    renderReplayCoachCard({ ...verifiedCoach, summary: cached.interpretation, advice: cached.next_time }, "ai");
+    return;
+  }
+  renderReplayCoachCard(verifiedCoach, "pending");
+  const label = replayPageShotLabel(shot, shotIndex);
+  const putt = verifiedCoach.evidence?.puttAnalysis;
+  const response = await postAiJson("/api/ai/replay", {
+    course: { id: state.courseId, name: state.course.name },
+    hole: { number: holeIndex + 1, par: card().Par },
+    shot: {
+      number: shotIndex + 1,
+      club: label.club,
+      power_percent: label.power,
+      distance_yards: replayPageState?.kind === "gps" ? Math.round(shot.distance_yards || 0) : Math.round(shot.yards || shot.feet / 3 || 0),
+      start_lie: shot?.start?.lie || shot?.conditionSnapshot?.lie || null,
+      finish_lie: label.result,
+      remaining_yards: Number.isFinite(shot?.remaining) ? shot.remaining : null,
+      shot_type: verifiedCoach.evidence?.shotType || null,
+      target_comparison: verifiedCoach.evidence?.targetComparison || null,
+      putt_analysis: putt ? {
+        distance_feet: putt.distanceFeet,
+        recommended_read: putt.recommendedRead,
+        player_read: putt.playerRead,
+        recommended_pace: putt.recommendedPace,
+        player_pace: putt.playerPace,
+        make_probability: putt.makeProbability
+      } : null,
+      decision_reasons: verifiedCoach.evidence?.decisionReasons || [],
+      execution_detail: verifiedCoach.evidence?.executionDetail || null,
+      canonical_assessment: verifiedCoach.evidence?.canonicalAssessment || null
+    },
+    authoritative_assessment: {
+      title: verifiedCoach.title,
+      result: verifiedCoach.result,
+      decision: verifiedCoach.decision,
+      execution: verifiedCoach.execution,
+      summary: verifiedCoach.summary,
+      deterministic_advice: verifiedCoach.advice
+    }
+  }, { retry: true });
+  if (!response || sequence !== replayCoachAiSequence || key !== replayCoachSelectionKey(holeIndex, shotIndex)) {
+    if (sequence === replayCoachAiSequence) renderReplayCoachCard(verifiedCoach, "verified");
+    return;
+  }
+  if (response.result !== verifiedCoach.result || response.decision !== verifiedCoach.decision || response.execution !== verifiedCoach.execution) {
+    renderReplayCoachCard(verifiedCoach, "verified");
+    return;
+  }
+  replayCoachAiCache.set(key, response);
+  renderReplayCoachCard({ ...verifiedCoach, summary: response.interpretation, advice: response.next_time }, "ai");
+}
+
+function replayPageMapMarkup(shot) {
+  const holeData = hole();
+  const g = holeData.geometries;
+  const frame = { left: 90, right: 910, top: 55, bottom: 945 };
+  const bounds = uprightFullHoleBounds();
+  const projector = createUniformMapProjector(bounds, frame, { verticalDirection: holeVerticalDirection() });
+  const polygon = (points, className) => `<polygon class="${className}" points="${points.map(point => projector.point(point).join(",")).join(" ")}"/>`;
+  const many = (items, className) => (items || []).map(item => polygon(item.polygon, className)).join("");
+  const points = replayPageShotPoints(shot);
+  const path = points.path.length >= 2 ? points.path : [points.start, points.finish].filter(Boolean);
+  const pathData = path.map((point, index) => `${index ? "L" : "M"}${projector.point(point).join(",")}`).join(" ");
+  const screenStart = points.start ? projector.point(points.start) : null;
+  const screenFinish = points.finish ? projector.point(points.finish) : null;
+  const screenTarget = points.target ? projector.point(points.target) : null;
+  const duration = shot?.puttPacket ? 2.8 : 2.35;
+  return `<svg viewBox="0 0 1000 1000" role="img" aria-label="Hole ${replayPageState.holeIndex + 1}, shot ${replayPageState.shotIndex + 1} replay">
+    <rect width="1000" height="1000" fill="#416247"/>
+    ${many(g.rough_zones, "replay-map-rough")}
+    ${many(g.fairway_segments, "replay-map-fairway")}
+    ${many(g.tree_zones, "replay-map-trees")}
+    ${many(g.hazards.filter(item => item.lie_catalog_id.includes("water")), "replay-map-water")}
+    ${many(g.hazards.filter(item => !item.lie_catalog_id.includes("water")), "replay-map-sand")}
+    ${many(g.tee_boxes, "replay-map-tee")}
+    ${polygon(g.green_complex.polygon, "replay-map-green")}
+    ${screenTarget && screenStart ? `<line class="replay-target-line" x1="${screenStart[0]}" y1="${screenStart[1]}" x2="${screenTarget[0]}" y2="${screenTarget[1]}"/>` : ""}
+    ${pathData ? `<path class="replay-shot-path" d="${pathData}"/>` : ""}
+    ${screenStart ? `<circle class="replay-start-mark" cx="${screenStart[0]}" cy="${screenStart[1]}" r="9"/>` : ""}
+    ${screenTarget ? `<path class="replay-target-mark" d="M${screenTarget[0]} ${screenTarget[1] - 11}l11 11-11 11-11-11z"/>` : ""}
+    ${screenFinish ? `<circle class="replay-finish-mark" cx="${screenFinish[0]}" cy="${screenFinish[1]}" r="10"/>` : ""}
+    ${pathData ? `<circle class="replay-moving-ball" r="8"><animateMotion dur="${duration}s" path="${pathData}" fill="freeze"/></circle>` : ""}
+  </svg>`;
+}
+
+function renderReplayPage() {
+  if (!replayPageState) return;
+  const holes = Array.from({ length: 18 }, (_, index) => replayPageShots(index));
+  const holeIndex = replayPageState.holeIndex;
+  const shots = holes[holeIndex];
+  replayPageState.shotIndex = bounded(replayPageState.shotIndex, 0, Math.max(0, shots.length - 1));
+  const shot = shots[replayPageState.shotIndex];
+  state.holeIndex = holeIndex;
+  state.pinIndex = rotatingPinIndex(holeIndex, hole().geometries.green_complex.pin_zones.length);
+  $("#replay-page-title").textContent = replayPageState.kind === "gps" ? "On-course replay" : "Game replay";
+  $("#replay-page-subtitle").textContent = `${state.course.name} · ${replayPageState.kind === "gps" ? "recorded GPS round" : `${shots.length} shots on this hole`}`;
+  $("#replay-page-holes").innerHTML = holes.map((holeShots, index) => `<button type="button" data-replay-page-hole="${index}" aria-current="${index === holeIndex}" ${replayPageHoleAvailable(index) ? "" : "disabled"}>${index + 1}</button>`).join("");
+  $("#replay-page-shots").innerHTML = shots.length ? shots.map((candidate, index) => {
+    const label = replayPageShotLabel(candidate, index);
+    const distance = replayPageState.kind === "gps" ? Math.round(candidate.distance_yards || 0) : Math.round(candidate.yards || candidate.feet / 3 || 0);
+    return `<button class="replay-shot-button" type="button" data-replay-page-shot="${index}" aria-current="${index === replayPageState.shotIndex}">
+      <b>${index + 1}</b><span><strong>${escapeHtml(label.club)}</strong><small>${label.power == null ? "Swing not recorded" : `${label.power}% swing`} · ${distance} yd</small></span><span>${escapeHtml(label.result)}</span>
+    </button>`;
+  }).join("") : `<p>No recorded shots on Hole ${holeIndex + 1}.</p>`;
+  if (!shot) {
+    replayCoachAiSequence += 1;
+    $("#replay-map-hole").textContent = `Hole ${holeIndex + 1}`;
+    $("#replay-map-shot").textContent = "No recorded shot";
+    $("#replay-page-map").innerHTML = "";
+    $("#replay-page-result").innerHTML = "";
+    $("#replay-page-coach").innerHTML = "";
+    $("#replay-page-coach").hidden = true;
+    return;
+  }
+  const label = replayPageShotLabel(shot, replayPageState.shotIndex);
+  const points = replayPageShotPoints(shot);
+  const distanceYards = replayPageState.kind === "gps" ? Math.round(shot.distance_yards || 0) : Math.round(shot.yards || shot.feet / 3 || 0);
+  const remaining = replayPageState.kind === "gps"
+    ? null
+    : Number.isFinite(shot.remaining) ? Math.round(shot.remaining) : null;
+  $("#replay-map-hole").textContent = `Hole ${holeIndex + 1} · ${card().Par === 3 ? "Par 3" : `Par ${card().Par}`}`;
+  $("#replay-map-shot").textContent = `Shot ${replayPageState.shotIndex + 1} · ${label.club}`;
+  $("#replay-page-map").innerHTML = replayPageMapMarkup(shot);
+  $("#replay-page-result").innerHTML = `
+    <div><span>Club and swing</span><strong>${escapeHtml(label.club)}${label.power == null ? "" : ` · ${label.power}%`}</strong></div>
+    <div><span>Distance</span><strong>${distanceYards} yd</strong></div>
+    <div><span>Result</span><strong>${escapeHtml(label.result)}</strong></div>
+    <div><span>${remaining == null ? "Finish" : "Remaining"}</span><strong>${remaining == null ? (points.finish ? "Recorded position" : "Not recorded") : `${remaining} yd`}</strong></div>`;
+  const coach = replayCoachForShot(shot, holeIndex, replayPageState.shotIndex);
+  renderReplayCoachCard(coach);
+  void requestAiReplayCoach(shot, holeIndex, replayPageState.shotIndex, coach);
+}
+
+function firstReplayHole(preferredHole = 0, holes = []) {
+  if (holes[preferredHole]?.length) return preferredHole;
+  const found = holes.findIndex(shots => shots?.length);
+  return found >= 0 ? found : 0;
+}
+
+function enterReplayPage({ kind = "game", round = null, returnState = null, holeIndex = state.holeIndex, shotIndex = null, holes: suppliedHoles = null, index = null, roundId = null } = {}) {
+  const holes = suppliedHoles || (kind === "gps" ? round?.holes?.map(holeState => holeState.shots || []) : state.roundHistory);
+  if (!holes?.some(shots => shots?.length)) {
+    showMobileShotToast("No shots to replay", "Play or record a shot first, then open Replay.");
+    return false;
+  }
+  replayPageState = {
+    kind,
+    round,
+    holes: kind === "gps" ? null : holes,
+    index,
+    roundId,
+    returnState: returnState || {
+      courseId: state.courseId,
+      holeIndex: state.holeIndex,
+      pinIndex: state.pinIndex,
+      liveGpsView: state.liveGpsView,
+      roundState: state.roundState,
+      roundSeed: state.roundSeed,
+      tee: state.tee
+    },
+    holeIndex: firstReplayHole(holeIndex, holes),
+    shotIndex: 0
+  };
+  const selectedShots = holes[replayPageState.holeIndex];
+  replayPageState.shotIndex = shotIndex == null ? Math.max(0, selectedShots.length - 1) : bounded(shotIndex, 0, selectedShots.length - 1);
+  document.body.classList.add("replay-mode-active");
+  $("#replay-mode-screen").hidden = false;
+  renderReplayPage();
+  window.scrollTo({ top: 0 });
+  return true;
+}
+
+function serverReplayShots(packageData) {
+  return (packageData?.hole?.events || [])
+    .filter(event => event?.event_type === "shot_committed")
+    .map(event => event.payload?.shot || event.payload || {})
+    .filter(shot => shot && typeof shot === "object");
+}
+
+async function loadServerReplayPageHole(holeIndex) {
+  if (replayPageState?.kind !== "server-game") return;
+  const expectedRoundId = replayPageState.roundId;
+  $("#replay-page-shots").innerHTML = `<p>Loading Hole ${holeIndex + 1}…</p>`;
+  try {
+    const replay = await replayHoleLoader.loadHole(expectedRoundId, holeIndex + 1, { priority: "user" });
+    if (replayPageState?.roundId !== expectedRoundId) return;
+    replayPageState.holes[holeIndex] = serverReplayShots(replay);
+    replayPageState.holeIndex = holeIndex;
+    replayPageState.shotIndex = 0;
+    renderReplayPage();
+  } catch (error) {
+    if (replayPageState?.roundId !== expectedRoundId) return;
+    $("#replay-page-shots").innerHTML = `<p>Hole ${holeIndex + 1} could not be loaded: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function exitReplayPage() {
+  if (!replayPageState) return;
+  replayCoachAiSequence += 1;
+  const previous = replayPageState.returnState;
+  replayPageState = null;
+  $("#replay-mode-screen").hidden = true;
+  document.body.classList.remove("replay-mode-active");
+  if (previous.roundState) state.roundState = previous.roundState;
+  if (Number.isInteger(previous.roundSeed)) state.roundSeed = previous.roundSeed;
+  if (previous.tee) state.tee = previous.tee;
+  if (previous.courseId && previous.courseId !== state.courseId) await loadData(previous.courseId);
+  state.holeIndex = previous.holeIndex;
+  state.pinIndex = previous.pinIndex;
+  state.liveGpsView = previous.liveGpsView;
+  $("#course-select").value = state.courseId;
+  resetHole();
+}
+
 function resetGame() {
   state.roundSeed = newRoundSeed();
   localStorage.removeItem(storageKey("scores"));
@@ -8277,6 +11547,7 @@ function resetGame() {
   localStorage.setItem(storageKey("round-seed"), String(state.roundSeed));
   state.holeIndex = 0;
   state.tee = "White";
+  state.postRoundReport = null;
   if (state.roundState) {
     state.roundState = resetRoundState(state.roundState, { roundSeed: state.roundSeed, tee: state.tee });
     persistRoundState();
@@ -8292,7 +11563,7 @@ function resetGame() {
       coachingEnabled: state.competition.coaching_enabled
     });
     state.competition.human_round = structuredClone(state.roundState);
-    saveCompetition(localStorage, state.competition, state.player?.id);
+    cacheActiveCompetition();
   }
   state.pinIndex = rotatingPinIndex(0, hole().geometries.green_complex.pin_zones.length);
   state.selectedClub = 0;
@@ -8484,7 +11755,28 @@ function renderScorecard() {
   $("#scorecard-grid").innerHTML = scoreTallyMarkup() + section(front, 0, "Out") + section(back, 9, "In");
 }
 
-function openRoundReview() {
+function setPostRoundExportReady(ready, message = "AI wording and shot evidence are ready to download.") {
+  $$('[data-post-round-export]').forEach(button => { button.disabled = !ready; });
+  const status = $("#post-round-export-status");
+  if (status) status.textContent = message;
+}
+
+function downloadPostRoundJson() {
+  const report = currentPostRoundReport({ freezeCompleted: false });
+  const exported = { ...report, exported_at: new Date().toISOString(), source_round: currentRoundSave({ includePostRoundReport: false }) };
+  const file = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
+  downloadRoundFile(file, postRoundReportFilename(exported, "json"));
+  setPostRoundExportReady(true, "Analysis JSON downloaded with the AI Caddie wording and complete round data.");
+}
+
+function downloadPostRoundPdf() {
+  const report = currentPostRoundReport({ freezeCompleted: false });
+  const file = new Blob([buildPostRoundPdf(report)], { type: "application/pdf" });
+  downloadRoundFile(file, postRoundReportFilename(report, "pdf"));
+  setPostRoundExportReady(true, "PDF report downloaded with the AI Caddie wording shown above.");
+}
+
+function openRoundReviewLegacy() {
   const shots = state.roundHistory.flat();
   const decisionGood = shots.filter(shot => decisionQualityFromAssessment(packetAssessment(shot), shot.quality) === "good").length;
   const executionGood = shots.filter(shot => executionQualityFromAssessment(packetAssessment(shot), shot.quality) === "good").length;
@@ -8555,7 +11847,7 @@ function openRoundReview() {
         : scoreToPar != null && scoreToPar < 0
           ? "Strong hole"
           : score == null ? "In progress" : "Clean hole";
-    return `<details class="review-hole ${reviewState}" ${priorityHoles.includes(index) ? "open" : ""}>
+    return `<details class="review-hole ${reviewState}" data-review-hole-number="${index + 1}" ${priorityHoles.includes(index) ? "open" : ""}>
       <summary>
         <div class="review-hole-overview">
           <div class="review-hole-title"><strong>Hole ${index + 1}</strong><small>${state.tee} tee</small></div>
@@ -8579,6 +11871,7 @@ function openRoundReview() {
         const executionQuality = executionQualityFromAssessment(assessment, shot.quality);
         const strategy = strategySummary(shot);
         const learningNotes = verifiedLearningNotesForShot(shot);
+        const landingPlan = shot.landingTargetPlan;
         return `<div class="review-shot ${quality}">
         <div class="shot-verdict"><b>Shot ${shotIndex + 1}</b><strong>${shot.club} · ${shotPowerLabel(shot.power, shot.club)}</strong></div>
         <div class="shot-judgments">
@@ -8596,6 +11889,7 @@ function openRoundReview() {
           : `<div class="shot-path"><span>${shot.intendedLie || "Target"}</span><i>→</i><strong>${shot.lie}</strong></div>`}
         ${strategy?.reasons?.length ? `<div class="shot-reasons">${strategy.reasons.map(reason => `<span>${reason}</span>`).join("")}</div>` : ""}
         ${shot.adjustmentReward?.accuracy_bonus > 0 ? `<div class="shot-reasons"><span>${escapeHtml(`${shot.adjustmentReward.grade === "excellent" ? "Excellent" : shot.adjustmentReward.grade === "sound" ? "Good" : "Useful"} adjustment · ${shot.adjustmentReward.base_accuracy}% → ${shot.adjustmentReward.effective_accuracy}% accuracy for this shot`)}</span></div>` : ""}
+        ${landingPlan ? `<aside class="shot-learning-context"><span>Landing Target evidence</span><p>${escapeHtml(`${landingPlan.selected_club} · ${landingPlan.auto_calculated_power}% Auto Power · ${landingPlan.expected_carry} yd carry + ${landingPlan.expected_roll} yd roll · Rule of 12: ${landingPlan.rule_of_12_candidate || "none"} · ${landingPlan.sample_count || "multi-run"}-shot model: ${landingPlan.recommended_choice || "no safe candidate"}`)}</p></aside>` : ""}
         ${learningNotes.length ? `<aside class="shot-learning-context"><span>Player record</span>${learningNotes.map(note => `<p>${escapeHtml(note)}</p>`).join("")}</aside>` : ""}
         <p>${shot.lesson}</p>
         <button class="shot-replay-button inline" type="button" data-replay-shot="${index}:${shotIndex}" ${Boolean((shot.puttPacket || shot.resultPacket)?.path?.length >= 2) ? "" : "disabled"}>▶ Replay this shot</button>
@@ -8604,10 +11898,23 @@ function openRoundReview() {
       <button class="replay-hole-button" type="button" data-replay-hole="${index}">Reset & replay Hole ${index + 1}</button>
     </details>`;
   }).join("") : "";
-  $("#round-review-list").innerHTML = replayLibraryMarkup + (learningReviewMarkup || `<div class="review-shot"><p>${shots.length
+  const reportExportMarkup = `<section class="post-round-export" aria-labelledby="post-round-export-title">
+    <div>
+      <span class="eyebrow">Take the report with you</span>
+      <strong id="post-round-export-title">One review, two useful formats</strong>
+      <p id="post-round-export-status" aria-live="polite">Finishing the AI Caddie wording before export…</p>
+    </div>
+    <div class="post-round-export-actions">
+      <button class="primary-action" type="button" data-post-round-export="pdf" disabled>Download PDF</button>
+      <button class="secondary-action" type="button" data-post-round-export="json" disabled>Download analysis JSON</button>
+    </div>
+  </section>`;
+  $("#round-review-list").innerHTML = reportExportMarkup + replayLibraryMarkup + (learningReviewMarkup || `<div class="review-shot"><p>${shots.length
     ? "No hole from this round met the learning-review threshold. The complete round remains available in the scorecard."
     : "No shot history has been recorded for this round yet. Play a new shot to begin the learning report. Scores from rounds played before this feature do not contain shot details."}</p></div>`);
-  $("#round-review-list").insertAdjacentHTML("beforeend", `<div class="review-actions"><button class="secondary-action" type="button" data-review-scorecard>View scorecard</button><button class="secondary-action" type="button" data-review-new-round>Start new round</button><button class="primary-action" type="button" data-review-back>Back to game</button></div>`);
+  $("#round-review-list").insertAdjacentHTML("beforeend", `<div class="review-actions"><button class="primary-action desktop-replay-only" type="button" data-review-replay>Open shot replay</button><button class="secondary-action" type="button" data-review-scorecard>View scorecard</button><button class="secondary-action" type="button" data-review-new-round>Start new round</button><button class="secondary-action" type="button" data-review-back>Back to game</button></div>`);
+  $('[data-post-round-export="pdf"]').addEventListener("click", downloadPostRoundPdf);
+  $('[data-post-round-export="json"]').addEventListener("click", downloadPostRoundJson);
   $$('[data-replay-hole]').forEach(button => button.addEventListener("click", () => {
     const holeIndex = Number(button.dataset.replayHole);
     const confirmed = window.confirm(`Reset Hole ${holeIndex + 1}? This will clear its score and shot history before replaying it.`);
@@ -8623,8 +11930,12 @@ function openRoundReview() {
   $$('[data-replay-shot]').forEach(button => button.addEventListener("click", () => {
     const [holeIndex, shotIndex] = button.dataset.replayShot.split(":").map(Number);
     $("#round-review-dialog").close();
-    replayRecordedShot(holeIndex, shotIndex);
+    enterReplayPage({ holeIndex, shotIndex });
   }));
+  $("[data-review-replay]").addEventListener("click", () => {
+    $("#round-review-dialog").close();
+    enterReplayPage();
+  });
   $("[data-review-scorecard]").addEventListener("click", () => {
     $("#round-review-dialog").close();
     renderScorecard();
@@ -8638,37 +11949,273 @@ function openRoundReview() {
   $("[data-review-back]").addEventListener("click", () => {
     $("#round-review-dialog").close();
   });
-  void requestAiRoundReview();
   $("#round-review-dialog").showModal();
+  void requestAiRoundReview()
+    .catch(error => console.warn("The post-round AI review could not be completed.", error))
+    .finally(() => setPostRoundExportReady(true));
+}
+
+function reportMetric(value, suffix = "") {
+  return value == null ? "—" : `${value}${suffix}`;
+}
+
+function postRoundShotMarkup(shot, { replay = true } = {}) {
+  const strategy = shot.strategy;
+  const landing = shot.landing_target;
+  const adjustment = shot.adjustment;
+  return `<article class="blended-shot">
+    <header class="blended-shot-head">
+      <div><span>Shot ${shot.stroke_number}</span><strong>${escapeHtml(shot.club)}${shot.power_label ? ` · ${escapeHtml(shot.power_label)}` : ""}</strong><small>${escapeHtml(shot.shot_type_label)}</small></div>
+      <div class="blended-shot-grades">
+        <span data-grade="${shot.decision.sound ? "sound" : shot.decision.graded ? "review" : "neutral"}">Decision <b>${escapeHtml(shot.decision.display)}</b></span>
+        <span data-grade="${shot.execution.on_plan ? "sound" : shot.execution.graded ? "review" : "neutral"}">Execution <b>${escapeHtml(shot.execution.display)}</b></span>
+        <span>Outcome <b>${escapeHtml(shot.result.finish_lie || shot.result.display)}</b></span>
+      </div>
+    </header>
+    ${shot.lesson ? `<p class="blended-shot-lesson"><span>Lesson</span>${escapeHtml(shot.lesson)}</p>` : ""}
+    <details class="shot-evidence">
+      <summary>Detailed evidence</summary>
+      <div class="shot-evidence-grid">
+        ${strategy ? `<div><span>Strategy Score</span><strong>${strategy.score ?? "—"}</strong></div><div><span>Preferred Miss</span><strong>${escapeHtml(reportLabel(strategy.preferred_miss, "Not declared"))}</strong></div>` : ""}
+        <div><span>Result</span><strong>${escapeHtml(shot.result.start_lie || "Start")} → ${escapeHtml(shot.result.finish_lie || "Recorded")}</strong></div>
+        <div><span>Penalty</span><strong>${shot.result.penalty_strokes}</strong></div>
+      </div>
+      ${strategy?.reasons?.length ? `<p><b>Evidence tags</b> ${strategy.reasons.map(reason => escapeHtml(reportLabel(reason))).join(" · ")}</p>` : ""}
+      ${landing ? `<p><b>Landing Target</b> ${escapeHtml(`${landing.selected_club || shot.club} · ${landing.auto_calculated_power ?? "—"}% power · ${landing.expected_carry ?? "—"} yd carry · ${landing.expected_roll ?? "—"} yd roll`)}</p>` : ""}
+      ${adjustment ? `<p><b>Adjustment</b> ${escapeHtml(`${adjustment.grade || "Recorded"} · ${adjustment.base_accuracy ?? "—"}% → ${adjustment.effective_accuracy ?? "—"}% accuracy for this shot`)}</p>` : ""}
+      ${shot.player_pattern_refs?.length ? `<p><b>Player Record</b> ${shot.player_pattern_refs.map(escapeHtml).join(" · ")}</p>` : ""}
+      <small>${shot.evidence_refs.map(escapeHtml).join(" · ")}</small>
+    </details>
+    ${replay ? `<button class="shot-replay-button inline" type="button" data-replay-shot="${shot.hole_number - 1}:${shot.stroke_number - 1}">▶ Replay this shot</button>` : ""}
+  </article>`;
+}
+
+function scorecardReportMarkup(report) {
+  const summary = report.scorecard.reduce((counts, hole) => {
+    if (hole.relative_to_par == null) return counts;
+    if (hole.relative_to_par < 0) counts.birdies += 1;
+    else if (hole.relative_to_par === 0) counts.pars += 1;
+    else if (hole.relative_to_par === 1) counts.bogeys += 1;
+    else counts.doublePlus += 1;
+    return counts;
+  }, { birdies: 0, pars: 0, bogeys: 0, doublePlus: 0 });
+  return `<details class="blended-report-section report-scorecard-section">
+    <summary><span><small>07</small><b>Scorecard</b></span><em>${report.round.holes_completed} holes recorded</em></summary>
+    <div class="blended-scorecard-summary"><span>Birdies <b>${summary.birdies}</b></span><span>Pars <b>${summary.pars}</b></span><span>Bogeys <b>${summary.bogeys}</b></span><span>Double+ <b>${summary.doublePlus}</b></span></div>
+    <div class="blended-scorecard-scroll"><table><thead><tr><th>Hole</th>${report.scorecard.map(hole => `<th>${hole.hole}</th>`).join("")}</tr></thead><tbody>
+      <tr><th>Par</th>${report.scorecard.map(hole => `<td>${hole.par}</td>`).join("")}</tr>
+      <tr><th>Score</th>${report.scorecard.map(hole => `<td>${hole.score ?? "—"}</td>`).join("")}</tr>
+      <tr><th>+/−</th>${report.scorecard.map(hole => `<td>${hole.relative_to_par == null ? "—" : relativeScoreLabel(hole.relative_to_par)}</td>`).join("")}</tr>
+    </tbody></table></div>
+  </details>`;
+}
+
+function renderBlendedPostRoundReport(report) {
+  const completed = report.round.status === "completed";
+  const narrative = report.narrative;
+  $("#round-review-dialog .eyebrow").textContent = completed ? "Original round analysis" : "Round review · in progress";
+  $("#round-review-dialog h2").textContent = completed ? "What to carry forward" : "What the round shows so far";
+  $("#round-review-summary").innerHTML = `<section class="blended-snapshot">
+    <header><div><span>${escapeHtml(report.round.course_name)}</span><strong>${escapeHtml(report.round.tee)} tee</strong></div><b>${completed ? "Final" : `${report.round.holes_completed} of ${report.scorecard.length}`}</b></header>
+    <div class="blended-snapshot-grid">
+      <div class="snapshot-round"><span>Round</span><strong>${relativeScoreLabel(report.round.relative_to_par)}</strong><small>${report.round.holes_completed} holes</small></div>
+      <div><span>Strategy</span><strong>${reportMetric(report.summary.strategy_score)}</strong><small>${report.summary.scored_decisions} scored decisions</small></div>
+      <div><span>Decisions</span><strong>${reportMetric(report.summary.decision_quality_percent, "%")}</strong><small>${report.summary.sound_decisions} of ${report.summary.graded_decisions} sound</small></div>
+      <div><span>Execution</span><strong>${reportMetric(report.summary.execution_quality_percent, "%")}</strong><small>${report.summary.on_plan_executions} of ${report.summary.graded_executions} on plan</small></div>
+      <div class="snapshot-focus"><span>Practice next</span><strong>${escapeHtml(report.summary.practice_priority_label || "Build more evidence")}</strong></div>
+    </div>
+  </section>`;
+
+  const takeaways = report.learning_summary.three_things_to_remember;
+  const moments = report.learning_summary.learning_moments;
+  const storyStatus = narrative.status === "available"
+    ? `<span class="narrative-status available">AI Caddie · ${escapeHtml(narrative.model || "verified narrative")}</span>`
+    : `<span class="narrative-status fallback">Calculated report${narrative.status === "pending" ? " · AI Caddie is reviewing" : " · AI narrative unavailable"}</span>`;
+  const story = `<section class="round-story" aria-labelledby="round-story-title"><header><span class="section-number">02</span><div><small>Round Story</small><h3 id="round-story-title">The shape of your round</h3></div>${storyStatus}</header><p>${escapeHtml(narrative.round_story?.text || "The calculated report remains available without AI wording.")}</p></section>`;
+  const remember = takeaways.length ? `<section class="blended-learning-section"><header><span class="section-number">03</span><div><small>Three things to remember</small><h3>Leave with the signal, not the noise</h3></div></header><div class="remember-grid" data-count="${takeaways.length}">${takeaways.map(item => `<article data-type="${escapeHtml(item.type)}"><span>${escapeHtml(item.label)}</span><p>${escapeHtml(item.text)}</p></article>`).join("")}</div></section>` : "";
+  const momentsMarkup = `<section class="blended-learning-section"><header><span class="section-number">04</span><div><small>Key learning moments</small><h3>${moments.length ? `${moments.length} moments worth replaying` : "No moment crossed the review threshold"}</h3></div></header><div class="learning-moment-list">${moments.length ? moments.map(moment => {
+    const explanation = narrative.learning_moment_explanations?.[moment.moment_id]?.text;
+    const hole = report.scorecard[moment.hole_number - 1];
+    return `<article class="learning-moment" data-type="${escapeHtml(moment.type)}"><header><span>Hole ${moment.hole_number} · ${escapeHtml(hole?.result || "Recorded")}</span><b>${escapeHtml(moment.shot_type)}</b></header><h4>${escapeHtml(moment.title)}</h4><div class="moment-separation"><span>Decision <b>${escapeHtml(moment.decision)}</b></span><span>Execution <b>${escapeHtml(moment.execution)}</b></span><span>Result <b>${escapeHtml(moment.result)}</b></span></div><p>${escapeHtml(explanation || moment.takeaway)}</p><button type="button" data-report-hole="${moment.hole_number}">See Hole ${moment.hole_number} evidence</button></article>`;
+  }).join("") : `<p class="report-empty">Routine evidence is still preserved in the scorecard and appendix.</p>`}</div></section>`;
+  const patterns = `<section class="blended-learning-section"><header><span class="section-number">05</span><div><small>Patterns across your game</small><h3>${report.patterns.length ? "Verified over multiple rounds" : "Still building a trustworthy record"}</h3></div></header>${report.patterns.length ? `<div class="pattern-grid">${report.patterns.map(pattern => `<article><span>${escapeHtml(pattern.kind.includes("strength") ? "Verified strength" : pattern.kind === "recurring_decision_mistake" ? "Recurring issue" : "Practice priority")}</span><strong>${escapeHtml(pattern.label)}</strong><p>${escapeHtml(pattern.summary)}</p></article>`).join("")}</div>` : `<p class="report-empty">No cross-round pattern has cleared the existing evidence threshold yet.</p>`}</section>`;
+  const focus = `<section class="blended-learning-section next-round-section"><header><span class="section-number">06</span><div><small>Next round</small><h3>Give your attention a job</h3></div></header><ol>${report.learning_summary.next_round_focus.map(item => `<li><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.action)}</p></li>`).join("") || `<li><strong>Keep collecting evidence</strong><p>Play the plan normally; Jetta will surface a focus when the record supports one.</p></li>`}</ol></section>`;
+  const holes = report.meaningful_holes.length ? `<section class="blended-detail-section"><header><span class="section-number">08</span><div><small>Meaningful holes</small><h3>Calculated review and evidence</h3></div></header>${report.meaningful_holes.map(hole => `<details class="review-hole blended-hole" id="report-hole-${hole.hole}" data-review-hole-number="${hole.hole}"><summary><div><strong>Hole ${hole.hole} · Par ${hole.par} · ${escapeHtml(hole.result)}</strong><span>${escapeHtml(hole.why_it_matters || "Selected learning evidence")}</span></div><b>${relativeScoreLabel(hole.relative_to_par)}</b></summary><div class="blended-hole-body">${hole.shots.map(shot => postRoundShotMarkup(shot)).join("")}<button class="replay-hole-button" type="button" data-replay-hole="${hole.hole - 1}">Reset & replay Hole ${hole.hole}</button></div></details>`).join("")}</section>` : "";
+  const appendix = `<details class="blended-report-section report-appendix"><summary><span><small>09</small><b>Detailed shot evidence</b></span><em>${report.detailed_shots.length} recorded shots</em></summary><div class="appendix-shot-list">${report.detailed_shots.map(shot => postRoundShotMarkup(shot, { replay: false })).join("") || `<p class="report-empty">No shot evidence has been recorded.</p>`}</div><footer>Report ${escapeHtml(report.report_builder_version)} · Assessment ${escapeHtml(report.provenance.assessment_version)} · Strategy ${escapeHtml(report.provenance.strategy_evaluator_version)}</footer></details>`;
+  const exports = `<section class="post-round-export" aria-labelledby="post-round-export-title"><div><span class="eyebrow">Take the report with you</span><strong id="post-round-export-title">One analysis, two useful formats</strong><p id="post-round-export-status" aria-live="polite">${narrative.status === "pending" ? "Finishing the AI Caddie wording before export…" : "AI wording and canonical evidence are ready to download."}</p></div><div class="post-round-export-actions"><button class="primary-action" type="button" data-post-round-export="pdf" ${narrative.status === "pending" ? "disabled" : ""}>Download PDF</button><button class="secondary-action" type="button" data-post-round-export="json" ${narrative.status === "pending" ? "disabled" : ""}>Download analysis JSON</button></div></section>`;
+  $("#round-review-list").innerHTML = `${story}${remember}${momentsMarkup}${patterns}${focus}${scorecardReportMarkup(report)}${holes}${appendix}${exports}<div class="review-actions"><button class="primary-action desktop-replay-only" type="button" data-review-replay>Open shot replay</button><button class="secondary-action" type="button" data-review-new-round>Start new round</button><button class="secondary-action" type="button" data-review-back>Back to game</button></div>`;
+  $('[data-post-round-export="pdf"]').addEventListener("click", downloadPostRoundPdf);
+  $('[data-post-round-export="json"]').addEventListener("click", downloadPostRoundJson);
+  $$('[data-report-hole]').forEach(button => button.addEventListener("click", () => {
+    const detail = $(`#report-hole-${button.dataset.reportHole}`);
+    if (!detail) return;
+    detail.open = true;
+    detail.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+  $$('[data-replay-shot]').forEach(button => button.addEventListener("click", () => {
+    const [holeIndex, shotIndex] = button.dataset.replayShot.split(":").map(Number);
+    $("#round-review-dialog").close();
+    enterReplayPage({ holeIndex, shotIndex });
+  }));
+  $$('[data-replay-hole]').forEach(button => button.addEventListener("click", () => {
+    const holeIndex = Number(button.dataset.replayHole);
+    if (!window.confirm(`Reset Hole ${holeIndex + 1}? This clears its score and shot history before replaying it.`)) return;
+    $("#round-review-dialog").close();
+    state.postRoundReport = null;
+    state.roundState = replaceHoleEvents(state.roundState, holeIndex, []);
+    persistRoundState();
+    syncRoundStateCaches();
+    changeHole(holeIndex);
+  }));
+  $("[data-review-replay]").addEventListener("click", () => { $("#round-review-dialog").close(); enterReplayPage(); });
+  $("[data-review-new-round]").addEventListener("click", () => { $("#round-review-dialog").close(); $("#reset-game-dialog").showModal(); });
+  $("[data-review-back]").addEventListener("click", () => $("#round-review-dialog").close());
+}
+
+function postRoundAiPayload(report) {
+  const packet = buildReportNarrativePacket(report);
+  return {
+    report_narrative_packet: packet,
+    course: { id: report.round.course_id, name: report.round.course_name },
+    player: { profile_id: state.profile?.id, profile_name: state.profile?.name },
+    round: { score_to_par: report.round.relative_to_par, completed_holes: report.round.holes_completed, scores: report.scorecard.map(hole => hole.score) },
+    strategy_analysis: {
+      version: report.provenance.strategy_evaluator_version,
+      strategy_score: report.summary.strategy_score,
+      execution_score: report.summary.execution_quality_percent,
+      scored_shots: report.summary.scored_decisions,
+      top_strength: report.summary.strongest_category,
+      top_priority: report.summary.practice_priority,
+      patterns: report.patterns
+    },
+    verified_player_patterns: report.patterns,
+    holes: report.meaningful_holes.slice(0, 5).map(hole => ({
+      hole_number: hole.hole, par: hole.par, distance_yards: hole.distance_yards, handicap: hole.handicap,
+      score: hole.score, meaningful: true, meaning_reasons: [hole.why_it_matters],
+      shots: hole.shots.map(shot => ({
+        stroke_number: shot.stroke_number, club: shot.club, power: shot.power_percent,
+        decision_quality: shot.decision.sound ? "good" : shot.decision.graded ? "review" : null,
+        execution_quality: shot.execution.on_plan ? "good" : shot.execution.graded ? "review" : null,
+        penalty: shot.result.penalty_strokes, lesson: shot.lesson,
+        canonical_assessment: { decision: shot.decision, execution: shot.execution, result: shot.result },
+        evidence_refs: shot.evidence_refs
+      }))
+    }))
+  };
+}
+
+async function requestPostRoundNarrative(report) {
+  const pending = structuredClone(report);
+  pending.narrative.status = "pending";
+  renderBlendedPostRoundReport(pending);
+  const response = await postAiJson("/api/ai/review", postRoundAiPayload(report), { retry: true });
+  const updated = response ? attachPostRoundNarrative(report, response) : report;
+  state.postRoundReport = structuredClone(updated);
+  if (updated.round.status === "completed") {
+    if (updated.narrative.status === "available") await syncPlayerRound().catch(error => console.warn("The completed report narrative could not be synced.", error));
+  }
+  renderBlendedPostRoundReport(updated);
+  setPostRoundExportReady(true, updated.narrative.status === "available"
+    ? "AI wording and canonical evidence are ready to download."
+    : "AI narrative unavailable. The complete calculated report is ready to download.");
+}
+
+function openRoundReview() {
+  const report = currentPostRoundReport();
+  if (!report) return;
+  renderBlendedPostRoundReport(report);
+  $("#round-review-dialog").showModal();
+  if (report.narrative.status !== "available") {
+    void requestPostRoundNarrative(report).catch(error => {
+      console.warn("The post-round AI narrative could not be completed.", error);
+      renderBlendedPostRoundReport(report);
+      setPostRoundExportReady(true, "AI narrative unavailable. The complete calculated report is ready to download.");
+    });
+  }
 }
 
 function renderPlayerGuide(markdown) {
   const container = $("#player-guide-content");
   const fragment = document.createDocumentFragment();
   let activeList = null;
+  const appendInlineText = (element, text) => {
+    for (const part of text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean)) {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        const strong = document.createElement("strong");
+        strong.textContent = part.slice(2, -2);
+        element.append(strong);
+      } else {
+        element.append(document.createTextNode(part));
+      }
+    }
+  };
   const appendTextElement = (tagName, text, className = "") => {
     const element = document.createElement(tagName);
-    element.textContent = text;
+    appendInlineText(element, text);
     if (className) element.className = className;
     fragment.append(element);
     return element;
   };
-  for (const rawLine of markdown.split(/\r?\n/)) {
-    const line = rawLine.trim();
+  const lines = markdown.split(/\r?\n/);
+  const tableCells = line => line.slice(1, -1).split("|").map(cell => cell.trim());
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex].trim();
     if (!line) {
       activeList = null;
+      continue;
+    }
+    const nextLine = lines[lineIndex + 1]?.trim() || "";
+    if (line.startsWith("|") && line.endsWith("|") &&
+        /^\|(?:\s*:?-{3,}:?\s*\|)+$/.test(nextLine)) {
+      activeList = null;
+      const scroll = document.createElement("div");
+      scroll.className = "guide-comparison-scroll";
+      const table = document.createElement("table");
+      table.className = "guide-comparison";
+      const head = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      for (const cell of tableCells(line)) {
+        const headingCell = document.createElement("th");
+        headingCell.scope = "col";
+        appendInlineText(headingCell, cell);
+        headRow.append(headingCell);
+      }
+      head.append(headRow);
+      table.append(head);
+      const body = document.createElement("tbody");
+      lineIndex += 2;
+      while (lineIndex < lines.length) {
+        const rowLine = lines[lineIndex].trim();
+        if (!rowLine.startsWith("|") || !rowLine.endsWith("|")) break;
+        const row = document.createElement("tr");
+        for (const cell of tableCells(rowLine)) {
+          const dataCell = document.createElement("td");
+          appendInlineText(dataCell, cell);
+          row.append(dataCell);
+        }
+        body.append(row);
+        lineIndex += 1;
+      }
+      lineIndex -= 1;
+      table.append(body);
+      scroll.append(table);
+      fragment.append(scroll);
       continue;
     }
     const heading = /^(#{1,3})\s+(.+)$/.exec(line);
     if (heading) {
       activeList = null;
       if (heading[1].length === 1) continue;
-      appendTextElement(`h${Math.min(4, heading[1].length + 1)}`, heading[2]);
+      const element = appendTextElement(`h${Math.min(4, heading[1].length + 1)}`, heading[2]);
+      if (heading[1].length === 2 && /^(Part\s+[IVX]+\s+—|The Golf-Domain Habit|第[一二三]部分\s+—|Golf-Domain Habit)/.test(heading[2])) {
+        element.classList.add("guide-part-heading");
+      }
       continue;
     }
     if (line.startsWith("> ")) {
       activeList = null;
-      appendTextElement("div", line.slice(2), "guide-principle");
+      const principle = appendTextElement("div", line.slice(2), "guide-principle");
+      if (line.includes("→")) principle.classList.add("guide-loop");
       continue;
     }
     const orderedItem = /^\d+\.\s+(.+)$/.exec(line);
@@ -8680,7 +12227,7 @@ function renderPlayerGuide(markdown) {
         fragment.append(activeList);
       }
       const item = document.createElement("li");
-      item.textContent = (orderedItem || bulletItem)[1];
+      appendInlineText(item, (orderedItem || bulletItem)[1]);
       activeList.append(item);
       continue;
     }
@@ -8690,20 +12237,65 @@ function renderPlayerGuide(markdown) {
   container.replaceChildren(fragment);
 }
 
+const PLAYER_GUIDE_LANGUAGES = {
+  en: {
+    file: "USERGUIDE.md",
+    documentLanguage: "en",
+    eyebrow: "Before the first tee",
+    title: "Player's guide",
+    loading: "Opening the guide…",
+    error: "The English player guide could not be loaded here. Use Open Markdown file below to read it directly.",
+    openFile: "Open English Markdown",
+    start: "Start playing"
+  },
+  "zh-tw": {
+    file: "USERGUIDE_ZH_TW.md",
+    documentLanguage: "zh-Hant",
+    eyebrow: "第一個 tee 之前",
+    title: "玩家指南",
+    loading: "正在開啟玩家指南…",
+    error: "無法在這裡載入繁體中文玩家指南。請使用下方連結開啟 Markdown 檔案。",
+    openFile: "開啟繁體中文 Markdown",
+    start: "開始遊戲"
+  }
+};
+
+async function loadPlayerGuideLanguage(language) {
+  const selectedLanguage = PLAYER_GUIDE_LANGUAGES[language] ? language : "en";
+  const guide = PLAYER_GUIDE_LANGUAGES[selectedLanguage];
+  const container = $("#player-guide-content");
+  $$('[data-guide-language]').forEach(button => {
+    button.setAttribute("aria-pressed", String(button.dataset.guideLanguage === selectedLanguage));
+  });
+  container.lang = guide.documentLanguage;
+  container.innerHTML = `<p>${guide.loading}</p>`;
+  $("#player-guide-eyebrow").textContent = guide.eyebrow;
+  $("#player-guide-title").textContent = guide.title;
+  $("#player-guide-start").textContent = guide.start;
+  const markdownLink = $("#player-guide-markdown-link");
+  markdownLink.href = guide.file;
+  markdownLink.textContent = guide.openFile;
+  try {
+    const response = await fetch(guide.file, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Guide request failed with ${response.status}`);
+    renderPlayerGuide(await response.text());
+    container.lang = guide.documentLanguage;
+    container.dataset.language = selectedLanguage;
+    localStorage.setItem("player-guide-language", selectedLanguage);
+  } catch (error) {
+    container.textContent = guide.error;
+    console.error(error);
+  }
+}
+
 async function openPlayerGuide() {
   const dialog = $("#player-guide-dialog");
   dialog.showModal();
-  const container = $("#player-guide-content");
-  if (container.dataset.loaded === "true") return;
-  try {
-    const response = await fetch("USERGUIDE.md", { cache: "no-store" });
-    if (!response.ok) throw new Error(`Guide request failed with ${response.status}`);
-    renderPlayerGuide(await response.text());
-    container.dataset.loaded = "true";
-  } catch (error) {
-    container.textContent = "The player guide could not be loaded here. Use Open Markdown file below to read it directly.";
-    console.error(error);
-  }
+  const savedLanguage = localStorage.getItem("player-guide-language");
+  const browserLanguage = navigator.language.toLowerCase().startsWith("zh") ? "zh-tw" : "en";
+  const language = PLAYER_GUIDE_LANGUAGES[savedLanguage] ? savedLanguage : browserLanguage;
+  if ($("#player-guide-content").dataset.language === language) return;
+  await loadPlayerGuideLanguage(language);
 }
 
 function updatePlayerAccountUI() {
@@ -8758,8 +12350,94 @@ function renderRoundHistory(rounds) {
       <div class="history-round-stat history-round-strokes"><span>Strokes</span><strong>${Number.isInteger(round.total_strokes) ? round.total_strokes : "—"}</strong><small>${parCopy}</small></div>
       <div class="history-round-stat history-round-relative"><span>To par</span><strong>${relative}</strong><small>Round score</small></div>
       <div class="history-round-stat history-round-management"><span>Course management</span><strong>${management}</strong><small>${managementCopy}</small></div>
+      <button class="history-replay-open" type="button" data-open-round-replay="${escapeHtml(round.id)}">Replay holes</button>
     </article>`;
   }).join("");
+  $$('[data-open-round-replay]').forEach(button => button.addEventListener("click", () => {
+    void openCompletedRoundReplay(button.dataset.openRoundReplay, button);
+  }));
+}
+
+function replayShotCount(hole) {
+  return (hole?.events || []).filter(event => event?.event_type === "shot_committed").length;
+}
+
+function renderLoadedReplayHole(container, packageData, indexEntry) {
+  const hole = packageData.hole;
+  const shots = (hole?.events || []).filter(event => event?.event_type === "shot_committed");
+  container.querySelector("[data-replay-hole-status]").textContent =
+    `Hole ${hole.hole_number} · ${Number.isInteger(hole.score) ? `${hole.score} strokes` : "unfinished"} · ${shots.length} recorded shots`;
+  container.querySelector("[data-replay-hole-detail]").innerHTML = shots.length
+    ? shots.map((event, index) => {
+      const shot = event.payload?.shot || event.payload || {};
+      return `<li><strong>Shot ${index + 1}: ${escapeHtml(shot.club || "Shot")}</strong><span>${Number.isFinite(shot.power) ? `${shot.power}% · ` : ""}${escapeHtml(shot.lie || event.resolved_lie || "Result saved")}${Number.isFinite(shot.remaining) ? ` · ${Math.round(shot.remaining)} yd left` : ""}</span></li>`;
+    }).join("")
+    : `<li><span>No shots recorded for this hole.</span></li>`;
+  for (const button of container.querySelectorAll("[data-load-replay-hole]")) {
+    button.setAttribute("aria-current", String(Number(button.dataset.loadReplayHole) === hole.hole_number));
+  }
+  if (indexEntry) container.dataset.shotCount = String(indexEntry.shot_count ?? replayShotCount(hole));
+}
+
+async function loadCompletedReplayHole(roundId, holeNumber, container) {
+  const requestId = String((Number(container.dataset.requestId) || 0) + 1);
+  container.dataset.requestId = requestId;
+  container.querySelector("[data-replay-hole-status]").textContent = `Loading Hole ${holeNumber}…`;
+  try {
+    const loaded = await replayHoleLoader.navigateToHole(roundId, holeNumber);
+    if (loaded.stale || container.dataset.requestId !== requestId) return;
+    const indexEntry = JSON.parse(container.dataset.index || "[]").find(item => item.hole === holeNumber);
+    renderLoadedReplayHole(container, loaded.replay, indexEntry);
+  } catch (error) {
+    if (container.dataset.requestId !== requestId) return;
+    container.querySelector("[data-replay-hole-status]").textContent = `Hole ${holeNumber} could not be loaded: ${error.message}`;
+  }
+}
+
+async function openCompletedRoundReplay(roundId, button) {
+  const originalLabel = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Opening replay…";
+  }
+  try {
+    const index = await replayHoleLoader.loadRoundSummary(roundId);
+    const replayCourseId = preferredCourseId(index.course_id);
+    if (!courseCatalog[replayCourseId]) throw new Error(`Course “${index.course_id}” is not installed on this server.`);
+    const firstHole = (index.holes || []).find(item => Number(item.shot_count) > 0)?.hole;
+    if (!firstHole) throw new Error("This round has no recorded shots to replay.");
+    const returnState = {
+      courseId: state.courseId,
+      holeIndex: state.holeIndex,
+      pinIndex: state.pinIndex,
+      liveGpsView: state.liveGpsView,
+      roundState: state.roundState,
+      roundSeed: state.roundSeed,
+      tee: state.tee
+    };
+    const replay = await replayHoleLoader.loadHole(roundId, firstHole, { priority: "user" });
+    if (state.courseId !== replayCourseId) await loadData(replayCourseId);
+    const holes = Array.from({ length: 18 }, () => []);
+    holes[firstHole - 1] = serverReplayShots(replay);
+    $("#round-history-dialog").close();
+    enterReplayPage({
+      kind: "server-game",
+      returnState,
+      holeIndex: firstHole - 1,
+      holes,
+      index,
+      roundId
+    });
+  } catch (error) {
+    console.error("Could not open completed round replay", error);
+    if (button) button.textContent = "Replay unavailable";
+    showMobileShotToast("Replay could not be opened", error.message);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      if (button.textContent !== "Replay unavailable") button.textContent = originalLabel;
+    }
+  }
 }
 
 async function openRoundHistory() {
@@ -8777,6 +12455,95 @@ async function openRoundHistory() {
       <strong>Round history could not be loaded.</strong>
       <span>${escapeHtml(error.message)} Close this window and try again.</span>
     </div>`;
+  }
+}
+
+function renderGpsReplayLibrary(rounds) {
+  const list = $("#gps-replay-library-list");
+  const visibleRounds = rounds.filter(round => Boolean(round?.is_complete)
+    || Number(round?.holes_recorded) > 0
+    || Number(round?.total_strokes) > 0);
+  if (!visibleRounds.length) {
+    list.innerHTML = `<div class="round-history-empty">
+      <strong>Your first saved GPS round will appear here.</strong>
+      <span>Record a shot in On-course GPS mode and wait for “Round synced.”</span>
+    </div>`;
+    return;
+  }
+  list.innerHTML = visibleRounds.map(round => {
+    const date = historyDateParts(round.completed_at || round.updated_at);
+    const course = courseCatalog[preferredCourseId(round.course_id)];
+    const installed = Boolean(course);
+    const complete = Boolean(round.is_complete);
+    const holesRecorded = Math.max(0, Number(round.holes_recorded) || 0);
+    const roundStatus = complete
+      ? `<b data-round-status="complete">Complete</b> · 18-hole GPS record`
+      : `<b data-round-status="progress">In progress</b> · ${holesRecorded} hole${holesRecorded === 1 ? "" : "s"} recorded`;
+    return `<article class="gps-replay-round" data-round-state="${complete ? "complete" : "progress"}">
+      <time datetime="${escapeHtml(round.completed_at || round.updated_at || "")}"><strong>${escapeHtml(date.day)}</strong><span>${escapeHtml(date.year)}</span></time>
+      <div class="gps-replay-round-copy"><strong>${escapeHtml(course?.name || round.course_id)}</strong><span>${installed ? roundStatus : "Course is not installed on this server"}</span></div>
+      <div class="gps-replay-round-score"><span>Strokes</span><strong>${Number.isInteger(round.total_strokes) ? round.total_strokes : "—"}</strong></div>
+      <button type="button" data-open-gps-replay="${escapeHtml(round.round_id)}" data-course-id="${escapeHtml(round.course_id)}" ${installed ? "" : "disabled"}>Replay</button>
+    </article>`;
+  }).join("");
+}
+
+async function openGpsReplayLibrary() {
+  $("#account-dialog").close();
+  const dialog = $("#gps-replay-library-dialog");
+  $("#gps-replay-library-status").textContent = "";
+  $("#gps-replay-library-list").innerHTML = `<div class="round-history-empty"><strong>Opening your on-course rounds…</strong></div>`;
+  dialog.showModal();
+  try {
+    const payload = await playerApi("/api/player/gps-round-history?limit=100");
+    renderGpsReplayLibrary(Array.isArray(payload.rounds) ? payload.rounds : []);
+  } catch (error) {
+    console.error("Could not load GPS replay history", error);
+    $("#gps-replay-library-list").innerHTML = `<div class="round-history-empty"><strong>On-course replays could not be loaded.</strong><span>${escapeHtml(error.message)}</span></div>`;
+  }
+}
+
+async function openGpsReplayRound(roundId, courseId) {
+  const status = $("#gps-replay-library-status");
+  if (competitionActive()) {
+    status.textContent = "Finish or leave the active Game Master match before opening an on-course replay.";
+    return;
+  }
+  const replayCourseId = preferredCourseId(courseId);
+  if (!courseCatalog[replayCourseId]) {
+    status.textContent = `Course “${courseId}” is not installed on this server.`;
+    return;
+  }
+  status.textContent = "Preparing the recorded course map…";
+  try {
+    const returnState = {
+      courseId: state.courseId,
+      holeIndex: state.holeIndex,
+      pinIndex: state.pinIndex,
+      liveGpsView: state.liveGpsView,
+      roundState: state.roundState,
+      roundSeed: state.roundSeed,
+      tee: state.tee
+    };
+    const payload = await playerApi(`/api/player/gps-round?round_id=${encodeURIComponent(roundId)}`);
+    const round = payload.round;
+    if (!round || round.course_id !== courseId) throw new Error("The synchronized GPS round could not be verified");
+    const steps = gpsReplaySteps(round, round.holes.map(holeState => holeState.pin_course_point));
+    if (!steps.length) throw new Error("This GPS round has no recorded shots to replay");
+    if (state.courseId !== replayCourseId) await loadData(replayCourseId);
+    $("#course-select").value = replayCourseId;
+    const first = gpsReplayNavigation(round)[0];
+    $("#gps-replay-library-dialog").close();
+    enterReplayPage({
+      kind: "gps",
+      round,
+      returnState,
+      holeIndex: first.holeIndex,
+      shotIndex: first.shotIndex
+    });
+  } catch (error) {
+    console.error("Could not open GPS replay", error);
+    status.textContent = error.message;
   }
 }
 
@@ -9440,10 +13207,12 @@ async function restorePlayerLearning() {
 
 async function restorePlayerRound() {
   const payload = await playerApi("/api/player/active-round");
-  const portableSave = payload.round;
+  const portableSave = payload.round
+    ? parseRoundSave(JSON.stringify(payload.round))
+    : null;
   if (!portableSave) {
     state.courseId = preferredCourseId(new URLSearchParams(window.location.search).get("course")
-      || localStorage.getItem(playerStorageKey("course"))
+      || readBrowserValue(playerStorageKey("course"))
       || "meadows");
     state.holeIndex = 0;
     state.pinIndex = 0;
@@ -9459,14 +13228,16 @@ async function restorePlayerRound() {
     state.courseId = restoredCourseId;
     state.holeIndex = 0;
     state.pinIndex = 0;
-    localStorage.setItem(playerStorageKey("course"), restoredCourseId);
+    writeBrowserValue(playerStorageKey("course"), restoredCourseId);
     return false;
   }
   const profileId = storeImportedProfile(portableSave.player_profile);
-  saveRoundState(localStorage, portableSave.round_state, state.player.id);
-  localStorage.setItem(profileStorageKey(), profileId);
-  localStorage.setItem(playerStorageKey("course"), portableSave.course_id);
-  localStorage.setItem(
+  state.roundState = structuredClone(portableSave.round_state);
+  state.postRoundReport = portableSave.post_round_report ? structuredClone(portableSave.post_round_report) : null;
+  saveBrowserRoundState(state.roundState, state.player.id);
+  writeBrowserValue(profileStorageKey(), profileId);
+  writeBrowserValue(playerStorageKey("course"), portableSave.course_id);
+  writeBrowserValue(
     playerStorageKey(`${portableSave.course_id}-round-seed`),
     String(portableSave.round_state.round_seed)
   );
@@ -9479,6 +13250,7 @@ async function restorePlayerRound() {
 async function logoutPlayer() {
   window.clearTimeout(roundSyncTimer);
   window.clearTimeout(gpsSyncTimer);
+  window.clearTimeout(gpsReplayTimer);
   window.clearTimeout(liveGpsPollTimer);
   try {
     await roundSyncPromise.catch(() => {});
@@ -9494,9 +13266,75 @@ async function logoutPlayer() {
 }
 
 function bindEvents() {
-  $("#competition-button").addEventListener("click", () => {
-    renderCompetitionSetup();
-    $("#competition-dialog").showModal();
+  $("#game-mode-select").addEventListener("change", event => {
+    event.currentTarget.dataset.mode = event.currentTarget.value;
+    void changeGameMode(event.currentTarget.value).catch(error => {
+      console.error("Could not change game mode", error);
+      syncGameModeSelector();
+    });
+  });
+  $("#challenge-dialog").addEventListener("close", () => {
+    if (!challengeActive()) syncGameModeSelector();
+  });
+  $("#challenge-dialog-close").addEventListener("click", () => $("#challenge-dialog").close());
+  $("#competition-dialog").addEventListener("close", () => {
+    if (!competitionActive()) syncGameModeSelector();
+  });
+  $("#competition-dialog-close").addEventListener("click", () => $("#competition-dialog").close());
+  $("#academy-dialog").addEventListener("close", () => {
+    if (!academyActive()) syncGameModeSelector();
+  });
+  $("#academy-dialog-close").addEventListener("click", () => $("#academy-dialog").close());
+  $("#academy-form").addEventListener("submit", event => void startAcademyFromSetup(event));
+  $("#academy-exit").addEventListener("click", () => void exitAcademy());
+  $("#academy-minimize").addEventListener("click", () => setMobileShotSheetState("minimized"));
+  $("#academy-commit").addEventListener("click", commitAcademyChoice);
+  $("#academy-choice-list").addEventListener("click", event => {
+    const choice = event.target.closest("[data-academy-choice]");
+    if (choice) selectAcademyChoice(choice.dataset.academyChoice);
+  });
+  $("#academy-result").addEventListener("click", event => {
+    if (event.target.closest("[data-academy-next]")) void prepareAcademyDecision();
+    else if (event.target.closest("[data-academy-finish]")) finishAcademyLesson();
+    else if (event.target.closest("[data-academy-exit-report]")) void exitAcademy();
+  });
+  $("#utility-menu").addEventListener("click", event => {
+    if (event.target.closest("button")) event.currentTarget.removeAttribute("open");
+  });
+  document.addEventListener("click", event => {
+    const menu = $("#utility-menu");
+    if (menu?.open && !menu.contains(event.target)) menu.removeAttribute("open");
+  });
+  $("#challenge-form").addEventListener("submit", event => void startChallengeFromSetup(event));
+  $("#challenge-exit").addEventListener("click", () => void exitChallenge());
+  $("#challenge-next").addEventListener("click", event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = "Loading…";
+    void continueChallenge().catch(error => {
+      console.error("Could not continue the three-hole challenge", error);
+      button.disabled = false;
+      renderChallengeMatchCard();
+    });
+  });
+  $("#challenge-finish-exit").addEventListener("click", () => {
+    $("#challenge-complete-dialog").close();
+    void exitChallenge();
+  });
+  $("#challenge-play-again").addEventListener("click", () => {
+    $("#challenge-complete-dialog").close();
+    challengeAudio.cancel();
+    state.challenge = null;
+    state.competition = null;
+    state.competitionPendingTurn = null;
+    renderChallengeSetup();
+    $("#challenge-form").requestSubmit();
+  });
+  $("#challenge-audio-toggle").addEventListener("click", () => {
+    const announcerMode = challengeAudio.settings.announcerMode === "off" ? "fun" : "off";
+    challengeAudio.applySettings({ announcerMode });
+    writeBrowserValue(playerStorageKey("challenge-audio-settings"), JSON.stringify(challengeAudio.settings));
+    renderChallengeMatchCard();
   });
   $("#competition-form").addEventListener("submit", event => {
     void startCompetitionFromSetup(event).catch(error => {
@@ -9525,6 +13363,10 @@ function bindEvents() {
     if (gpsRound) setGpsSyncDisplay("Offline · on phone", "error");
   });
   $("#player-guide-button").addEventListener("click", () => void openPlayerGuide());
+  $$('[data-guide-language]').forEach(button => button.addEventListener("click", () => {
+    if ($("#player-guide-content").dataset.language === button.dataset.guideLanguage) return;
+    void loadPlayerGuideLanguage(button.dataset.guideLanguage);
+  }));
   $("#gm-voice-toggle").addEventListener("click", toggleGmVoice);
   $("#account-button").addEventListener("click", () => {
     updatePlayerAccountUI();
@@ -9536,6 +13378,35 @@ function bindEvents() {
     $("#profile-dialog").showModal();
   });
   $("#round-history-button").addEventListener("click", () => void openRoundHistory());
+  $("#gps-replay-library-button").addEventListener("click", () => void openGpsReplayLibrary());
+  $("#gps-replay-library-list").addEventListener("click", event => {
+    const button = event.target.closest("[data-open-gps-replay]");
+    if (button) void openGpsReplayRound(button.dataset.openGpsReplay, button.dataset.courseId);
+  });
+  $("#gps-replay-previous").addEventListener("click", () => moveGpsReplay(-1));
+  $("#gps-replay-next").addEventListener("click", () => moveGpsReplay(1));
+  $("#gps-replay-play").addEventListener("click", toggleGpsReplayPlayback);
+  $("#gps-replay-close").addEventListener("click", exitGpsReplay);
+  $("#replay-page-holes").addEventListener("click", event => {
+    const button = event.target.closest("[data-replay-page-hole]");
+    if (!button || !replayPageState) return;
+    const holeIndex = Number(button.dataset.replayPageHole);
+    if (replayPageState.kind === "server-game") {
+      void loadServerReplayPageHole(holeIndex);
+      return;
+    }
+    replayPageState.holeIndex = holeIndex;
+    replayPageState.shotIndex = 0;
+    renderReplayPage();
+  });
+  $("#replay-page-shots").addEventListener("click", event => {
+    const button = event.target.closest("[data-replay-page-shot]");
+    if (!button || !replayPageState) return;
+    replayPageState.shotIndex = Number(button.dataset.replayPageShot);
+    renderReplayPage();
+  });
+  $("#replay-page-play").addEventListener("click", renderReplayPage);
+  $("#replay-page-exit").addEventListener("click", () => void exitReplayPage());
   $("#player-learning-button").addEventListener("click", () => void openPlayerLearning());
   $("#leaderboard-button").addEventListener("click", () => void openLeaderboard());
   $("#feedback-center-button").addEventListener("click", () => void openFeedbackCenter());
@@ -9654,6 +13525,11 @@ function bindEvents() {
   $("#course-select").addEventListener("change", async event => {
     const nextCourse = event.target.value;
     if (nextCourse === state.courseId) return;
+    if (academyActive()) {
+      window.alert("Finish or leave the Academy lesson before switching courses.");
+      event.target.value = state.courseId;
+      return;
+    }
     if (competitionActive()) {
       window.alert("Finish or leave the active Game Master competition before switching courses.");
       event.target.value = state.courseId;
@@ -9666,6 +13542,8 @@ function bindEvents() {
     }
     state.liveGpsView = false;
     state.liveGpsRound = null;
+    stopGpsReplayPlayback();
+    state.gpsReplay = null;
     window.clearTimeout(liveGpsPollTimer);
     await loadData(nextCourse);
     localStorage.setItem(playerStorageKey("course"), nextCourse);
@@ -9675,6 +13553,7 @@ function bindEvents() {
     schedulePlayerRoundSync(0);
   });
   $$(".tee-switch button").forEach(button => button.addEventListener("click", () => {
+    if (academyActive()) return;
     state.tee = button.dataset.tee;
     if (state.roundState) {
       state.roundState = { ...state.roundState, tee: state.tee };
@@ -9683,7 +13562,7 @@ function bindEvents() {
     if (state.competition) {
       state.competition.tee = state.tee;
       state.competition.strategist_round.tee = state.tee;
-      saveCompetition(localStorage, state.competition, state.player?.id);
+      cacheActiveCompetition();
     }
     resetHole();
   }));
@@ -9692,7 +13571,7 @@ function bindEvents() {
     state.target = null;
     state.manualTargetPreview = false;
     state.shotDraft.target = false;
-    state.structuredShot = { aim: "", adjustment: "none", offset: 1, selectedTarget: null };
+    state.structuredShot = { aim: "", shotType: "auto", adjustment: "none", offset: 1, selectedTarget: null };
     clearStrategyPlan();
     updateAll();
     schedulePlayerRoundSync();
@@ -9706,6 +13585,12 @@ function bindEvents() {
   });
   $("#mobile-carousel-previous").addEventListener("click", () => setMobileCarouselPage(state.mobileCarouselPage - 1));
   $("#mobile-carousel-next").addEventListener("click", () => setMobileCarouselPage(state.mobileCarouselPage + 1));
+  $("#mobile-shot-sheet-minimize").addEventListener("click", () => setMobileShotSheetState("minimized"));
+  $("#mobile-shot-sheet-expand").addEventListener("click", () => setMobileShotSheetState("expanded"));
+  $("#mobile-edit-target").addEventListener("click", () => {
+    setMobileShotSheetState("minimized");
+    showMobileShotToast("Set your target", "Tap the course map to place the target, then reopen Shot plan.");
+  });
   $("#mobile-carousel-viewport").addEventListener("wheel", onMobileCarouselWheel, { passive: false });
   $("#mobile-carousel-viewport").addEventListener("pointerdown", onMobileCarouselPointerDown);
   $("#mobile-carousel-viewport").addEventListener("pointerup", onMobileCarouselPointerUp);
@@ -9717,6 +13602,7 @@ function bindEvents() {
   window.addEventListener("pointercancel", onMobileMapPlanPointerUp);
   window.visualViewport?.addEventListener("resize", keepMobileMapPlanInView);
   window.visualViewport?.addEventListener("scroll", keepMobileMapPlanInView);
+  window.addEventListener("resize", keepMobileMapPlanInView);
   window.visualViewport?.addEventListener("resize", positionLiveRoundPanel);
   window.addEventListener("resize", refreshMapAfterViewportWidthChange);
   window.addEventListener("resize", positionLiveRoundPanel);
@@ -9726,6 +13612,9 @@ function bindEvents() {
   $("#mobile-power-slider").addEventListener("input", event => {
     setSwingPowerFromMobile(event.target.value);
   });
+  $$('[data-aim-type]').forEach(button => button.addEventListener("click", () => {
+    setAimType(button.dataset.aimType);
+  }));
   $$('[data-shot-field]').forEach(control => control.addEventListener("change", event => {
     updateStructuredShotField(event.currentTarget.dataset.shotField, event.currentTarget.value);
   }));
@@ -9740,6 +13629,7 @@ function bindEvents() {
     $("#scorecard-dialog").showModal();
   });
   $("#mobile-review-button").addEventListener("click", openRoundReview);
+  $("#mobile-game-finished-button").addEventListener("click", finishGame);
   $("#reset-view").addEventListener("click", openResetHoleDialog);
   $("#mobile-reset-view").addEventListener("click", openResetHoleDialog);
   $("#enlarge-green").addEventListener("click", openEnlargedGreen);
@@ -9790,6 +13680,7 @@ function bindEvents() {
   window.addEventListener("pointerup", onGreenAimPanelPointerUp);
   window.addEventListener("pointercancel", onGreenAimPanelPointerUp);
   window.visualViewport?.addEventListener("resize", keepGreenAimPanelInView);
+  window.addEventListener("resize", keepGreenAimPanelInView);
   window.visualViewport?.addEventListener("scroll", keepGreenAimPanelInView);
   $("#green-putt-play").addEventListener("click", () => {
     if (!state.target) return;
@@ -9797,18 +13688,26 @@ function bindEvents() {
     updateEnlargedPuttControls();
   });
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && state.greenEnlarged) closeEnlargedGreen();
+    if (event.key !== "Escape") return;
+    if (state.greenEnlarged) closeEnlargedGreen();
+    else if (mobileShotSheetExpanded()) setMobileShotSheetState("minimized");
   });
   window.addEventListener("pointermove", onTargetPointerMove, { passive: false });
   window.addEventListener("pointerup", onTargetPointerUp);
   window.addEventListener("pointercancel", onTargetPointerUp);
+  $("#course-map").addEventListener("contextmenu", preventLiveMapNativeGesture);
+  $("#course-map").addEventListener("selectstart", preventLiveMapNativeGesture);
+  $("#course-map").addEventListener("dragstart", preventLiveMapNativeGesture);
+  window.addEventListener("pointermove", onLiveMapMeasurePointerMove, { passive: false });
+  window.addEventListener("pointerup", endLiveMapMeasurement);
+  window.addEventListener("pointercancel", endLiveMapMeasurement);
   window.addEventListener("pointermove", onGreenOrbitPointerMove, { passive: false });
   window.addEventListener("pointerup", onGreenOrbitPointerUp);
   window.addEventListener("pointercancel", onGreenOrbitPointerUp);
   $("#previous-hole").addEventListener("click", () => changeHole(state.holeIndex - 1));
   $("#next-hole").addEventListener("click", () => changeHole(state.holeIndex + 1));
   $("#mobile-previous-hole").addEventListener("click", () => changeHole(state.holeIndex - 1));
-  $("#mobile-next-hole").addEventListener("click", () => changeHole(state.holeIndex + 1));
+  $("#mobile-next-hole").addEventListener("click", () => changeHole(nextGpsHoleIndex(state.holeIndex)));
   $("#mobile-round-current").addEventListener("click", () => {
     renderRoundNavigation();
     $("#round-nav-dialog").showModal();
@@ -9831,6 +13730,8 @@ function bindEvents() {
     if (state.livePanelCollapsed) setLivePanelCollapsed(false);
   });
   $("#live-round-open-gps").addEventListener("click", openGpsMode);
+  $("#live-map-measure-record").addEventListener("click", openGpsMode);
+  $("#live-map-measure-voice").addEventListener("click", speakLiveMapInstruction);
   $("#gps-exit").addEventListener("click", () => closeGpsMode("simulator"));
   $("#gps-exit-live").addEventListener("click", () => closeGpsMode("live"));
   $("#gps-previous-hole").addEventListener("click", () => gpsChangeHole(state.holeIndex - 1));
@@ -9842,6 +13743,7 @@ function bindEvents() {
     renderGpsMode();
   });
   $("#gps-location-button").addEventListener("click", () => void captureGpsLocation());
+  $("#gps-on-green").addEventListener("click", () => void captureGpsLocation({ forcedLie: "Green" }));
   $("#gps-undo").addEventListener("click", () => {
     if (gpsPagePreviewActive()) return;
     const action = undoGpsHoleAction(gpsHoleState());
@@ -9851,6 +13753,25 @@ function bindEvents() {
     setGpsStatus(`Removed the last ${action}.`);
   });
   $("#gps-hole-review").addEventListener("click", openGpsHoleReview);
+  $$('[data-gps-review-trace]').forEach(button => button.addEventListener("click", event => {
+    const review = event.currentTarget.closest(".gps-review-card");
+    viewGpsHoleTrace(Number(review?.dataset.gpsReviewHole));
+  }));
+  $$('[data-gps-review-shots]').forEach(container => container.addEventListener("click", event => {
+    const row = event.target.closest(".gps-review-shot");
+    if (!row) return;
+    if (event.target.closest("[data-gps-review-delete]")) {
+      deleteGpsReviewShot(row);
+    } else if (event.target.closest("[data-gps-review-edit]")) {
+      toggleGpsReviewShotEditor(row, !row.classList.contains("editing"));
+    } else if (event.target.closest("[data-gps-review-cancel]")) {
+      toggleGpsReviewShotEditor(row, false);
+    } else if (event.target.closest("[data-gps-review-save]")) {
+      saveGpsReviewShotCorrection(row);
+    }
+  }));
+  $$('[data-gps-review-delete-putt]').forEach(button => button.addEventListener("click", () => deleteGpsReviewPutt(button)));
+  $("#gps-review-next").addEventListener("click", continueFromGpsHoleReview);
   $("#gps-add-putt").addEventListener("click", () => {
     if (gpsPagePreviewActive()) return;
     const holeState = gpsHoleState();
@@ -9859,6 +13780,7 @@ function bindEvents() {
     persistGpsRound();
     renderGpsMode();
   });
+  $("#gps-holed-out").addEventListener("click", finishGpsHoleFromGreen);
   $("#gps-lie-controls").addEventListener("click", event => {
     if (gpsPagePreviewActive()) return;
     const button = event.target.closest("[data-gps-lie]");
@@ -9876,9 +13798,6 @@ function bindEvents() {
     persistGpsRound();
     renderGpsMode();
   });
-  $("#gps-stance-select").addEventListener("change", event => updateGpsBallCondition("stance", event.target.value));
-  $("#gps-slope-select").addEventListener("change", event => updateGpsBallCondition("slope", event.target.value));
-  $("#gps-rough-select").addEventListener("change", event => updateGpsBallCondition("rough_depth", event.target.value));
   $("#gps-caddie-choices").addEventListener("click", event => {
     const button = event.target.closest("[data-gps-strategy]");
     if (button) selectGpsStrategy(button.dataset.gpsStrategy);
@@ -9888,6 +13807,7 @@ function bindEvents() {
     renderGpsMode();
   });
   $("#gps-club-select").addEventListener("change", selectGpsManualShot);
+  $("#gps-tee-club-select").addEventListener("change", selectGpsTeeClub);
   $("#gps-power-select").addEventListener("change", selectGpsManualShot);
   document.addEventListener("click", event => {
     const strategyChoice = event.target.closest("[data-strategy-choice]");
@@ -9923,6 +13843,11 @@ function bindEvents() {
     setRoundFileStatus("Round files include your shots, score, tee, and player profile.");
     $("#scorecard-dialog").showModal();
   });
+  $("#replay-mode-button").addEventListener("click", () => enterReplayPage());
+  $("#scorecard-replay-button").addEventListener("click", () => {
+    $("#scorecard-dialog").close();
+    enterReplayPage();
+  });
   $("#save-round-file").addEventListener("click", () => {
     void exportRoundFile();
   });
@@ -9935,11 +13860,12 @@ function bindEvents() {
     void importRoundFile(file);
   });
   $$('[data-reference-image]').forEach(button => button.addEventListener("click", () => {
-    $("#reference-image-title").textContent = `${state.course.shortName} · Hole ${state.holeIndex + 1}`;
-    $("#reference-hole-image").src = `${state.course.imagePath}/hole${state.holeIndex + 1}.png?v=${state.course.dataVersion}`;
+    $("#reference-image-title").textContent = `${state.course.shortName} · Hole ${activeDisplayHoleNumber()}`;
+    $("#reference-hole-image").src = `${state.course.imagePath}/hole${activeDisplayHoleNumber()}.png?v=${state.course.dataVersion}`;
     $("#reference-image-dialog").showModal();
   }));
   $("#round-review-button").addEventListener("click", openRoundReview);
+  $("#game-finished-button").addEventListener("click", finishGame);
   $("#reset-game-button").addEventListener("click", () => $("#reset-game-dialog").showModal());
   $("#declare-unplayable").addEventListener("click", declareLastShotUnplayable);
   $("#reset-game-dialog").addEventListener("close", () => {
@@ -9951,8 +13877,9 @@ function bindEvents() {
   $("#hole-complete-dialog").addEventListener("close", () => {
     const dialog = $("#hole-complete-dialog");
     if (dialog.returnValue !== "next") return;
-    if (state.holeIndex < 17) changeHole(state.holeIndex + 1);
-    else openRoundReview();
+    if (challengeActive()) void continueChallenge();
+    else if (state.holeIndex < 17) changeHole(state.holeIndex + 1);
+    else finishGame();
   });
   $("#gm-form").addEventListener("submit", event => {
     event.preventDefault();
@@ -9975,9 +13902,10 @@ async function init() {
     const hasSavedPlayerProfile = await restorePlayerProfile();
     const resumed = await restorePlayerRound();
     await loadData(state.courseId);
-    const competitionResumed = await restoreCompetitionRound();
+    const challengeResumed = await restoreChallenge();
+    const competitionResumed = challengeResumed ? false : await restoreCompetitionRound();
     const pinCount = hole().geometries.green_complex.pin_zones.length;
-    state.pinIndex = rotatingPinIndex(state.holeIndex, pinCount);
+    if (!challengeResumed) state.pinIndex = rotatingPinIndex(state.holeIndex, pinCount);
     resetHole();
     bindEvents();
     updateAll();
@@ -9986,7 +13914,10 @@ async function init() {
     $("#app").hidden = false;
     $("#loading").style.opacity = 0;
     setTimeout(() => $("#loading").remove(), 500);
-    if (competitionResumed) {
+    if (challengeResumed) {
+      addGmMessage("Quick 3-Hole Match resumed. Your current paired hole is ready.");
+      setAccountSyncStatus("Challenge resumed", `Challenge hole ${challengeSlot() + 1} of 3 is ready.`);
+    } else if (competitionResumed) {
       addGmMessage(state.competitionRecoveryMessage || "Game Master match resumed from the latest paired turn.");
       if (state.competitionComparisonTurnId) {
         window.setTimeout(showCompetitionComparison, 0);
@@ -10006,7 +13937,21 @@ async function init() {
       $("#profile-dialog").showModal();
     }
   } catch (error) {
-    $("#loading").innerHTML = `<div class="loading-mark">!</div><p>Course data could not be loaded.<br>Run this app through a local web server.</p>`;
+    const loading = $("#loading");
+    loading.innerHTML = "";
+    const mark = document.createElement("div");
+    mark.className = "loading-mark";
+    mark.textContent = "!";
+    const message = document.createElement("p");
+    message.textContent = "The game could not finish loading on this device.";
+    const detail = document.createElement("small");
+    detail.textContent = error?.message || "Please check the connection and try again.";
+    const reload = document.createElement("button");
+    reload.type = "button";
+    reload.className = "primary-action";
+    reload.textContent = "Reload game";
+    reload.addEventListener("click", () => window.location.reload());
+    loading.append(mark, message, detail, reload);
     console.error(error);
   }
 }

@@ -7,6 +7,11 @@ A dependency-free, browser-based strategic golf game with four 18-hole courses:
 - Cranbury Golf Club
 - Galloping Hill Golf Course
 
+For a current catalog of player, GPS, and review tools, see the
+[Features Guide](FEATURES_GUIDE.md). For the longer shot-by-shot tutorial, see the
+[Player's Guide in English](USERGUIDE.md) or the
+[Traditional Chinese Player's Guide](USERGUIDE_ZH_TW.md).
+
 ## Run locally
 
 From this folder:
@@ -29,6 +34,25 @@ projects; and complete game packages containing both artwork and geometry.
 
 It requires no map API key or billing account. See [Course Mapper](docs/COURSE_MAPPER.md)
 for setup, mapping, export, and local installation instructions.
+
+#### Import a course from Golf Intelligence
+
+Authorized developer accounts can search Golf Intelligence from Course Mapper,
+review the expected credit use, download one selected course, and open the
+normalized GPS geometry in the existing editor. Credentials remain server-side.
+Add these settings to `.env` and restart the server:
+
+```bash
+GOLF_INTELLIGENCE_ENABLED=true
+GOLF_INTELLIGENCE_BASE_URL=https://api.golfintelligence.com
+GOLF_INTELLIGENCE_CLIENT_ID=your-client-id
+GOLF_INTELLIGENCE_ACTIVE_TOKEN=your-active-token
+```
+
+Paid calls start OFF after every server restart. Enabling them in the editor does
+not spend credits; the selected full-course download has a separate confirmation.
+Successful imports are cached locally, and published gameplay uses only Jetta
+course files. See [Golf Intelligence usage notes](docs/golf_intelligence_usage_notes.md).
 
 ### Player accounts and automatic round resume
 
@@ -116,7 +140,7 @@ Gemini remains available as an explicit alternative:
 ```bash
 export AI_PROVIDER="gemini"
 export GEMINI_API_KEY="your-key"
-export GEMINI_MODEL="gemini-2.5-flash"
+export GEMINI_MODEL="gemini-3.6-flash"
 python3 scripts/serve.py --port 8080
 ```
 

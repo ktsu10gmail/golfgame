@@ -1,4 +1,4 @@
-export const TREE_CONDITION_VERSION = "tree-conditions-v1";
+export const TREE_CONDITION_VERSION = "tree-conditions-v2";
 
 export const TREE_CONDITION_INVENTORY = Object.freeze({
   ball_surface: Object.freeze(["light_rough", "mild_rough", "deep_rough"]),
@@ -170,9 +170,8 @@ export function evaluateTreeCondition({
 const WORDING = Object.freeze({
   ball_surface: { light_rough: "light rough", mild_rough: "mild rough", deep_rough: "deep rough" },
   tree_position: { edge_of_trees: "at the edge of the trees", under_canopy: "under the tree canopy", deep_in_trees: "deep in the trees" },
-  pin_line: { clear: "clear", partially_blocked: "partially blocked", blocked: "blocked" },
-  canopy: { high_branches: "higher branches", medium_branches: "mid-height branches", low_branches: "low branches" },
-  swing_room: { three_quarter_swing: "approximately a three-quarter swing", half_swing: "approximately a half swing", punch_only: "a restricted punch swing" },
+  canopy: { high_branches: "overhanging branches", medium_branches: "dense mid-height branches", low_branches: "dense low branches" },
+  swing_room: { three_quarter_swing: "a 3/4 swing", half_swing: "a 1/2 swing", punch_only: "a punch-only swing" },
   escape_destination: { fairway: "fairway", clear_area: "clear area" }
 });
 
@@ -183,7 +182,9 @@ export function treeConditionMessage(condition, { includeDistance = true } = {})
     : "";
   const obstruction = condition.pin_line === "clear"
     ? "The direct line to the pin is clear of the mapped canopy."
-    : `The direct line to the pin is ${WORDING.pin_line[condition.pin_line]} by ${WORDING.canopy[condition.canopy]}.`;
+    : condition.pin_line === "blocked"
+      ? "The direct route toward the green passes through significant mapped tree cover and carries high tree-interference risk."
+      : "The direct route toward the green passes through mapped tree cover and carries tree-interference risk.";
   const direction = condition.escape_direction === "left" || condition.escape_direction === "right"
     ? `to the ${condition.escape_direction} of the pin line`
     : condition.escape_direction === "forward"
@@ -196,20 +197,12 @@ export function treeConditionMessage(condition, { includeDistance = true } = {})
         ? "away from the pin line"
         : `${Math.abs(condition.recovery_angle_degrees)}° ${condition.recovery_angle_degrees < 0 ? "left" : "right"} of the pin line`
     : direction;
-  const clock = Number.isFinite(condition.recovery_clock)
-    ? `—about ${condition.recovery_clock} o'clock when facing the pin`
-    : "";
   const targetYards = condition.recovery_target_yards ?? condition.escape_distance_yards;
-  const entryYards = condition.fairway_entry_yards ?? condition.escape_distance_yards;
-  const beforeMargin = Math.max(0, targetYards - entryYards);
-  const afterMargin = Number.isFinite(condition.fairway_end_yards)
-    ? Math.max(0, condition.fairway_end_yards - targetYards)
-    : null;
   const recovery = condition.pin_line === "clear"
     ? ""
-    : condition.escape_destination === "fairway"
-      ? ` Punch out toward the marked recovery target about ${targetYards} yards from your ball, ${angle}${clock}. The fairway begins at about ${entryYards} yards${Number.isFinite(condition.fairway_end_yards) ? ` and its far edge is about ${condition.fairway_end_yards} yards away, leaving roughly ${beforeMargin} yards before the target and ${afterMargin} yards beyond it` : ""}.`
-      : ` Punch out toward the marked recovery target about ${targetYards} yards from your ball, ${angle}${clock}.`;
-  return `${distanceLead}Your ball is ${WORDING.tree_position[condition.tree_position]} in ${WORDING.ball_surface[condition.ball_surface]}. ` +
-    `${obstruction} You have room for ${WORDING.swing_room[condition.swing_room]}.${recovery}`;
+    : ` The recovery cards compare a safer punch-out ${angle} toward the ${WORDING.escape_destination[condition.escape_destination]} (${targetYards}-yard target) with any viable forward-progress alternatives. Choose the tradeoff you want to play.`;
+  const stance = condition.pin_line === "clear"
+    ? `${obstruction} You have room for ${WORDING.swing_room[condition.swing_room]}.`
+    : `Your stance is restricted to ${WORDING.swing_room[condition.swing_room]}, and ${obstruction.charAt(0).toLowerCase()}${obstruction.slice(1)}`;
+  return `${distanceLead}Your ball is ${WORDING.tree_position[condition.tree_position]} in ${WORDING.ball_surface[condition.ball_surface]}. ${stance}${recovery}`;
 }

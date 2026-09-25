@@ -55,6 +55,11 @@ test("paired multi-run evaluation is stable and summarizes authoritative packets
   assert.ok(first.candidates.safe_smart.playable_percent >= first.candidates.aggressive.playable_percent);
   assert.ok(first.candidates.aggressive.leave_p10_yards <= first.candidates.aggressive.median_leave_yards);
   assert.ok(first.candidates.aggressive.median_leave_yards <= first.candidates.aggressive.leave_p90_yards);
+  assert.ok(first.candidates.aggressive.inside_3ft_percent <= first.candidates.aggressive.inside_6ft_percent);
+  assert.ok(first.candidates.aggressive.inside_6ft_percent <= first.candidates.aggressive.inside_8ft_percent);
+  assert.ok(first.candidates.aggressive.inside_8ft_percent <= first.candidates.aggressive.inside_15ft_percent);
+  assert.ok(first.candidates.aggressive.median_leave_feet >= 0);
+  assert.ok(Math.abs(first.candidates.aggressive.median_leave_feet - first.candidates.aggressive.median_leave_yards * 3) <= 1.5);
 });
 
 test("paired probabilities can override the deterministic fallback ranking", () => {

@@ -113,10 +113,35 @@ export function completeGpsHole(holeState) {
   return true;
 }
 
+export function holeOutGpsHole(holeState) {
+  const currentFix = holeState?.shots?.at(-1)?.end || holeState?.tee;
+  if (currentFix?.lie !== "Green" || holeState.finished) return false;
+  holeState.putts = Math.max(0, Number(holeState.putts) || 0) + 1;
+  return completeGpsHole(holeState);
+}
+
 export function firstUnfinishedGpsHoleIndex(round) {
   return Array.isArray(round?.holes)
     ? round.holes.findIndex(holeState => holeState?.finished !== true)
     : -1;
+}
+
+export function nextGpsHoleIndex(currentHoleIndex, holeCount = 18) {
+  const count = Math.max(1, Math.trunc(Number(holeCount)) || 18);
+  const current = Math.max(0, Math.min(count - 1, Math.trunc(Number(currentHoleIndex)) || 0));
+  return (current + 1) % count;
+}
+
+export function gpsRoundReviewAction(round, currentHoleIndex) {
+  const holeCount = Array.isArray(round?.holes) && round.holes.length ? round.holes.length : 18;
+  const current = Math.max(0, Math.min(holeCount - 1, Math.trunc(Number(currentHoleIndex)) || 0));
+  if (current < holeCount - 1) {
+    return { kind: "next", holeIndex: current + 1 };
+  }
+  const unfinished = firstUnfinishedGpsHoleIndex(round);
+  return unfinished < 0
+    ? { kind: "complete", holeIndex: current }
+    : { kind: "unfinished", holeIndex: unfinished };
 }
 
 export function latestCompletedGpsHoleIndex(round, currentHoleIndex = 0) {
@@ -145,10 +170,46 @@ export function gpsHoleReview(holeState, par) {
     shots: shots.map((shot, index) => ({
       number: index + 1,
       label: index === 0 ? "Tee shot" : `${index + 1}${({ 2: "nd", 3: "rd" })[index + 1] || "th"} shot`,
-      club_name: shot?.strategy?.club_name || "Club not recorded",
+      club_name: shot?.strategy?.club_name || "No shot selected",
+      power: Number.isFinite(Number(shot?.strategy?.power)) ? Number(shot.strategy.power) : null,
       distance_yards: Math.max(0, Math.round(Number(shot?.distance_yards) || 0))
     }))
   };
+}
+
+export function correctGpsRecordedShot(holeState, shotIndex, choice, correctedAt = new Date().toISOString()) {
+  if (!holeState?.finished || !Array.isArray(holeState.shots)) {
+    throw new Error("only completed-hole shots can be corrected");
+  }
+  const index = Number(shotIndex);
+  const shot = Number.isInteger(index) ? holeState.shots[index] : null;
+  if (!shot) throw new Error("recorded shot was not found");
+  shot.strategy = manualGpsStrategy(shot.strategy, choice);
+  shot.strategy.corrected_in_review_at = correctedAt;
+  return shot.strategy;
+}
+
+export function deleteGpsRecordedShot(holeState, shotIndex) {
+  if (!Array.isArray(holeState?.shots)) throw new Error("recorded shots are unavailable");
+  const index = Number(shotIndex);
+  const shot = Number.isInteger(index) ? holeState.shots[index] : null;
+  if (!shot) throw new Error("recorded shot was not found");
+  return holeState.shots.splice(index, 1)[0];
+}
+
+export function deleteLastGpsPutt(holeState) {
+  if (!holeState || !Number.isInteger(holeState.putts) || holeState.putts < 0) {
+    throw new Error("recorded putts are unavailable");
+  }
+  if (holeState.putts > 0) {
+    holeState.putts -= 1;
+    return true;
+  }
+  if (holeState.final_stroke === true) {
+    holeState.final_stroke = false;
+    return true;
+  }
+  throw new Error("there is no recorded putt to delete");
 }
 
 const GPS_STANCES = new Set(["tbd", "level", "above_feet", "below_feet"]);

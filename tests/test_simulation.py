@@ -298,8 +298,8 @@ class PuttingTests(unittest.TestCase):
         self.assertEqual(first, replay)
         self.assertEqual(first.audit.engine_version, PUTTING_ENGINE_VERSION)
         self.assertEqual(first.audit.shot_seed, derive_putt_seed(90210, 4, 2))
-        self.assertEqual(first.landing, Vec2(-0.7087, 9.4976))
-        self.assertEqual(first.remaining_distance_yards, 2.6)
+        self.assertEqual(first.landing, Vec2(-0.7965, 11.7134))
+        self.assertEqual(first.remaining_distance_yards, 0.85)
         self.assertFalse(first.made)
         self.assertAlmostEqual(first.make_probability, 0.0, places=6)
         self.assertEqual(first.assessment.decision_assessment, "review")
@@ -312,6 +312,19 @@ class PuttingTests(unittest.TestCase):
 
         self.assertNotEqual(first.audit.shot_seed, second.audit.shot_seed)
         self.assertNotEqual(first, second)
+
+    def test_short_putt_reaching_cup_radius_retains_make_chance(self) -> None:
+        sample = replace(
+            putt_context(),
+            target=Vec2(0, 1.25),
+            pin=Vec2(0, 1.25),
+            read=PuttRead(feet=3.75, direction="right", start_direction="right", break_inches=0),
+            pace_scale=0.06,
+        )
+        packet = simulate_putt(sample, round_seed=19, hole_number=10, stroke_index=3)
+        self.assertGreater(packet.make_probability, 0)
+        self.assertTrue(packet.pace_correct)
+        self.assertTrue(packet.correct_decision)
 
     def test_putt_read_is_relative_to_player_to_cup_line_on_rotated_green(self) -> None:
         rotated = PuttContext(
@@ -351,11 +364,11 @@ class PuttingTests(unittest.TestCase):
 
         packet = simulate_putt(contour_context, round_seed=90210, hole_number=1, stroke_index=1)
 
-        self.assertEqual(packet.landing, Vec2(0.0825, 3.3345))
-        self.assertEqual(len(packet.path), 21)
+        self.assertEqual(packet.landing, Vec2(0.097, 4.4586))
+        self.assertEqual(len(packet.path), 23)
         self.assertEqual(packet.path[-1], packet.landing)
         self.assertTrue(packet.audit.contour_physics)
-        self.assertEqual(packet.audit.physics_steps, 80)
+        self.assertEqual(packet.audit.physics_steps, 87)
 
 
 if __name__ == "__main__":

@@ -11,10 +11,12 @@ from packages.ai.service import (
 from packages.ai.prompts import (
     COMPETITION_DECISION_RESPONSE_SCHEMA,
     GPS_HOLE_REVIEW_RESPONSE_SCHEMA,
+    REPLAY_INTERPRETATION_RESPONSE_SCHEMA,
     ROUND_RESPONSE_SCHEMA,
     SHOT_RESPONSE_SCHEMA,
     STRATEGY_RESPONSE_SCHEMA,
     build_gps_hole_review_prompt,
+    build_replay_interpretation_prompt,
     build_competition_decision_prompt,
     build_round_prompt,
     build_shot_prompt,
@@ -37,6 +39,25 @@ class FakeProvider:
 
 
 class AiPromptTests(unittest.TestCase):
+    def test_replay_prompt_keeps_engine_grades_authoritative(self) -> None:
+        prompt = build_replay_interpretation_prompt({
+            "shot": {
+                "club": "Putter", "shot_type": "putt_lag",
+                "remaining_yards": 1, "execution_detail": "slight_miss",
+                "putt_analysis": {"make_probability": 2},
+            },
+            "authoritative_assessment": {
+                "title": "Good plan—acceptable result",
+                "result": "Result: good",
+                "decision": "Decision: competitive plan",
+                "execution": "Execution: slight miss",
+            },
+        })
+        self.assertIn("interpreter, not a grader", prompt)
+        self.assertIn("manageable leave", prompt)
+        self.assertIn('"make_probability": 2', prompt)
+        self.assertIn("never say carry point", prompt)
+
     def test_competition_prompt_excludes_future_execution(self) -> None:
         prompt = build_competition_decision_prompt({
             "profile": {"id": "90", "preferred_scoring_range_yards": [40, 80]},
@@ -139,6 +160,61 @@ class AiPromptTests(unittest.TestCase):
 
 
 class AiServiceTests(unittest.TestCase):
+    def test_interpret_replay_preserves_authoritative_grades(self) -> None:
+        provider = FakeProvider({
+            "interpretation": "The read was sound and the three-foot leave was manageable.",
+            "next_time": "Use the same line with slightly softer pace.",
+        })
+        payload = {
+            "shot": {"club": "Putter", "remaining_yards": 1},
+            "authoritative_assessment": {
+                "title": "Good plan—acceptable result",
+                "result": "Result: good",
+                "decision": "Decision: competitive plan",
+                "execution": "Execution: slight miss",
+            },
+        }
+        response = AiService(provider=provider).interpret_replay(payload)
+        self.assertEqual(response["result"], "Result: good")
+        self.assertEqual(response["decision"], "Decision: competitive plan")
+        self.assertEqual(response["execution"], "Execution: slight miss")
+        self.assertEqual(provider.schema, REPLAY_INTERPRETATION_RESPONSE_SCHEMA)
+
+    def test_interpret_replay_rejects_grade_contradiction(self) -> None:
+        provider = FakeProvider({
+            "interpretation": "This was a poor decision and a fortunate result.",
+            "next_time": "Choose a different plan.",
+        })
+        with self.assertRaisesRegex(AiProviderError, "contradicted"):
+            AiService(provider=provider).interpret_replay({
+                "authoritative_assessment": {
+                    "title": "Good plan",
+                    "result": "Result: good",
+                    "decision": "Decision: preferred plan",
+                    "execution": "Execution: on plan",
+                },
+            })
+
+    def test_interpret_replay_rejects_landing_language_for_direction_target(self) -> None:
+        provider = FakeProvider({
+            "interpretation": "The ball finished close to your target spot.",
+            "next_time": "Repeat that landing point.",
+        })
+        with self.assertRaisesRegex(AiProviderError, "Direction Target semantics"):
+            AiService(provider=provider).interpret_replay({
+                "shot": {
+                    "canonical_assessment": {
+                        "outcome_vs_target": {"target_kind": "DIRECTION_TARGET"}
+                    }
+                },
+                "authoritative_assessment": {
+                    "title": "Good decision",
+                    "result": "Result: good",
+                    "decision": "Decision: competitive plan",
+                    "execution": "Execution: on plan",
+                },
+            })
+
     def test_competition_explanation_uses_locked_decision_schema(self) -> None:
         provider = FakeProvider({
             "headline": "Lay up to the scoring zone",
