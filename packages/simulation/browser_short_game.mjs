@@ -107,8 +107,9 @@ export function expectedShortGameRoll({ carryYards, rollRatio, slopeFactor = 1, 
   return Math.max(0, Number(carryYards) * Number(rollRatio) * Number(slopeFactor) * surfaceFactor);
 }
 
-export function recommendNonPutterClubIndex({ clubs, targetDistanceYards, lieMultiplier = 1 }) {
+export function recommendNonPutterClubIndex({ clubs, targetDistanceYards, lieMultiplier = 1, startSurface = "" }) {
   const target = Number(targetDistanceYards);
+  const driverAllowed = String(startSurface).trim().toLowerCase() === "tee";
   const candidates = (clubs || [])
     .map((club, index) => ({
       index,
@@ -116,7 +117,8 @@ export function recommendNonPutterClubIndex({ clubs, targetDistanceYards, lieMul
       difference: Math.abs(Number(club.carry) * Number(lieMultiplier) - target)
     }))
     .filter(candidate =>
-      candidate.club?.name !== "Putter" &&
+      !String(candidate.club?.name || "").toLowerCase().includes("putter") &&
+      (driverAllowed || !String(candidate.club?.name || "").toLowerCase().includes("driver")) &&
       Number.isFinite(candidate.difference)
     )
     .sort((first, second) => first.difference - second.difference || first.index - second.index);

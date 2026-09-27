@@ -19,7 +19,7 @@ import {
   nominalAimCarryYards,
   recommendNonPutterClubIndex,
   solveShortGamePower
-} from "./packages/simulation/browser_short_game.mjs?v=20260901-2";
+} from "./packages/simulation/browser_short_game.mjs?v=20260927-1";
 import {
   SHOT_TYPE_LABELS,
   ShotType,
@@ -62,11 +62,13 @@ import { analyzeSidehillShot } from "./packages/simulation/browser_sidehill.mjs?
 import { gradeAdjustmentReward } from "./packages/simulation/browser_adjustment_reward.mjs?v=20260809-1";
 import {
   PLAYER_SAFE_SHOT_ERROR,
+  clubCanReachTarget,
   formatBreak,
   modeledMakeChanceLabel,
-  outcomeDelta
-} from "./packages/simulation/browser_gm_feedback.mjs?v=20260830-1";
-import { buildAcademyStrategyChoices, buildStrategyChoices, buildTreeRecoveryChoices } from "./packages/simulation/browser_strategy_choices.mjs?v=20260921-1";
+  outcomeDelta,
+  shotConditionBriefing
+} from "./packages/simulation/browser_gm_feedback.mjs?v=20260927-2";
+import { buildAcademyStrategyChoices, buildStrategyChoices, buildTreeRecoveryChoices } from "./packages/simulation/browser_strategy_choices.mjs?v=20260927-1";
 import { applyTreeRecoveryContact, resolveTreeRecoveryOutcome } from "./packages/simulation/browser_tree_recovery.mjs?v=20260921-1";
 import { evaluateTreeCondition, treeConditionMessage } from "./packages/simulation/browser_tree_conditions.mjs?v=20260921-2";
 import {
@@ -4580,21 +4582,22 @@ function gameMasterBriefing(includeDistance = true) {
     const distanceLead = includeDistance ? `You have ${Math.round(c.remaining)} yards to the cup from ${c.lie.toLowerCase()}.` : `From ${c.lie.toLowerCase()},`;
     return `${distanceLead}${edgeDescription} Treat the target as a landing spot, not the cup. A ${chipPlan.clubName} should land about ${landingDescription}, then release about ${Math.round(chipPlan.rollYards)} yards toward the cup. Favor the ${chipPlan.startDirection} side by about ${formatBreak(chipPlan.breakInches)}.`;
   }
-  const unit = `${Math.round(c.remaining)} yards`;
   const sidehill = sidehillShotPlan(state.ball, normalShotTarget(state.ball));
   const sidehillAdvice = sidehill.stance === "level"
     ? ""
     : sidehill.stance === "ball_below_feet"
       ? ` Expect about ${Math.round(Math.abs(sidehill.expected_curve_yards) * 10) / 10} yards of movement right; aim roughly ${Math.round(Math.abs(sidehill.recommended_aim_yards) * 10) / 10} yards left.`
       : ` Expect about ${Math.round(Math.abs(sidehill.expected_curve_yards) * 10) / 10} yards of movement left; aim roughly ${Math.round(Math.abs(sidehill.recommended_aim_yards) * 10) / 10} yards right.`;
-  const distanceLead = includeDistance ? `You have ${unit} to the pin from ${c.lie.toLowerCase()}. ` : "";
-  const stanceDescription = c.stanceType === "level"
-    ? "Your stance is fairly level"
-    : `You have ${c.stance}`;
-  const slopeDescription = c.slope === "playing nearly level"
-    ? "the shot plays nearly level"
-    : `the shot plays ${c.slope}${Math.abs(c.elevationFeet) >= 4 ? ` by about ${Math.abs(Math.round(c.elevationFeet))} feet` : ""}`;
-  return `${distanceLead}${stanceDescription}, and ${slopeDescription}.${sidehillAdvice}`;
+  return shotConditionBriefing({
+    includeDistance,
+    remainingYards: c.remaining,
+    lie: c.lie,
+    stanceType: c.stanceType,
+    stance: c.stance,
+    slope: c.slope,
+    elevationFeet: c.elevationFeet,
+    sidehillAdvice
+  });
 }
 
 function addGmMessage(text, role = "gm", metadata = {}) {
@@ -5490,16 +5493,24 @@ function interpretGmInstruction(text) {
       addGmMessage(`I like ${chipPlan.clubName}.${edgeCopy} ${landingCopy} Let it release about ${Math.round(chipPlan.rollYards)} yards toward the cup. Favor the ${chipPlan.startDirection} side by about ${formatBreak(chipPlan.breakInches)}.`);
       return { blocked: true };
     }
-    if (currentClub().name === "Putter") {
-      recommendClub();
-    }
+    // A recommendation must be recalculated for the current lie. Reusing the
+    // previously selected tee club can otherwise recommend Driver after the
+    // ball has moved into the fairway, rough, trees, or a bunker.
+    recommendClub();
     const adjustment = recommendedAdjustment();
     const club = currentClub();
+    const conditions = shotConditions();
+    const greenReachable = clubCanReachTarget({
+      distanceYards: conditions.remaining,
+      carryYards: club.carry,
+      lieMultiplier: liePenalty(),
+      elevationFeet: conditions.elevationFeet
+    });
     const targetAdvice = mapViewMode() === "putting"
       ? "Aim at the cup."
-      : distance(state.ball, pin().center_point) <= 210
+      : greenReachable
         ? "Aim at the center of the green; use a named caddie plan when you want a verified hazard-specific target."
-        : "Aim for the center of a reachable fairway or layup area.";
+        : "The green is not reachable with that club. Aim for the center of a reachable fairway or layup area.";
     addGmMessage(`I like ${club.name}${adjustment > 0 ? " with one club more for the uphill shot" : adjustment < 0 ? " with one club less for the downhill shot" : " at its normal yardage"}. ${targetAdvice}`);
     return { blocked: true };
   }
@@ -6051,7 +6062,8 @@ function recommendClub() {
   const index = recommendNonPutterClubIndex({
     clubs: state.profile.clubs,
     targetDistanceYards: Math.min(targetDistance, state.profile.clubs[0].carry),
-    lieMultiplier: liePenalty()
+    lieMultiplier: liePenalty(),
+    startSurface: currentLieType()
   });
   if (index >= 0) state.selectedClub = index;
 }
@@ -7919,7 +7931,8 @@ async function playShot() {
       : penaltyOutcome
         ? penaltyOutcome
       : `Finished in ${resultLie.type.toLowerCase()} after targeting ${intendedLie.toLowerCase()}.`;
-    addGmMessage(gameMasterBriefing(false), "gm", { kind: "next-shot", shotUpdateId });
+    const nextShotBriefing = gameMasterBriefing(false);
+    if (nextShotBriefing) addGmMessage(nextShotBriefing, "gm", { kind: "next-shot", shotUpdateId });
     addGmMessage(outcome, "gm", { kind: "shot-result", shotUpdateId });
     addGmMessage(
       remainingPositionMessage({ start, landing, remaining, resultLie, completionType }),
@@ -8232,19 +8245,19 @@ function renderPuttAnalysis(evaluation, remainingYards) {
   const result = evaluation.made ? "Holed" : `${formatPuttDistance(remainingYards * 3)} from the cup`;
   let lesson;
   if (evaluation.made) lesson = "The starting line and pace produced a made putt.";
-  else if (evaluation.aimCorrect && evaluation.paceCorrect) lesson = "The decision was sound. Profile-based execution produced a miss; repeat the same process.";
-  else if (!evaluation.aimCorrect && !evaluation.paceCorrect) lesson = `Adjust both parts: start closer to ${recommendedRead} and use about ${recommendedPace}% pace.`;
-  else if (!evaluation.aimCorrect) lesson = `Your pace was suitable. Change only the starting line toward ${recommendedRead}.`;
-  else lesson = `Your read was suitable. Keep that line and change pace toward ${recommendedPace}%.`;
+  else if (evaluation.aimCorrect && evaluation.paceCorrect) lesson = "Your selected line and pace matched the model. Execution produced a miss; keep the decision separate from the result.";
+  else if (!evaluation.aimCorrect && !evaluation.paceCorrect) lesson = `Your line was ${playerRead}; the model recommends ${recommendedRead}. Adjust the line and use about ${recommendedPace}% pace.`;
+  else if (!evaluation.aimCorrect) lesson = `Your pace matched the model. Change the selected line from ${playerRead} toward ${recommendedRead}.`;
+  else lesson = `Your selected line matched the model. Keep that line and change pace toward ${recommendedPace}%.`;
 
   $("#putt-analysis-distance").textContent = formatPuttDistance(evaluation.read.feet);
   $("#putt-read-recommended").textContent = recommendedRead;
-  $("#putt-read-player").textContent = `${playerRead} ${evaluation.aimCorrect ? "✓" : "✕"}`;
+  $("#putt-read-player").textContent = `${playerRead} · ${evaluation.aimCorrect ? "Matched model" : "Review"}`;
   $("#putt-read-player").className = evaluation.aimCorrect ? "correct" : "incorrect";
   $("#putt-pace-recommended").textContent = `${recommendedPace}%`;
-  $("#putt-pace-player").textContent = `${playerPace}% ${evaluation.paceCorrect ? "✓" : "✕"}`;
+  $("#putt-pace-player").textContent = `${playerPace}% · ${evaluation.paceCorrect ? "Matched model" : "Review"}`;
   $("#putt-pace-player").className = evaluation.paceCorrect ? "correct" : "incorrect";
-  $("#putt-probability").textContent = `${Math.round(evaluation.makeProbability * 100)}%`;
+  $("#putt-probability").textContent = modeledMakeChanceLabel(evaluation.makeProbability);
   $("#putt-analysis-result").textContent = result;
   $("#putt-analysis-lesson").textContent = lesson;
   $("#putt-analysis").hidden = false;

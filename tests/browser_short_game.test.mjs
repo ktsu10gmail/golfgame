@@ -85,3 +85,23 @@ test("non-green fallback recommendation never selects the putter", () => {
   });
   assert.equal(bunkerClubs[index].name, "Lob Wedge");
 });
+
+test("fallback recommendation allows Driver only from the tee", () => {
+  const longClubs = [
+    { name: "Driver", carry: 220 },
+    { name: "3 Wood", carry: 200 },
+    { name: "6 Iron", carry: 155 },
+    { name: "Putter", carry: 20 }
+  ];
+  const recommendation = startSurface => recommendNonPutterClubIndex({
+    clubs: longClubs,
+    targetDistanceYards: 220,
+    lieMultiplier: 1,
+    startSurface
+  });
+
+  assert.equal(longClubs[recommendation("Tee")].name, "Driver");
+  for (const surface of ["Fairway", "Rough", "Heavy rough", "Trees", "Bunker"]) {
+    assert.notEqual(longClubs[recommendation(surface)].name, "Driver", surface);
+  }
+});

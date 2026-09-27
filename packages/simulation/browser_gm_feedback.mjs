@@ -1,8 +1,49 @@
 export const PLAYER_SAFE_SHOT_ERROR = "The shot could not be completed. Your ball and score have not changed. Please try again. If this continues, return to the hole and resume the round.";
 
 export function modeledMakeChanceLabel(probability) {
-  const percentage = Math.max(0, Number(probability) * 100);
+  if (probability == null || probability === "") return "Unavailable";
+  const numeric = Number(probability);
+  if (!Number.isFinite(numeric)) return "Unavailable";
+  const percentage = Math.max(0, numeric * 100);
   return percentage < 1 ? "under 1%" : `${Math.round(percentage)}%`;
+}
+
+export function clubCanReachTarget({ distanceYards, carryYards, lieMultiplier = 1, elevationFeet = 0 }) {
+  const distance = Number(distanceYards);
+  const carry = Number(carryYards);
+  const lie = Number(lieMultiplier);
+  const elevation = Number(elevationFeet);
+  if (![distance, carry, lie, elevation].every(Number.isFinite) || distance < 0 || carry <= 0 || lie <= 0) {
+    return false;
+  }
+  const playsLikeDistance = distance + Math.max(0, elevation) * .5;
+  return carry * lie + 3 >= playsLikeDistance;
+}
+
+export function shotConditionBriefing({
+  includeDistance = true,
+  remainingYards,
+  lie,
+  stanceType,
+  stance,
+  slope,
+  elevationFeet = 0,
+  sidehillAdvice = ""
+}) {
+  const sentences = [];
+  if (includeDistance && Number.isFinite(Number(remainingYards))) {
+    sentences.push(`You have ${Math.round(Number(remainingYards))} yards to the pin from ${String(lie || "the current lie").toLowerCase()}.`);
+  }
+  if (stanceType && stanceType !== "level" && stance) {
+    sentences.push(`You have ${stance}.`);
+  }
+  if (slope && slope !== "playing nearly level") {
+    const amount = Math.abs(Number(elevationFeet));
+    sentences.push(`The shot plays ${slope}${Number.isFinite(amount) && amount >= 4 ? ` by about ${Math.round(amount)} feet` : ""}.`);
+  }
+  const advice = String(sidehillAdvice || "").trim();
+  if (advice) sentences.push(advice);
+  return sentences.join(" ");
 }
 
 export function formatBreak(inches) {

@@ -378,8 +378,33 @@ test("tree recovery offers honest risk contracts and a seeded outcome", () => {
     assert.equal(Math.round((probability.clean_escape + probability.branch_clip + probability.major_tree_contact) * 1000), 1000);
     assert.ok(choice.treeRecovery.reward.overall_expected_leave_yards >= choice.treeRecovery.reward.expected_leave_if_clean_yards);
   }
+  if (choices.length > 1) {
+    assert.equal(new Set(choices.map(choice => JSON.stringify(choice.treeRecovery.probabilities))).size, choices.length);
+  }
   const first = resolveTreeRecoveryOutcome(choices[0].treeRecovery.probabilities, "round:1:2:tree");
   assert.deepEqual(first, resolveTreeRecoveryOutcome(choices[0].treeRecovery.probabilities, "round:1:2:tree"));
+});
+
+test("short tree recovery does not propose a shot that finishes farther from the hole", () => {
+  const input = fixture();
+  input.pin = { x: 0, y: 14 };
+  input.centerline = [{ x: 0, y: 0 }, { x: 0, y: 14 }];
+  input.fairways = [rectangle(-10, 2, 10, 10)];
+  input.surfaces = [
+    { surface: "green", priority: 70, polygon: rectangle(-5, 10, 5, 18) },
+    { surface: "fairway", priority: 40, polygon: rectangle(-10, 2, 10, 10) },
+    { surface: "rough", priority: 20, polygon: rectangle(-20, -5, 20, 24) }
+  ];
+  input.lieMultiplier = .65;
+  const choices = buildTreeRecoveryChoices({
+    ...input,
+    treeCondition: { tree_position: "edge_of_trees", pin_line: "partially_blocked" }
+  });
+
+  assert.ok(choices.length >= 1);
+  assert.ok(choices.every(choice => choice.mode === "recovery"));
+  assert.ok(choices.every(choice => choice.leavesYards <= 19));
+  assert.ok(choices.every(choice => !/wood|hybrid/i.test(choice.clubName)));
 });
 
 test("meaningful difference requires a material club, power, target, result, or risk change", () => {

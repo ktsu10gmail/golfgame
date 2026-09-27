@@ -1,5 +1,5 @@
-export const STRATEGY_CHOICES_VERSION = "strategy-choices-v11";
-export const TREE_RECOVERY_MODEL_VERSION = "tree-recovery-v1";
+export const STRATEGY_CHOICES_VERSION = "strategy-choices-v12";
+export const TREE_RECOVERY_MODEL_VERSION = "tree-recovery-v2";
 
 const SWING_LEVELS = [.25, .5, .75, 1];
 
@@ -458,6 +458,16 @@ function recoveryChoices(context) {
   ];
 }
 
+function recoveryPlans(context) {
+  // Inside 30 yards, full-club recovery plans can fly beyond the hole before
+  // their minimum supported swing is applied. Reuse the calibrated approach
+  // construction, then retain the recovery classification for coaching.
+  if (distance(context.start, context.pin) <= 30) {
+    return approachChoices(context).map(choice => ({ ...choice, mode: "recovery" }));
+  }
+  return recoveryChoices(context);
+}
+
 export function choicesMeaningfullyDifferent(first, second) {
   if (first.clubIndex !== second.clubIndex) return true;
   if (Math.abs(first.power - second.power) >= 5) return true;
@@ -619,7 +629,7 @@ export function buildStrategyChoices({
     preferred, clubs: fullShotClubs
   };
   const recovery = recoveryRequired || ["bunker", "native", "heavy_rough"].includes(normalizedSurface);
-  if (recovery) return selectTwoStrategyChoices(finalizeChoices(recoveryChoices(context))).map(choice => ({
+  if (recovery) return selectTwoStrategyChoices(finalizeChoices(recoveryPlans(context))).map(choice => ({
     ...choice,
     adviceKeys: planAdviceKeys(choice, normalizedSurface)
   }));
@@ -666,7 +676,7 @@ export function buildAcademyStrategyChoices({
   const remaining = distance(start, pin);
   const reachable = remaining <= fullShotClubs[0].effectiveCarry + 2;
   const plans = recovery
-    ? recoveryChoices(context)
+    ? recoveryPlans(context)
     : reachable
       ? approachChoices(context)
       : longChoices(context);
@@ -694,9 +704,18 @@ export function buildTreeRecoveryChoices({ treeCondition, ...input }) {
     const progress = (dx * forward.x + dy * forward.y) / Math.max(attempted, 1);
     const directionRisk = progress > .7 ? .16 : progress > .2 ? .08 : progress < -.1 ? -.05 : 0;
     const distanceRisk = Math.min(.18, attempted / maxDistance * .18);
-    const accuracyRisk = Math.max(0, 100 - (input.clubs.find(club => club.clubIndex === choice.clubIndex)?.accuracy || 70)) / 100 * .1;
-    const major = bounded(.015 + depthRisk * .42 + directionRisk * .5 + distanceRisk * .32 + accuracyRisk * .22, .01, .48);
-    const clip = bounded(.035 + depthRisk * .72 + directionRisk * .62 + distanceRisk * .48 + accuracyRisk * .35, .03, .58 - major);
+    const selectedClub = input.clubs.find((club, index) => (club.clubIndex ?? index) === choice.clubIndex);
+    const accuracyRisk = Math.max(0, 100 - (selectedClub?.accuracy || 70)) / 100 * .1;
+    const clubName = String(selectedClub?.name || choice.clubName || "").toLowerCase();
+    const ironNumber = Number.parseInt(clubName, 10);
+    const trajectoryRisk = clubName.includes("driver") ? .14
+      : clubName.includes("wood") ? .1
+        : clubName.includes("hybrid") ? .07
+          : clubName.includes("wedge") ? -.04
+            : Number.isFinite(ironNumber) && ironNumber <= 5 ? .06
+              : Number.isFinite(ironNumber) && ironNumber <= 7 ? .035 : .015;
+    const major = bounded(.015 + depthRisk * .42 + directionRisk * .5 + distanceRisk * .32 + accuracyRisk * .22 + trajectoryRisk * .32, .01, .48);
+    const clip = bounded(.035 + depthRisk * .72 + directionRisk * .62 + distanceRisk * .48 + accuracyRisk * .35 + trajectoryRisk * .5, .03, .58 - major);
     const clean = Math.round((1 - clip - major) * 1000) / 1000;
     const normalizedClip = Math.round(clip * 1000) / 1000;
     const normalizedMajor = Math.round((1 - clean - normalizedClip) * 1000) / 1000;
@@ -725,6 +744,7 @@ export function buildTreeRecoveryChoices({ treeCondition, ...input }) {
       // has a physical branch model.
       scoringIndex: overallLeave + normalizedMajor * 35 + normalizedClip * 12
     };
-  }).sort((a, b) => a.scoringIndex - b.scoringIndex);
+  }).filter(choice => choice.leavesYards <= maxDistance + 5)
+    .sort((a, b) => a.scoringIndex - b.scoringIndex);
   return decorated.slice(0, limit);
 }

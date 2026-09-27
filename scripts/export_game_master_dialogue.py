@@ -56,6 +56,23 @@ def event_shots(round_document: dict[str, Any]) -> Iterable[tuple[int, int, dict
             yield hole_index, shot_number, shot
 
 
+def recorded_game_master_responses(round_document: dict[str, Any]) -> dict[tuple[int, int], list[dict[str, Any]]]:
+    responses: dict[tuple[int, int], list[dict[str, Any]]] = {}
+    for hole_index, hole in enumerate(round_document.get("round_state", {}).get("holes", []), 1):
+        for event in hole.get("events", []):
+            if not isinstance(event, dict) or event.get("event_type") != "gm_response_recorded":
+                continue
+            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            stroke_index = event.get("stroke_index")
+            if not isinstance(stroke_index, int):
+                continue
+            saved = payload.get("responses") if isinstance(payload.get("responses"), list) else []
+            for response in saved:
+                if isinstance(response, dict) and isinstance(response.get("text"), str) and response["text"].strip():
+                    responses.setdefault((hole_index, stroke_index), []).append(response)
+    return responses
+
+
 def direct_game_master_templates(source: str) -> list[str]:
     """Find direct string/template arguments supplied to addGmMessage."""
     matches = re.findall(
@@ -82,7 +99,9 @@ def direct_game_master_templates(source: str) -> list[str]:
     return messages
 
 
-def write_simulator_shot(lines: list[str], shot: dict[str, Any]) -> None:
+def write_simulator_shot(
+    lines: list[str], shot: dict[str, Any], responses: list[dict[str, Any]] | None = None
+) -> None:
     intent = shot.get("playerIntent") if isinstance(shot.get("playerIntent"), dict) else {}
     instructions = intent.get("instructions") if isinstance(intent.get("instructions"), list) else []
     strategy = shot.get("strategyChoice") if isinstance(shot.get("strategyChoice"), dict) else {}
@@ -104,15 +123,22 @@ def write_simulator_shot(lines: list[str], shot: dict[str, Any]) -> None:
         f"  Selected target label: {clean(strategy.get('target_label'))}",
         f"  Intended finish lie: {clean(shot.get('intendedLie'))}",
         "  --- Game Master / review evidence ---",
-        "  Historical chat status: Exact on-screen Game Master bubbles were not persisted.",
+        "  Historical chat status: Exact saved Game Master responses follow when available.",
         f"  Stored deterministic review text: {clean(shot.get('lesson'))}",
         f"  Decision grade: {clean(decision.get('label'))} ({clean(decision.get('score'))}/100)",
         f"  Decision reasons: {clean(' | '.join(clean(item) for item in reasons))}",
         f"  Recorded result lie: {clean(shot.get('landingLie') or shot.get('lie'))}",
         f"  Remaining distance: {remaining_copy}",
         f"  Penalty strokes: {clean(shot.get('penalty'), '0')}",
-        "",
     ])
+    if responses:
+        for response in responses:
+            source = clean(response.get("source"), "recorded")
+            response_type = clean(response.get("response_type"), "message")
+            lines.append(f"  Exact Game Master response [{source}/{response_type}]: {clean(response.get('text'))}")
+    else:
+        lines.append("  Exact Game Master response: Not available for this historical shot")
+    lines.append("")
 
 
 def write_gps_shot(lines: list[str], shot: dict[str, Any]) -> None:
@@ -166,12 +192,13 @@ def export(database_path: Path, output_path: Path) -> Counter[str]:
         "",
         "IMPORTANT LIMITATION",
         "--------------------",
-        "The browser's exact Game Master conversation array was temporary and was not saved",
-        "inside historical rounds. AI-generated narration was also not archived. Therefore:",
+        "Newer rounds preserve exact shot-linked Game Master responses as structured events.",
+        "Older rounds may predate that audit trail. Therefore:",
         "- Built-in direct response templates are exported below exactly as source templates.",
         "- Saved player instructions, notes, club choices, and caddie choices are included.",
         "- Stored deterministic review text and result evidence are paired with each shot.",
-        "- Reconstructed evidence is not labeled as an exact historical Game Master quote.",
+        "- Only gm_response_recorded event text is labeled as an exact historical response.",
+        "- Reconstructed evidence is never labeled as an exact historical Game Master quote.",
         "- Historical review text is preserved as recorded and may contain wording fixed in newer versions.",
         "",
         "PART 1 — BUILT-IN GAME MASTER RESPONSE TEMPLATES",
@@ -200,6 +227,7 @@ def export(database_path: Path, output_path: Path) -> Counter[str]:
     for round_index, row in enumerate(simulator_rows, 1):
         document = json.loads(row["round_json"])
         shots = list(event_shots(document))
+        gm_responses = recorded_game_master_responses(document)
         if not shots:
             continue
         counts["simulator_rounds"] += 1
@@ -214,7 +242,7 @@ def export(database_path: Path, output_path: Path) -> Counter[str]:
         for hole_number, shot_number, shot in shots:
             counts["simulator_shots"] += 1
             lines.append(f"Hole {hole_number} · Shot {shot_number}")
-            write_simulator_shot(lines, shot)
+            write_simulator_shot(lines, shot, gm_responses.get((hole_number, shot_number)))
 
     lines.extend(["", "PART 3 — SAVED GPS PLAYER SELECTIONS AND EVIDENCE", "=" * 51, ""])
     gps_rows = connection.execute(
