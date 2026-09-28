@@ -2989,6 +2989,8 @@ body.replay-mode-active .mobile-round-nav { display: none !important; }
 .blended-snapshot-grid .snapshot-round { background: var(--paper-deep); }
 .blended-snapshot-grid .snapshot-focus { background: rgba(181,82,62,.07); }
 .blended-snapshot-grid .snapshot-focus strong { color: var(--danger); font-size: 1rem; line-height: 1.25; }
+.blended-snapshot-note { margin: 0; padding: 10px 14px 12px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: .64rem; line-height: 1.5; }
+.blended-snapshot-note strong { color: var(--ink); }
 .round-story,.blended-learning-section,.blended-detail-section { padding: 18px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255,255,255,.34); }
 .round-story > header,.blended-learning-section > header,.blended-detail-section > header { display: flex; align-items: center; gap: 11px; }
 .section-number { display: grid; flex: 0 0 32px; width: 32px; height: 32px; place-items: center; border: 1px solid rgba(24,49,38,.2); border-radius: 50%; color: var(--rough-dark); font: 800 .58rem var(--font-system); }

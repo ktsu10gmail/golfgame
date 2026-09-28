@@ -57,17 +57,24 @@ import {
   greenElevationColor,
   greenContourTransform,
   sampleCourseGreenContour
-} from "./packages/simulation/browser_green_contour.mjs?v=20260807-5";
+} from "./packages/simulation/browser_green_contour.mjs?v=20260927-1";
 import { analyzeSidehillShot } from "./packages/simulation/browser_sidehill.mjs?v=20260729-1";
 import { gradeAdjustmentReward } from "./packages/simulation/browser_adjustment_reward.mjs?v=20260809-1";
 import {
+  GM_RECOMMENDATION_FALLBACK,
   PLAYER_SAFE_SHOT_ERROR,
   clubCanReachTarget,
+  completedHoleDestination,
   formatBreak,
+  gameMasterTargetSuggestion,
+  hasGameMasterReply,
   modeledMakeChanceLabel,
   outcomeDelta,
+  puttAnalysisMatchLabels,
+  recommendationTargetAdvice,
+  remainingDistanceBadge,
   shotConditionBriefing
-} from "./packages/simulation/browser_gm_feedback.mjs?v=20260927-2";
+} from "./packages/simulation/browser_gm_feedback.mjs?v=20260927-5";
 import { buildAcademyStrategyChoices, buildStrategyChoices, buildTreeRecoveryChoices } from "./packages/simulation/browser_strategy_choices.mjs?v=20260927-1";
 import { applyTreeRecoveryContact, resolveTreeRecoveryOutcome } from "./packages/simulation/browser_tree_recovery.mjs?v=20260921-1";
 import { evaluateTreeCondition, treeConditionMessage } from "./packages/simulation/browser_tree_conditions.mjs?v=20260921-2";
@@ -81,14 +88,15 @@ import { replaceDraftMessage } from "./packages/presentation/gm_conversation.mjs
 import {
   buildPostRoundPdf,
   postRoundReportFilename
-} from "./packages/presentation/post_round_export.mjs?v=20260924-1";
+} from "./packages/presentation/post_round_export.mjs?v=20260927-1";
 import {
   attachPostRoundNarrative,
   buildPostRoundReportModel,
   buildReportNarrativePacket,
+  refreshPostRoundReportNarrative,
   relativeScoreLabel,
   reportLabel
-} from "./packages/presentation/post_round_report.mjs?v=20260924-1";
+} from "./packages/presentation/post_round_report.mjs?v=20260927-3";
 import {
   ACADEMY_DECISION_POLICY_VERSION,
   academyChoiceEvidence,
@@ -167,7 +175,7 @@ import {
   createRoundSave,
   parseRoundSave,
   roundSaveFilename
-} from "./packages/simulation/round_save.mjs?v=20260730-1";
+} from "./packages/simulation/round_save.mjs?v=20260927-1";
 import { createSupabaseAuth } from "./packages/accounts/browser_supabase_auth.mjs?v=20260920-1";
 import { personalizeCustomProfile, playerProfileName } from "./packages/accounts/browser_profile_naming.mjs?v=20260804-1";
 import {
@@ -277,7 +285,8 @@ const courseCatalog = {
 
 const legacyCourseReplacements = {
   meadows: "the-meadow-at-middlesex-golf-course",
-  warrenbrook: "the-warrenbrook-golf-course",
+  warrenbrook: "warrenbrook-golf-course-new",
+  "the-warrenbrook-golf-course": "warrenbrook-golf-course-new",
   cranbury: "cranbury-golf-club",
   gallopinghills: "galloping-hills-golf-course",
   "galloping-hills-golf-coourse": "galloping-hills-golf-course"
@@ -859,7 +868,9 @@ function currentPostRoundReport({ freezeCompleted = true } = {}) {
   const roundId = `${state.courseId}:${state.roundSeed || state.roundState?.round_seed || "legacy"}`;
   const completed = state.scores.filter(Number.isInteger).length === state.scorecard.length;
   if (completed && state.postRoundReport?.round?.round_id === roundId) {
-    return structuredClone(state.postRoundReport);
+    const refreshed = refreshPostRoundReportNarrative(state.postRoundReport);
+    state.postRoundReport = structuredClone(refreshed);
+    return refreshed;
   }
   const input = {
     roundId,
@@ -3559,7 +3570,7 @@ function strategyChoiceMarkup(choice, analysis = null) {
     ? (() => {
         const recovery = choice.treeRecovery;
         const contact = Math.round((recovery.probabilities.branch_clip + recovery.probabilities.major_tree_contact) * 100);
-        return `${Math.round(recovery.probabilities.clean_escape * 100)}% clean · ${contact}% tree contact · expected leave ~${recovery.reward.overall_expected_leave_yards} yd`;
+        return `${Math.round(recovery.probabilities.clean_escape * 100)}% clean · ${contact}% tree contact · risk-weighted expected leave ~${recovery.reward.overall_expected_leave_yards} yd`;
       })()
     : null;
   return `
@@ -3570,7 +3581,7 @@ function strategyChoiceMarkup(choice, analysis = null) {
       </div>
       <button class="strategy-choice-main" type="button" data-strategy-choice="${choice.id}" aria-pressed="${selected}">
         <strong>${escapeHtml(choice.title)}</strong>
-        <span>${escapeHtml(choice.clubName)} · ${shotPowerLabel(choice.power, choice.clubName)} · ${choice.mode === "approach" && choice.leavesYards <= 8 ? `${choice.rollYards} yd roll` : choice.leavesYards <= 8 ? "green" : `${choice.leavesYards} yd left`}</span>
+        <span>${escapeHtml(choice.clubName)} · ${shotPowerLabel(choice.power, choice.clubName)} · ${choice.treeRecovery ? `clean outcome leaves ~${choice.treeRecovery.reward.expected_leave_if_clean_yards} yd` : choice.mode === "approach" && choice.leavesYards <= 8 ? `${choice.rollYards} yd roll` : choice.leavesYards <= 8 ? "green" : `${choice.leavesYards} yd left`}</span>
         ${choice.treeRecovery
           ? `<small class="tree-recovery-summary">${treeSummary}</small>`
           : choice.greensideStrategy
@@ -4106,7 +4117,8 @@ function puttingRead(from = state.ball) {
     start: from,
     pin: pin().center_point,
     polygon: hole().geometries.green_complex.polygon,
-    holeNumber: greenContourKey()
+    holeNumber: greenContourKey(),
+    yardsPerCoordinateUnit: finiteScale()
   });
 }
 
@@ -5415,9 +5427,12 @@ function updateSpellingHint() {
   hint.textContent = suggestion ? `Check spelling: Did you mean “${suggestion}”?` : "";
 }
 
-function fairwayCenterTarget() {
+function fairwayCenterTarget(desiredDistanceYards = null) {
   const fairways = hole().geometries.fairway_segments;
-  const reachable = currentClub().carry * liePenalty();
+  const clubReach = currentClub().carry * liePenalty();
+  const reachable = Number.isFinite(desiredDistanceYards) && desiredDistanceYards > 0
+    ? Math.min(clubReach, desiredDistanceYards)
+    : clubReach;
   const currentPinDistance = distance(state.ball, pin().center_point);
   const toPin = [pin().center_point[0] - state.ball[0], pin().center_point[1] - state.ball[1]];
   const polygonCenters = fairways.map(segment => {
@@ -5449,6 +5464,12 @@ function fairwayCenterTarget() {
     };
   }).filter(candidate => candidate.forward);
   return candidates.sort((a, b) => a.difference - b.difference)[0]?.center || null;
+}
+
+function layupCenterTarget() {
+  const remaining = distance(state.ball, pin().center_point);
+  const desiredAdvance = Math.max(15, remaining - preferredApproachDistance());
+  return fairwayCenterTarget(desiredAdvance);
 }
 
 function interpretGmInstruction(text) {
@@ -5506,11 +5527,14 @@ function interpretGmInstruction(text) {
       lieMultiplier: liePenalty(),
       elevationFeet: conditions.elevationFeet
     });
-    const targetAdvice = mapViewMode() === "putting"
-      ? "Aim at the cup."
-      : greenReachable
-        ? "Aim at the center of the green; use a named caddie plan when you want a verified hazard-specific target."
-        : "The green is not reachable with that club. Aim for the center of a reachable fairway or layup area.";
+    const recoveryRequired = Boolean(conditions.treeCondition) || currentLieType() === "Trees";
+    const targetAdvice = recommendationTargetAdvice({
+      viewMode: mapViewMode(),
+      recoveryRequired,
+      greenReachable,
+      par: card().Par,
+      startSurface: currentLieType()
+    });
     addGmMessage(`I like ${club.name}${adjustment > 0 ? " with one club more for the uphill shot" : adjustment < 0 ? " with one club less for the downhill shot" : " at its normal yardage"}. ${targetAdvice}`);
     return { blocked: true };
   }
@@ -5633,6 +5657,19 @@ function interpretGmInstruction(text) {
     targetDescription = `${Math.round(requestedYards * 10) / 10} yards ${direction} of the normal target`;
     state.shotDraft.target = true;
   } else if (
+    mapViewMode() !== "putting" &&
+    hasApproxWord(normalized, "layup") &&
+    (hasApproxWord(normalized, "center") || hasApproxWord(normalized, "centre"))
+  ) {
+    state.target = layupCenterTarget();
+    targetDescription = state.target
+      ? `a center-fairway layup leaving about ${Math.round(distance(state.target, pin().center_point))} yards`
+      : "";
+    state.shotDraft.target = Boolean(state.target);
+    if (!state.target) {
+      addGmMessage("There is no useful center-fairway layup point ahead from this position. Click a safe landing area on the map, or ask for a recommendation.");
+    }
+  } else if (
     hasApproxWord(normalized, "fairway") &&
     (hasApproxWord(normalized, "center") || hasApproxWord(normalized, "centre"))
   ) {
@@ -5651,7 +5688,7 @@ function interpretGmInstruction(text) {
     state.shotDraft.target = true;
   } else if (parsedTarget.explicit_pin_aim) {
     state.target = pinPoint();
-    targetDescription = "the pin";
+    targetDescription = mapViewMode() === "putting" ? "the cup" : "the pin";
     state.shotDraft.target = true;
   }
   if (targetDescription) {
@@ -5701,6 +5738,7 @@ function interpretGmInstruction(text) {
     Boolean(targetDescription) ||
     namedSwingPower !== null ||
     normalized.includes("aim ") ||
+    normalized.includes("layup") ||
     normalized.includes("play") ||
     normalized.includes("hit it") ||
     normalized.includes("take the shot") ||
@@ -7790,8 +7828,8 @@ async function playShot() {
         ? `Made the putt with ${shotRecord.power}% pace and the correct break compensation.`
       : puttingEvaluation.correctDecision
         ? puttingEvaluation.read.feet > 12
-          ? `The read and pace were sound for a lag putt. From this distance, the modeled make chance was ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)}; the ball finished ${formatPuttDistance(puttPacket.remaining_distance_yards * 3)} from the cup.`
-          : `The read and pace were sound; the modeled ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)} make chance did not fall this time.`
+          ? `The selected read and pace matched the current model for a lag putt. From this distance, the modeled make chance was ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)}; the ball finished ${formatPuttDistance(puttPacket.remaining_distance_yards * 3)} from the cup.`
+          : `The selected read and pace matched the current model; the modeled ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)} make chance did not fall this time.`
         : `Missed the read by ${formatInches(Math.round(puttingEvaluation.aimErrorInches))} and the pace by ${Math.round(puttingEvaluation.powerErrorPoints)} percentage points.`;
   } else {
     const costly = penalty > 0 || ["Bunker", "Heavy rough", "Trees", "Water", "Out of bounds"].includes(resultLie.type);
@@ -7925,8 +7963,8 @@ async function playShot() {
     const outcome = puttingEvaluation
       ? puttingEvaluation.correctDecision
         ? puttingEvaluation.read.feet > 12
-          ? `The read and pace were sound for a lag putt. The modeled make chance was ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)}, and the ball finished ${formatPuttDistance(remaining * 3)} from the cup.`
-          : `The read and pace were sound, but the modeled ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)} make chance did not fall this time.`
+          ? `The selected read and pace matched the current model for a lag putt. The modeled make chance was ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)}, and the ball finished ${formatPuttDistance(remaining * 3)} from the cup.`
+          : `The selected read and pace matched the current model, but the modeled ${modeledMakeChanceLabel(puttingEvaluation.makeProbability)} make chance did not fall this time.`
         : `That putt missed because the decision was off by about ${formatInches(Math.round(puttingEvaluation.aimErrorInches))} of starting line and ${Math.round(puttingEvaluation.powerErrorPoints)} percentage points of pace.`
       : penaltyOutcome
         ? penaltyOutcome
@@ -8113,6 +8151,8 @@ function activeDisplayHoleNumber() {
 function openHoleCompleteDialog() {
   const dialog = $("#hole-complete-dialog");
   if (!dialog) return;
+  dialog.dataset.completedHoleIndex = String(state.holeIndex);
+  dialog.dataset.navigationHandled = "false";
   const strokes = state.scores[state.holeIndex] ?? state.shots.reduce((sum, shot) => sum + 1 + shot.penalty, 0);
   const relative = strokes - card().Par;
   const nextButton = $("#hole-complete-next");
@@ -8242,20 +8282,28 @@ function renderPuttAnalysis(evaluation, remainingYards) {
     : `${formatInches(Math.round(evaluation.playerOffsetInches))} ${evaluation.playerOffsetDirection}`;
   const recommendedPace = Math.round(evaluation.requiredPower * 100);
   const playerPace = Math.round(evaluation.usedPower * 100);
+  const matchLabels = puttAnalysisMatchLabels({
+    aimCorrect: evaluation.aimCorrect,
+    paceCorrect: evaluation.paceCorrect,
+    aimErrorInches: evaluation.aimErrorInches,
+    playerPace,
+    recommendedPace
+  });
   const result = evaluation.made ? "Holed" : `${formatPuttDistance(remainingYards * 3)} from the cup`;
   let lesson;
   if (evaluation.made) lesson = "The starting line and pace produced a made putt.";
-  else if (evaluation.aimCorrect && evaluation.paceCorrect) lesson = "Your selected line and pace matched the model. Execution produced a miss; keep the decision separate from the result.";
+  else if (matchLabels.maximumModeledPace) lesson = `You used the model's maximum 100% pace. This putt is beyond the modeled putter range, so there is no higher pace setting to select; treat it as a lag and judge the leave.`;
+  else if (evaluation.aimCorrect && evaluation.paceCorrect) lesson = "Your selected line and pace matched the current model, but the putt did not finish in the cup. Review the roll and leave before deciding whether to repeat or adjust the plan.";
   else if (!evaluation.aimCorrect && !evaluation.paceCorrect) lesson = `Your line was ${playerRead}; the model recommends ${recommendedRead}. Adjust the line and use about ${recommendedPace}% pace.`;
   else if (!evaluation.aimCorrect) lesson = `Your pace matched the model. Change the selected line from ${playerRead} toward ${recommendedRead}.`;
   else lesson = `Your selected line matched the model. Keep that line and change pace toward ${recommendedPace}%.`;
 
   $("#putt-analysis-distance").textContent = formatPuttDistance(evaluation.read.feet);
   $("#putt-read-recommended").textContent = recommendedRead;
-  $("#putt-read-player").textContent = `${playerRead} · ${evaluation.aimCorrect ? "Matched model" : "Review"}`;
+  $("#putt-read-player").textContent = `${playerRead} · ${matchLabels.aim}`;
   $("#putt-read-player").className = evaluation.aimCorrect ? "correct" : "incorrect";
   $("#putt-pace-recommended").textContent = `${recommendedPace}%`;
-  $("#putt-pace-player").textContent = `${playerPace}% · ${evaluation.paceCorrect ? "Matched model" : "Review"}`;
+  $("#putt-pace-player").textContent = `${playerPace}% · ${matchLabels.pace}`;
   $("#putt-pace-player").className = evaluation.paceCorrect ? "correct" : "incorrect";
   $("#putt-probability").textContent = modeledMakeChanceLabel(evaluation.makeProbability);
   $("#putt-analysis-result").textContent = result;
@@ -9318,9 +9366,14 @@ function updateShotDesk() {
   const projection = expectedShotProjection();
   const displayDistance = yards => putting ? `${Math.round(yards * 3)} ft` : `${Math.round(yards)} yd`;
   $("#shot-number").textContent = state.shots.length + 1;
-  const puttingFeet = remaining * 3;
-  $("#yards-left").textContent = putting ? (puttingFeet < 1 ? Math.max(1, Math.round(puttingFeet * 12)) : Math.round(puttingFeet)) : Math.round(remaining);
-  $(".yards-left span").textContent = putting ? (puttingFeet < 1 ? "in to cup" : "ft to cup") : "yd left";
+  const remainingBadge = remainingDistanceBadge({
+    putting,
+    remainingYards: remaining,
+    holeFinished: state.holeFinished,
+    completionType: state.completionType
+  });
+  $("#yards-left").textContent = remainingBadge.value;
+  $(".yards-left span").textContent = remainingBadge.label;
   $("#club-select").value = String(state.selectedClub);
   $("#mobile-club-select").value = String(state.selectedClub);
   updateClubPowerLabels();
@@ -9406,19 +9459,14 @@ function updateGmSuggestions() {
   help.innerHTML = `The dropdowns control the shot. Your note is saved for coaching and cannot change the setup.${stanceNote}`;
   if (mobileInput) mobileInput.placeholder = "Optional coaching note";
   if (mobileHelp) mobileHelp.textContent = `The dropdowns control the shot. Your note is saved for coaching and cannot change the setup.${stanceNote}`;
-  if (viewMode === "putting") {
-    button.textContent = "Aim at cup";
-    button.dataset.gmSuggestion = "Aim at the pin";
-  } else if (remaining <= 30) {
-    button.textContent = "Aim at pin";
-    button.dataset.gmSuggestion = "Aim at the pin";
-  } else if (remaining <= 210) {
-    button.textContent = "Aim at pin";
-    button.dataset.gmSuggestion = "Aim at the pin";
-  } else {
-    button.textContent = card().Par === 5 && remaining < teeYards() * .62 ? "Layup center" : "Fairway center";
-    button.dataset.gmSuggestion = "Aim fairway center";
-  }
+  const suggestion = gameMasterTargetSuggestion({
+    viewMode,
+    remainingYards: remaining,
+    par: card().Par,
+    teeYards: teeYards()
+  });
+  button.textContent = suggestion.label;
+  button.dataset.gmSuggestion = suggestion.command;
 }
 
 function updateAll(redraw = true) {
@@ -11791,15 +11839,19 @@ function downloadPostRoundPdf() {
 
 function openRoundReviewLegacy() {
   const shots = state.roundHistory.flat();
-  const decisionGood = shots.filter(shot => decisionQualityFromAssessment(packetAssessment(shot), shot.quality) === "good").length;
-  const executionGood = shots.filter(shot => executionQualityFromAssessment(packetAssessment(shot), shot.quality) === "good").length;
+  const assessments = shots.map(canonicalAssessmentForGameShot);
+  const gradedDecisions = assessments.filter(assessment => [DecisionLabel.PREFERRED, DecisionLabel.COMPETITIVE, DecisionLabel.HIGHER_RISK].includes(assessment?.decision?.label));
+  const decisionGood = gradedDecisions.filter(assessment => [DecisionLabel.PREFERRED, DecisionLabel.COMPETITIVE].includes(assessment.decision.label)).length;
+  const gradedExecutions = assessments.filter(assessment => ["ON_PLAN_EXECUTION", "ACCEPTABLE_EXECUTION", "MISSED_EXECUTION"].includes(assessment?.execution?.label));
+  const executionGood = gradedExecutions.filter(assessment => ["ON_PLAN_EXECUTION", "ACCEPTABLE_EXECUTION"].includes(assessment.execution.label)).length;
   const strategyAnalysis = analyzeRoundStrategy(state.roundHistory);
+  const ungradedDecisions = Math.max(0, (strategyAnalysis?.scored_shots ?? gradedDecisions.length) - gradedDecisions.length);
   const playedScore = state.scores.reduce((sum, score, index) => score == null ? sum : sum + score - state.scorecard[index].Par, 0);
   const strength = strategyAnalysis ? formatStrategyCategory(strategyAnalysis.top_strength) : "No pattern yet";
   const priority = strategyAnalysis ? formatStrategyCategory(strategyAnalysis.top_priority) : "No pattern yet";
   const keyMomentCount = strategyAnalysis?.top_costly_decisions.length ?? 0;
   const verdict = strategyAnalysis
-    ? `Your deterministic strategy score was ${strategyAnalysis.strategy_score}. ${strength} was the strongest category; ${priority} is the first priority. ${strategyAnalysis.pattern_summary}`
+    ? `Your course-management score was ${strategyAnalysis.strategy_score}/100, weighted across ${strategyAnalysis.scored_shots} scored shots. ${strength} was the strongest category; ${priority} is the first priority. ${strategyAnalysis.pattern_summary}`
     : shots.length
       ? "This saved round predates strategy packets, so its shots remain visible but are not assigned a strategy score."
     : "Play a new shot to begin your caddie report. Rounds completed before shot tracking do not contain enough detail for coaching.";
@@ -11810,9 +11862,9 @@ function openRoundReviewLegacy() {
       <p>${verdict}</p>
     </section>
     <div class="review-stat review-score"><span>Round</span><strong>${fmtScore(playedScore)}</strong></div>
-    <div class="review-stat"><span>Strategy score</span><strong>${strategyAnalysis?.strategy_score ?? "—"}</strong><small>${strategyAnalysis ? `${strategyAnalysis.scored_shots} scored decisions` : "No strategy packets yet"}</small></div>
-    <div class="review-stat"><span>Decision quality</span><strong>${shots.length ? `${Math.round(decisionGood / shots.length * 100)}%` : "—"}</strong><small>${decisionGood} sound choices</small></div>
-    <div class="review-stat"><span>Execution quality</span><strong>${shots.length ? `${Math.round(executionGood / shots.length * 100)}%` : "—"}</strong><small>${executionGood} shots on plan</small></div>
+    <div class="review-stat"><span>Course management</span><strong>${strategyAnalysis ? `${strategyAnalysis.strategy_score}/100` : "—"}</strong><small>${strategyAnalysis ? `Weighted across ${strategyAnalysis.scored_shots} scored shots` : "No strategy packets yet"}</small></div>
+    <div class="review-stat"><span>Sound-plan rate</span><strong>${gradedDecisions.length ? `${Math.round(decisionGood / gradedDecisions.length * 100)}%` : "—"}</strong><small>${decisionGood} of ${gradedDecisions.length} graded${ungradedDecisions ? ` · ${ungradedDecisions} ungraded` : ""}</small></div>
+    <div class="review-stat"><span>Execution on plan</span><strong>${gradedExecutions.length ? `${Math.round(executionGood / gradedExecutions.length * 100)}%` : "—"}</strong><small>${executionGood} of ${gradedExecutions.length} graded shots</small></div>
     <div class="review-stat review-focus"><span>Practice next</span><strong>${priority}</strong><small>${keyMomentCount} key decision ${keyMomentCount === 1 ? "moment" : "moments"}</small></div>`;
 
   const priorityHoles = strategyAnalysis
@@ -12026,32 +12078,44 @@ function scorecardReportMarkup(report) {
 function renderBlendedPostRoundReport(report) {
   const completed = report.round.status === "completed";
   const narrative = report.narrative;
+  const ungradedDecisions = report.summary.ungraded_decisions ?? Math.max(0, report.summary.scored_decisions - report.summary.graded_decisions);
   $("#round-review-dialog .eyebrow").textContent = completed ? "Original round analysis" : "Round review · in progress";
   $("#round-review-dialog h2").textContent = completed ? "What to carry forward" : "What the round shows so far";
   $("#round-review-summary").innerHTML = `<section class="blended-snapshot">
     <header><div><span>${escapeHtml(report.round.course_name)}</span><strong>${escapeHtml(report.round.tee)} tee</strong></div><b>${completed ? "Final" : `${report.round.holes_completed} of ${report.scorecard.length}`}</b></header>
     <div class="blended-snapshot-grid">
       <div class="snapshot-round"><span>Round</span><strong>${relativeScoreLabel(report.round.relative_to_par)}</strong><small>${report.round.holes_completed} holes</small></div>
-      <div><span>Strategy</span><strong>${reportMetric(report.summary.strategy_score)}</strong><small>${report.summary.scored_decisions} scored decisions</small></div>
-      <div><span>Decisions</span><strong>${reportMetric(report.summary.decision_quality_percent, "%")}</strong><small>${report.summary.sound_decisions} of ${report.summary.graded_decisions} sound</small></div>
+      <div><span>Course management</span><strong>${report.summary.strategy_score == null ? "—" : `${report.summary.strategy_score}/100`}</strong><small>Weighted across ${report.summary.scored_decisions} scored shots</small></div>
+      <div><span>Sound-plan rate</span><strong>${reportMetric(report.summary.decision_quality_percent, "%")}</strong><small>${report.summary.sound_decisions} of ${report.summary.graded_decisions} graded${ungradedDecisions ? ` · ${ungradedDecisions} ungraded` : ""}</small></div>
       <div><span>Execution</span><strong>${reportMetric(report.summary.execution_quality_percent, "%")}</strong><small>${report.summary.on_plan_executions} of ${report.summary.graded_executions} on plan</small></div>
       <div class="snapshot-focus"><span>Practice next</span><strong>${escapeHtml(report.summary.practice_priority_label || "Build more evidence")}</strong></div>
     </div>
+    <p class="blended-snapshot-note"><strong>How course management is scored:</strong> a 0–100 weighted average of the recorded decision scores, using the shot type and situation weights shown in the detailed evidence. It is separate from the sound-plan percentage and execution results.</p>
   </section>`;
 
   const takeaways = report.learning_summary.three_things_to_remember;
   const moments = report.learning_summary.learning_moments;
   const storyStatus = narrative.status === "available"
     ? `<span class="narrative-status available">AI Caddie · ${escapeHtml(narrative.model || "verified narrative")}</span>`
-    : `<span class="narrative-status fallback">Calculated report${narrative.status === "pending" ? " · AI Caddie is reviewing" : " · AI narrative unavailable"}</span>`;
+    : `<span class="narrative-status fallback">${narrative.status === "pending" ? "AI Caddie is reviewing" : "Verified calculated narrative"}</span>`;
   const story = `<section class="round-story" aria-labelledby="round-story-title"><header><span class="section-number">02</span><div><small>Round Story</small><h3 id="round-story-title">The shape of your round</h3></div>${storyStatus}</header><p>${escapeHtml(narrative.round_story?.text || "The calculated report remains available without AI wording.")}</p></section>`;
-  const remember = takeaways.length ? `<section class="blended-learning-section"><header><span class="section-number">03</span><div><small>Three things to remember</small><h3>Leave with the signal, not the noise</h3></div></header><div class="remember-grid" data-count="${takeaways.length}">${takeaways.map(item => `<article data-type="${escapeHtml(item.type)}"><span>${escapeHtml(item.label)}</span><p>${escapeHtml(item.text)}</p></article>`).join("")}</div></section>` : "";
+  const remember = takeaways.length ? `<section class="blended-learning-section"><header><span class="section-number">03</span><div><small>Three things to remember</small><h3>Leave with the signal, not the noise</h3></div></header><div class="remember-grid" data-count="${takeaways.length}">${takeaways.map(item => {
+    const label = item.label || reportLabel(item.type, "Round evidence");
+    const text = item.text || (item.type === "round_characteristic"
+      ? `${report.summary.sound_decisions} of ${report.summary.graded_decisions} graded plans met the current model's sound-plan criteria.`
+      : "This item is retained from the verified round evidence; review the detailed shots below for its supporting record.");
+    return `<article data-type="${escapeHtml(item.type || "evidence")}"><span>${escapeHtml(label)}</span><p>${escapeHtml(text)}</p></article>`;
+  }).join("")}</div></section>` : "";
   const momentsMarkup = `<section class="blended-learning-section"><header><span class="section-number">04</span><div><small>Key learning moments</small><h3>${moments.length ? `${moments.length} moments worth replaying` : "No moment crossed the review threshold"}</h3></div></header><div class="learning-moment-list">${moments.length ? moments.map(moment => {
     const explanation = narrative.learning_moment_explanations?.[moment.moment_id]?.text;
     const hole = report.scorecard[moment.hole_number - 1];
     return `<article class="learning-moment" data-type="${escapeHtml(moment.type)}"><header><span>Hole ${moment.hole_number} · ${escapeHtml(hole?.result || "Recorded")}</span><b>${escapeHtml(moment.shot_type)}</b></header><h4>${escapeHtml(moment.title)}</h4><div class="moment-separation"><span>Decision <b>${escapeHtml(moment.decision)}</b></span><span>Execution <b>${escapeHtml(moment.execution)}</b></span><span>Result <b>${escapeHtml(moment.result)}</b></span></div><p>${escapeHtml(explanation || moment.takeaway)}</p><button type="button" data-report-hole="${moment.hole_number}">See Hole ${moment.hole_number} evidence</button></article>`;
   }).join("") : `<p class="report-empty">Routine evidence is still preserved in the scorecard and appendix.</p>`}</div></section>`;
-  const patterns = `<section class="blended-learning-section"><header><span class="section-number">05</span><div><small>Patterns across your game</small><h3>${report.patterns.length ? "Verified over multiple rounds" : "Still building a trustworthy record"}</h3></div></header>${report.patterns.length ? `<div class="pattern-grid">${report.patterns.map(pattern => `<article><span>${escapeHtml(pattern.kind.includes("strength") ? "Verified strength" : pattern.kind === "recurring_decision_mistake" ? "Recurring issue" : "Practice priority")}</span><strong>${escapeHtml(pattern.label)}</strong><p>${escapeHtml(pattern.summary)}</p></article>`).join("")}</div>` : `<p class="report-empty">No cross-round pattern has cleared the existing evidence threshold yet.</p>`}</section>`;
+  const patterns = `<section class="blended-learning-section"><header><span class="section-number">05</span><div><small>Patterns across your game</small><h3>${report.patterns.length ? "Verified over multiple rounds" : "Still building a trustworthy record"}</h3></div></header>${report.patterns.length ? `<div class="pattern-grid">${report.patterns.map(pattern => {
+    const title = pattern.label || reportLabel(pattern.key || pattern.kind, "Verified pattern");
+    const summary = pattern.summary || "This pattern cleared the verified evidence threshold; its supporting shots remain available in the detailed evidence.";
+    return `<article><span>${escapeHtml(String(pattern.kind || "").includes("strength") ? "Verified strength" : pattern.kind === "recurring_decision_mistake" ? "Recurring issue" : "Practice priority")}</span><strong>${escapeHtml(title)}</strong><p>${escapeHtml(summary)}</p></article>`;
+  }).join("")}</div>` : `<p class="report-empty">No cross-round pattern has cleared the existing evidence threshold yet.</p>`}</section>`;
   const focus = `<section class="blended-learning-section next-round-section"><header><span class="section-number">06</span><div><small>Next round</small><h3>Give your attention a job</h3></div></header><ol>${report.learning_summary.next_round_focus.map(item => `<li><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.action)}</p></li>`).join("") || `<li><strong>Keep collecting evidence</strong><p>Play the plan normally; Jetta will surface a focus when the record supports one.</p></li>`}</ol></section>`;
   const holes = report.meaningful_holes.length ? `<section class="blended-detail-section"><header><span class="section-number">08</span><div><small>Meaningful holes</small><h3>Calculated review and evidence</h3></div></header>${report.meaningful_holes.map(hole => `<details class="review-hole blended-hole" id="report-hole-${hole.hole}" data-review-hole-number="${hole.hole}"><summary><div><strong>Hole ${hole.hole} · Par ${hole.par} · ${escapeHtml(hole.result)}</strong><span>${escapeHtml(hole.why_it_matters || "Selected learning evidence")}</span></div><b>${relativeScoreLabel(hole.relative_to_par)}</b></summary><div class="blended-hole-body">${hole.shots.map(shot => postRoundShotMarkup(shot)).join("")}<button class="replay-hole-button" type="button" data-replay-hole="${hole.hole - 1}">Reset & replay Hole ${hole.hole}</button></div></details>`).join("")}</section>` : "";
   const appendix = `<details class="blended-report-section report-appendix"><summary><span><small>09</small><b>Detailed shot evidence</b></span><em>${report.detailed_shots.length} recorded shots</em></summary><div class="appendix-shot-list">${report.detailed_shots.map(shot => postRoundShotMarkup(shot, { replay: false })).join("") || `<p class="report-empty">No shot evidence has been recorded.</p>`}</div><footer>Report ${escapeHtml(report.report_builder_version)} · Assessment ${escapeHtml(report.provenance.assessment_version)} · Strategy ${escapeHtml(report.provenance.strategy_evaluator_version)}</footer></details>`;
@@ -12130,7 +12194,7 @@ async function requestPostRoundNarrative(report) {
   renderBlendedPostRoundReport(updated);
   setPostRoundExportReady(true, updated.narrative.status === "available"
     ? "AI wording and canonical evidence are ready to download."
-    : "AI narrative unavailable. The complete calculated report is ready to download.");
+    : "The verified calculated narrative and canonical evidence are ready to download.");
 }
 
 function openRoundReview() {
@@ -12142,7 +12206,7 @@ function openRoundReview() {
     void requestPostRoundNarrative(report).catch(error => {
       console.warn("The post-round AI narrative could not be completed.", error);
       renderBlendedPostRoundReport(report);
-      setPostRoundExportReady(true, "AI narrative unavailable. The complete calculated report is ready to download.");
+      setPostRoundExportReady(true, "The AI service did not respond, so the verified calculated narrative is ready to download.");
     });
   }
 }
@@ -13890,8 +13954,12 @@ function bindEvents() {
   $("#hole-complete-dialog").addEventListener("close", () => {
     const dialog = $("#hole-complete-dialog");
     if (dialog.returnValue !== "next") return;
+    if (dialog.dataset.navigationHandled === "true") return;
+    dialog.dataset.navigationHandled = "true";
+    const completedHoleIndex = Number(dialog.dataset.completedHoleIndex);
+    const destination = completedHoleDestination(completedHoleIndex, state.scorecard.length);
     if (challengeActive()) void continueChallenge();
-    else if (state.holeIndex < 17) changeHole(state.holeIndex + 1);
+    else if (destination !== null) changeHole(destination);
     else finishGame();
   });
   $("#gm-form").addEventListener("submit", event => {
@@ -13900,8 +13968,27 @@ function bindEvents() {
     playStructuredShot("desktop");
   });
   $$("[data-gm-suggestion]").forEach(button => button.addEventListener("click", () => {
-    ensureAudio();
-    interpretGmInstruction(button.dataset.gmSuggestion);
+    const suggestion = button.dataset.gmSuggestion || button.textContent.trim();
+    const recommendation = suggestion.toLowerCase().includes("recommend");
+    const messageStart = state.gmMessages.length;
+    try {
+      ensureAudio();
+    } catch (error) {
+      console.warn("Audio could not be initialized for the Game Master suggestion.", error);
+    }
+    try {
+      interpretGmInstruction(suggestion);
+      if (recommendation && !hasGameMasterReply(state.gmMessages, messageStart)) {
+        addGmMessage(GM_RECOMMENDATION_FALLBACK);
+      }
+    } catch (error) {
+      console.error("Game Master suggestion could not be completed.", error);
+      const newMessages = state.gmMessages.slice(messageStart);
+      if (!newMessages.some(message => message.role === "player")) addGmMessage(suggestion, "player");
+      addGmMessage(recommendation
+        ? GM_RECOMMENDATION_FALLBACK
+        : "I could not apply that suggestion. Your shot setup has not changed; select the target manually or try again.");
+    }
   }));
 }
 

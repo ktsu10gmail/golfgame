@@ -3,7 +3,7 @@ import { ROUND_STRATEGY_VERSION, analyzeRoundStrategy } from "../simulation/brow
 
 export const POST_ROUND_SCHEMA_VERSION = "2.0";
 export const POST_ROUND_REPORT_VERSION = "2.0";
-export const POST_ROUND_REPORT_BUILDER_VERSION = "post-round-report-v2";
+export const POST_ROUND_REPORT_BUILDER_VERSION = "post-round-report-v2.1";
 export const POST_ROUND_NARRATIVE_PROMPT_VERSION = "post-round-narrative-v2";
 
 const SOUND_DECISIONS = new Set([DecisionLabel.PREFERRED, DecisionLabel.COMPETITIVE]);
@@ -251,15 +251,19 @@ function deterministicStory(round, summary) {
       ? "This round does not contain enough graded decision evidence for a strategy summary. The scorecard and recorded shots remain available."
       : "This review is still in progress. Complete more graded shots to build a reliable round story.";
   }
-  const comparison = summary.execution_quality_percent == null
-    ? "Execution evidence is not available for every graded decision."
-    : summary.decision_quality_percent > summary.execution_quality_percent + 8
-      ? "Your decision quality was stronger than your execution."
-      : summary.execution_quality_percent > summary.decision_quality_percent + 8
-        ? "Execution was stronger than the quality of the selected plans."
-        : "Decision quality and execution tracked closely."
   const scope = round.status === "completed" ? "Across the completed round" : `Through ${round.holes_completed} completed holes`;
-  return `${scope}, ${summary.sound_decisions} of ${summary.graded_decisions} graded decisions were sound. ${comparison} ${summary.practice_priority ? `${summary.practice_priority} is the first evidence-based focus.` : "No practice priority is supported yet."}`;
+  const ungradedDecisions = Math.max(0, summary.scored_decisions - summary.graded_decisions);
+  const decisionEvidence = `${summary.sound_decisions} of ${summary.graded_decisions} graded plans met the current model's sound-plan criteria.`;
+  const ungradedEvidence = ungradedDecisions
+    ? ` ${ungradedDecisions} additional strategy-scored ${ungradedDecisions === 1 ? "shot was" : "shots were"} not categorically graded.`
+    : "";
+  const executionEvidence = summary.graded_executions
+    ? ` Execution finished on plan for ${summary.on_plan_executions} of ${summary.graded_executions} graded shots.`
+    : " Execution evidence was not available for categorical grading.";
+  const focus = summary.practice_priority_label
+    ? ` The lowest-scoring planning category was ${summary.practice_priority_label}.`
+    : " No practice priority is supported yet.";
+  return `${scope}, ${decisionEvidence}${ungradedEvidence}${executionEvidence}${focus}`;
 }
 
 function narrativeFallback(round, summary) {
@@ -317,9 +321,12 @@ export function buildPostRoundReportModel({
   const practicePriority = strategyAnalysis?.top_priority || null;
   const summary = {
     strategy_score: strategyAnalysis?.strategy_score ?? null,
+    strategy_score_scale: 100,
+    strategy_score_basis: "weighted_average_of_scored_shots",
     scored_decisions: strategyAnalysis?.scored_shots ?? 0,
     sound_decisions: soundDecisions,
     graded_decisions: gradedDecisions.length,
+    ungraded_decisions: Math.max(0, (strategyAnalysis?.scored_shots ?? 0) - gradedDecisions.length),
     decision_quality_percent: percent(soundDecisions, gradedDecisions.length),
     on_plan_executions: onPlanExecutions,
     graded_executions: gradedExecutions.length,
@@ -380,7 +387,7 @@ export function buildPostRoundReportModel({
   }).slice(0, 6);
   const takeaways = [];
   if (summary.strongest_category_label) takeaways.push({ type: "strength", label: "Strength", text: `${summary.strongest_category_label} was your strongest category.`, evidence_refs: ["summary:strongest_category"] });
-  if (summary.graded_decisions) takeaways.push({ type: "round_characteristic", label: "Decision making", text: `${summary.sound_decisions} of ${summary.graded_decisions} graded decisions were sound.`, evidence_refs: ["summary:decision_quality"] });
+  if (summary.graded_decisions) takeaways.push({ type: "round_characteristic", label: "Decision making", text: `${summary.sound_decisions} of ${summary.graded_decisions} graded plans met the current model's sound-plan criteria.`, evidence_refs: ["summary:decision_quality"] });
   if (summary.practice_priority_label) takeaways.push({ type: "focus", label: "Focus", text: `${summary.practice_priority_label} is the first practice priority.`, evidence_refs: ["summary:practice_priority"] });
   const nextRoundFocus = [];
   if (summary.practice_priority) nextRoundFocus.push({ type: "priority", title: summary.practice_priority_label, action: focusAction(summary.practice_priority), evidence_refs: ["summary:practice_priority"] });
@@ -448,9 +455,26 @@ export function buildReportNarrativePacket(report) {
 
 function contradictsEvidence(text, report) {
   const value = String(text || "").toLowerCase();
+  if (/\b[a-z]+_[a-z_]+\b/.test(value)) return true;
+  if (/decision(?:s| quality)? (?:was|were|is) sound[^.]*execution|execution produced a miss|does not justify changing a sound strategy/.test(value)) return true;
   if (/poor (swing|contact|strike)|bad (swing|contact|strike)|mishit|swing fault/.test(value)) return true;
   if (report.summary.graded_decisions && report.summary.sound_decisions === report.summary.graded_decisions && /bad decision|poor decision|wrong decision/.test(value)) return true;
   return false;
+}
+
+export function refreshPostRoundReportNarrative(report) {
+  const next = structuredClone(report);
+  if (!next?.round || !next?.summary || !next?.narrative) return next;
+  next.summary.strategy_score_scale = 100;
+  next.summary.strategy_score_basis = "weighted_average_of_scored_shots";
+  next.summary.ungraded_decisions = Math.max(0, next.summary.scored_decisions - next.summary.graded_decisions);
+  const story = next.narrative.round_story?.text || "";
+  if (next.narrative.status === "deterministic_fallback" || contradictsEvidence(story, next)) {
+    next.narrative = narrativeFallback(next.round, next.summary);
+    next.report_builder_version = POST_ROUND_REPORT_BUILDER_VERSION;
+    if (next.provenance) next.provenance.report_engine_version = POST_ROUND_REPORT_BUILDER_VERSION;
+  }
+  return next;
 }
 
 export function attachPostRoundNarrative(report, response, { generatedAt = new Date().toISOString() } = {}) {

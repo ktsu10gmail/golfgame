@@ -48,6 +48,7 @@ export function postRoundReportFilename(report, extension) {
 function reportTextLines(report) {
   if (report?.schema_version === "2.0" && report?.round && report?.summary) {
     const score = value => value === 0 ? "E" : value > 0 ? `+${value}` : String(value ?? "-");
+    const ungradedDecisions = report.summary.ungraded_decisions ?? Math.max(0, report.summary.scored_decisions - report.summary.graded_decisions);
     const lines = [
       "POST-ROUND LEARNING REPORT",
       report.round.status === "completed" ? "ORIGINAL ROUND ANALYSIS" : "ROUND REVIEW - IN PROGRESS",
@@ -55,8 +56,8 @@ function reportTextLines(report) {
       `${cleanText(report.round.tee)} tee / ${report.round.holes_completed} holes completed`,
       "",
       "ROUND SNAPSHOT",
-      `Round: ${score(report.round.relative_to_par)} / Strategy Score: ${report.summary.strategy_score ?? "-"}`,
-      `Decision Quality: ${report.summary.decision_quality_percent ?? "-"}% (${report.summary.sound_decisions} of ${report.summary.graded_decisions})`,
+      `Round: ${score(report.round.relative_to_par)} / Course-Management Score: ${report.summary.strategy_score ?? "-"}/100 (weighted across ${report.summary.scored_decisions} scored shots)`,
+      `Sound-Plan Rate: ${report.summary.decision_quality_percent ?? "-"}% (${report.summary.sound_decisions} of ${report.summary.graded_decisions} graded${ungradedDecisions ? `; ${ungradedDecisions} ungraded` : ""})`,
       `Execution Quality: ${report.summary.execution_quality_percent ?? "-"}% (${report.summary.on_plan_executions} of ${report.summary.graded_executions})`,
       `Practice Next: ${cleanText(report.summary.practice_priority_label || "Not enough evidence yet")}`,
       "",

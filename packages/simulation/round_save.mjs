@@ -2,6 +2,8 @@ import { validateRoundState } from "./round_state.mjs";
 
 export const ROUND_SAVE_VERSION = "golf-round-save-v1";
 export const ROUND_SAVE_EXTENSION = "golfround";
+export const ROUND_GAME_NAME = "Jetta Golf — The Strategy Round";
+const LEGACY_ROUND_GAME_NAME = "Middlesex — The Strategy Round";
 
 function assertIndex(value, label, maximum) {
   if (!Number.isInteger(value) || value < 0 || value > maximum) {
@@ -65,6 +67,7 @@ export function validateRoundSave(save) {
   if (save.version !== ROUND_SAVE_VERSION) {
     throw new Error(`unsupported save file version: ${save.version || "missing"}`);
   }
+  if (save.game === LEGACY_ROUND_GAME_NAME) save.game = ROUND_GAME_NAME;
   validateRoundState(save.round_state);
   if (save.course_id !== save.round_state.course_id) {
     throw new Error("save file course does not match its round");
@@ -88,7 +91,7 @@ export function createRoundSave({
 }) {
   const save = {
     version: ROUND_SAVE_VERSION,
-    game: "Middlesex — The Strategy Round",
+    game: ROUND_GAME_NAME,
     saved_at: savedAt,
     course_id: roundState?.course_id,
     current_hole_index: currentHoleIndex,

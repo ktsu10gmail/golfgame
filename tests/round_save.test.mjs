@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   ROUND_SAVE_VERSION,
+  ROUND_GAME_NAME,
   createRoundSave,
   parseRoundSave,
   roundSaveFilename
@@ -47,6 +48,7 @@ test("portable save retains round position, player, and replay state", () => {
   const restored = parseRoundSave(JSON.stringify(save));
 
   assert.equal(restored.version, ROUND_SAVE_VERSION);
+  assert.equal(restored.game, ROUND_GAME_NAME);
   assert.equal(restored.course_id, "meadows");
   assert.equal(restored.round_state.round_seed, 12345);
   assert.equal(restored.round_state.holes[0].events.length, 1);
@@ -55,6 +57,19 @@ test("portable save retains round position, player, and replay state", () => {
   assert.equal(restored.pin_index, 2);
   assert.equal(restored.round_summary.strategy_score, 82);
   assert.equal(roundSaveFilename(restored), "meadows-hole-1-2026-07-30.golfround");
+});
+
+test("legacy Middlesex product metadata migrates without changing course evidence", () => {
+  const save = createRoundSave({
+    roundState: playedRound(), currentHoleIndex: 0, pinIndex: 2, playerProfile: PROFILE
+  });
+  save.game = "Middlesex — The Strategy Round";
+
+  const restored = parseRoundSave(JSON.stringify(save));
+
+  assert.equal(restored.game, ROUND_GAME_NAME);
+  assert.equal(restored.course_id, "meadows");
+  assert.deepEqual(restored.round_state.holes, save.round_state.holes);
 });
 
 test("portable save is detached from live round and profile objects", () => {

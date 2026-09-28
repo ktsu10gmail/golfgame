@@ -1,4 +1,64 @@
 export const PLAYER_SAFE_SHOT_ERROR = "The shot could not be completed. Your ball and score have not changed. Please try again. If this continues, return to the hole and resume the round.";
+export const GM_RECOMMENDATION_FALLBACK = "I could not calculate a recommendation for this position. Your shot setup has not changed. Select a club and target manually, or try Recommendation again.";
+
+export function gameMasterTargetSuggestion({ viewMode, remainingYards, par, teeYards }) {
+  if (viewMode === "putting") return { label: "Aim at cup", command: "Aim at cup" };
+  if (Number(remainingYards) <= 210) return { label: "Aim at pin", command: "Aim at pin" };
+  const layup = Number(par) === 5 && Number(remainingYards) < Number(teeYards) * .62;
+  return layup
+    ? { label: "Layup center", command: "Layup center" }
+    : { label: "Fairway center", command: "Aim fairway center" };
+}
+
+export function hasGameMasterReply(messages, startIndex = 0) {
+  return (Array.isArray(messages) ? messages : [])
+    .slice(Math.max(0, Number(startIndex) || 0))
+    .some(message => message?.role !== "player" && String(message?.text || "").trim());
+}
+
+export function puttAnalysisMatchLabels({
+  aimCorrect,
+  paceCorrect,
+  aimErrorInches,
+  playerPace,
+  recommendedPace
+}) {
+  const exactAim = Boolean(aimCorrect) && Number(aimErrorInches) < .5;
+  const displayedPaceMatches = Number(playerPace) === Number(recommendedPace);
+  const maximumModeledPace = !paceCorrect && displayedPaceMatches && Number(recommendedPace) === 100;
+  return {
+    aim: exactAim ? "Matched model" : aimCorrect ? "Within model tolerance" : "Review",
+    pace: paceCorrect
+      ? displayedPaceMatches ? "Matched model" : "Within model tolerance"
+      : maximumModeledPace
+        ? "Maximum modeled pace"
+        : displayedPaceMatches
+          ? "At model pace"
+          : "Review",
+    maximumModeledPace
+  };
+}
+
+export function recommendationTargetAdvice({ viewMode, recoveryRequired, greenReachable, par, startSurface }) {
+  if (viewMode === "putting") return "Aim at the cup.";
+  if (recoveryRequired) {
+    return "Do not aim at the green through the trees. Choose one of the recovery plans and restore a playable position first.";
+  }
+  if (greenReachable) {
+    return "Aim at the center of the green; use a named caddie plan when you want a verified hazard-specific target.";
+  }
+  if (Number(par) === 3 && String(startSurface).toLowerCase() === "tee") {
+    return "The green is beyond this club's modeled reach. Choose a club that can cover the distance, or play to the safest short-of-green area—this is not a layup hole.";
+  }
+  return "The green is not reachable with that club. Aim for the center of a reachable fairway or layup area.";
+}
+
+export function completedHoleDestination(completedHoleIndex, totalHoles = 18) {
+  const index = Number(completedHoleIndex);
+  const count = Number(totalHoles);
+  if (!Number.isInteger(index) || !Number.isInteger(count) || count < 1 || index < 0 || index >= count - 1) return null;
+  return index + 1;
+}
 
 export function modeledMakeChanceLabel(probability) {
   if (probability == null || probability === "") return "Unavailable";
@@ -6,6 +66,21 @@ export function modeledMakeChanceLabel(probability) {
   if (!Number.isFinite(numeric)) return "Unavailable";
   const percentage = Math.max(0, numeric * 100);
   return percentage < 1 ? "under 1%" : `${Math.round(percentage)}%`;
+}
+
+export function remainingDistanceBadge({ putting, remainingYards, holeFinished = false, completionType = null }) {
+  if (putting && holeFinished && completionType === "gimme") {
+    return { value: "Gimme", label: "Hole complete" };
+  }
+  if (putting && holeFinished && completionType === "holed") {
+    return { value: "Holed", label: "In cup" };
+  }
+  const remaining = Math.max(0, Number(remainingYards) || 0);
+  if (!putting) return { value: String(Math.round(remaining)), label: "yd left" };
+  const feet = remaining * 3;
+  return feet < 1
+    ? { value: String(Math.max(1, Math.round(feet * 12))), label: "in from cup" }
+    : { value: String(Math.round(feet)), label: "ft from cup" };
 }
 
 export function clubCanReachTarget({ distanceYards, carryYards, lieMultiplier = 1, elevationFeet = 0 }) {

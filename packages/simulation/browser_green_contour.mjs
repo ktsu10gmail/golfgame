@@ -201,13 +201,18 @@ export function contourPuttStrength(feet) {
   return 1 + bounded((Number(feet) - 15) / 10, 0, 1);
 }
 
-export function contourPuttRead({ start, pin, polygon, holeNumber }) {
+export function contourPuttRead({ start, pin, polygon, holeNumber, yardsPerCoordinateUnit = 1 }) {
   const dx = Number(pin[0]) - Number(start[0]);
   const dy = Number(pin[1]) - Number(start[1]);
-  const yards = Math.hypot(dx, dy);
+  const coordinateDistance = Math.hypot(dx, dy);
+  const distanceScale = Number(yardsPerCoordinateUnit);
+  if (!Number.isFinite(distanceScale) || distanceScale <= 0) {
+    throw new Error("yardsPerCoordinateUnit must be a positive finite number");
+  }
+  const yards = coordinateDistance * distanceScale;
   const feet = yards * 3;
-  const forwardX = yards > 1e-8 ? dx / yards : 0;
-  const forwardY = yards > 1e-8 ? dy / yards : 1;
+  const forwardX = coordinateDistance > 1e-8 ? dx / coordinateDistance : 0;
+  const forwardY = coordinateDistance > 1e-8 ? dy / coordinateDistance : 1;
   const rightX = forwardY;
   const rightY = -forwardX;
   let weightedLateral = 0;

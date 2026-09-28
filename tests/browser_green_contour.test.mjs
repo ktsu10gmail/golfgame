@@ -56,6 +56,25 @@ test("putting read follows the same field used by the visual contour", () => {
   assert.ok(read.slopeDegrees > 0);
 });
 
+test("putting distance converts mapped course units to true feet", () => {
+  const read = contourPuttRead({
+    start: [2, 4],
+    pin: [12, 4],
+    polygon: green,
+    holeNumber: 7,
+    yardsPerCoordinateUnit: 1.09361
+  });
+
+  assert.ok(Math.abs(read.feet - 32.8083) < 1e-8);
+  assert.notEqual(Math.round(read.feet), 30);
+});
+
+test("putting distance rejects an invalid course scale", () => {
+  assert.throws(() => contourPuttRead({
+    start: [2, 4], pin: [12, 4], polygon: green, holeNumber: 7, yardsPerCoordinateUnit: 0
+  }), /yardsPerCoordinateUnit/);
+});
+
 test("contour influence increases after fifteen feet without changing short putts", () => {
   assert.equal(contourPuttStrength(10), 1);
   assert.equal(contourPuttStrength(15), 1);

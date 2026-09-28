@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -97,6 +98,18 @@ def _has_unsupported_gps_inference(text: object) -> bool:
     )
 
 
+def _has_overconfident_decision_blame(*values: object) -> bool:
+    combined = " ".join(str(value or "") for value in values).lower()
+    return bool(re.search(r"\b[a-z]+_[a-z_]+\b", combined)) or any(
+        phrase in combined for phrase in (
+            "execution produced a miss",
+            "does not justify changing a sound strategy",
+            "decisions were sound, but",
+            "decision was sound, but",
+        )
+    )
+
+
 def _verified_hole_review(hole_number: int, hole: dict) -> dict:
     shots = [shot for shot in hole.get("shots", []) if isinstance(shot, dict)]
     decision_reviews = [shot for shot in shots if shot.get("decision_quality") == "review"]
@@ -146,7 +159,10 @@ def _verified_hole_review(hole_number: int, hole: dict) -> dict:
         if decision_reviews:
             details.append(f"the recorded result also missed the plan on {references}")
         else:
-            details.append(f"The decisions were sound, but the recorded result missed the plan on {references}")
+            details.append(
+                f"The current evaluator classified the selected plan as meeting its criteria on {references}; "
+                "the recorded result missed the intended outcome"
+            )
     if penalties:
         details.append(f"the hole included {penalties} penalty {('stroke' if penalties == 1 else 'strokes')}")
     if not details:
@@ -169,7 +185,10 @@ def _verified_hole_review(hole_number: int, hole: dict) -> dict:
             )
         next_time = guidance_text(action_keys, limit=1) or "Choose the lower-risk target or club plan next time."
     elif execution_reviews:
-        next_time = "Keep the strategic plan; the recorded issue was execution, not evidence that the target or club choice was wrong."
+        next_time = (
+            "Review the selected plan, caddie recommendation, execution evidence, and recorded outcome separately; "
+            "the miss alone does not prove which one should change."
+        )
     else:
         next_time = "Use the recorded result to repeat the successful decision or adjust the next similar plan."
 
@@ -182,7 +201,7 @@ def _verified_hole_review(hole_number: int, hole: dict) -> dict:
         credit = sidehill_credit + "."
     elif sound_decisions:
         references = ", ".join(_shot_reference(shot) for shot in sound_decisions[:3])
-        credit = f"The strategic plan was graded sound on {references}."
+        credit = f"The selected plan met the current evaluator's criteria on {references}."
     else:
         credit = "The record does not show a specific strategic strength to credit on this hole."
 
@@ -191,7 +210,10 @@ def _verified_hole_review(hole_number: int, hole: dict) -> dict:
         correction = f"The target, club, or risk choice needs review on {references}."
     elif execution_reviews:
         references = ", ".join(_shot_reference(shot) for shot in execution_reviews[:3])
-        correction = f"Execution missed the intended plan on {references}; the evidence does not justify changing a sound strategy."
+        correction = (
+            f"The recorded outcome missed the intended plan on {references}; this evidence alone does not identify "
+            "whether the recommendation, model assumptions, or execution should change."
+        )
     elif penalties:
         correction = f"The {penalties}-stroke penalty was the main cost recorded on this hole."
     else:
@@ -320,6 +342,7 @@ class GeminiProvider:
 class AiService:
     provider: JsonProvider | None
     disabled_reason: str = "AI provider is disabled"
+    fallback_provider: JsonProvider | None = None
 
     def status(self) -> dict:
         if self.provider is None:
@@ -402,7 +425,23 @@ class AiService:
     def review_round(self, payload: dict) -> dict:
         if self.provider is None:
             raise AiProviderError(self.disabled_reason)
-        response = self.provider.generate_json(build_round_prompt(payload), ROUND_RESPONSE_SCHEMA)
+        prompt = build_round_prompt(payload)
+        response_provider = self.provider
+        try:
+            response = response_provider.generate_json(prompt, ROUND_RESPONSE_SCHEMA)
+        except AiProviderError:
+            if self.fallback_provider is None:
+                raise
+            response_provider = self.fallback_provider
+            response = response_provider.generate_json(prompt, ROUND_RESPONSE_SCHEMA)
+        primary_verdict = str(response.get("verdict", "")).strip()
+        if (
+            response_provider is self.provider
+            and self.fallback_provider is not None
+            and (not primary_verdict or _has_overconfident_decision_blame(primary_verdict))
+        ):
+            response_provider = self.fallback_provider
+            response = response_provider.generate_json(prompt, ROUND_RESPONSE_SCHEMA)
         valid_holes = {}
         for hole in payload.get("holes", []):
             if not isinstance(hole, dict) or not hole.get("meaningful") or hole.get("hole_number") is None:
@@ -429,7 +468,7 @@ class AiService:
             correction = str(review.get("correction", "")).strip()
             if not insight or not next_time or _has_unsupported_swing_diagnosis(
                 insight, credit, correction, next_time
-            ):
+            ) or _has_overconfident_decision_blame(insight, credit, correction, next_time):
                 continue
             seen_holes.add(hole_number)
             hole_reviews.append({
@@ -444,10 +483,13 @@ class AiService:
             if hole_number in seen_holes:
                 continue
             hole_reviews.append(_verified_hole_review(hole_number, hole))
+        verdict = str(response.get("verdict", "")).strip()
+        if _has_overconfident_decision_blame(verdict):
+            verdict = ""
         return {
-            "provider": self.provider.name,
-            "model": self.provider.model,
-            "verdict": str(response.get("verdict", "")).strip(),
+            "provider": response_provider.name,
+            "model": response_provider.model,
+            "verdict": verdict,
             "strength": str(response.get("strength", "")).strip(),
             "priority": str(response.get("priority", "")).strip(),
             "hole_reviews": hole_reviews[:5],
@@ -625,4 +667,19 @@ def create_ai_service() -> AiService:
         return AiService(provider=None, disabled_reason="missing GEMINI_API_KEY")
     model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip() or DEFAULT_GEMINI_MODEL
     timeout = int(os.getenv("GEMINI_TIMEOUT_SECONDS", str(DEFAULT_GEMINI_TIMEOUT_SECONDS)))
-    return AiService(provider=GeminiProvider(api_key=api_key, model=model, timeout_seconds=timeout))
+    local_fallback = None
+    if os.getenv("AI_LOCAL_FALLBACK", "on").strip().lower() not in {"0", "off", "false", "no"}:
+        fallback_host = os.getenv("OLLAMA_HOST", DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST
+        if "://" not in fallback_host:
+            fallback_host = f"http://{fallback_host}"
+        local_fallback = OllamaProvider(
+            model=os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip() or DEFAULT_OLLAMA_MODEL,
+            host=fallback_host,
+            timeout_seconds=int(os.getenv("OLLAMA_TIMEOUT_SECONDS", str(DEFAULT_OLLAMA_TIMEOUT_SECONDS))),
+            context_tokens=int(os.getenv("OLLAMA_NUM_CTX", str(DEFAULT_OLLAMA_CONTEXT_TOKENS))),
+            temperature=float(os.getenv("OLLAMA_TEMPERATURE", str(DEFAULT_OLLAMA_TEMPERATURE))),
+        )
+    return AiService(
+        provider=GeminiProvider(api_key=api_key, model=model, timeout_seconds=timeout),
+        fallback_provider=local_fallback,
+    )

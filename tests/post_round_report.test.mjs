@@ -5,7 +5,8 @@ import {
   POST_ROUND_REPORT_BUILDER_VERSION,
   attachPostRoundNarrative,
   buildPostRoundReportModel,
-  buildReportNarrativePacket
+  buildReportNarrativePacket,
+  refreshPostRoundReportNarrative
 } from "../packages/presentation/post_round_report.mjs";
 import { buildPostRoundPdf } from "../packages/presentation/post_round_export.mjs";
 
@@ -64,6 +65,9 @@ test("canonical report uses explicit graded denominators and numeric score value
   assert.equal(report.round.status, "in_progress");
   assert.equal(typeof report.round.relative_to_par, "number");
   assert.equal(report.summary.graded_decisions, 2);
+  assert.equal(report.summary.strategy_score_scale, 100);
+  assert.equal(report.summary.strategy_score_basis, "weighted_average_of_scored_shots");
+  assert.equal(report.summary.ungraded_decisions, 1);
   assert.equal(report.summary.sound_decisions, 1);
   assert.equal(report.summary.decision_quality_percent, 50);
   assert.equal(report.summary.graded_executions, 2);
@@ -101,12 +105,38 @@ test("validated narrative attaches only to existing deterministic moments with e
   assert.ok(explanation.evidence_refs.every(ref => ref.startsWith("shot:h2:s1")));
 });
 
+test("AI narrative cannot reintroduce code keys or automatic execution blame", () => {
+  const report = build();
+  const codeLeak = attachPostRoundNarrative(report, { verdict: "lie_management is the priority." });
+  const blame = attachPostRoundNarrative(report, { verdict: "The decisions were sound, but execution produced a miss." });
+  assert.equal(codeLeak.narrative.status, "deterministic_fallback");
+  assert.equal(blame.narrative.status, "deterministic_fallback");
+});
+
+test("frozen older reports refresh unsafe wording without changing evidence", () => {
+  const report = build();
+  const evidence = structuredClone(report.detailed_shots);
+  report.report_builder_version = "post-round-report-v2";
+  report.narrative.status = "available";
+  report.narrative.round_story.text = "lie_management was sound, but execution produced a miss.";
+
+  const refreshed = refreshPostRoundReportNarrative(report);
+
+  assert.equal(refreshed.report_builder_version, POST_ROUND_REPORT_BUILDER_VERSION);
+  assert.equal(refreshed.narrative.status, "deterministic_fallback");
+  assert.doesNotMatch(refreshed.narrative.round_story.text, /lie_management|execution produced a miss/i);
+  assert.deepEqual(refreshed.detailed_shots, evidence);
+});
+
 test("completed report is labeled as original analysis and retains fallback without AI", () => {
   const scores = SCORECARD.map(row => row.Par);
   const report = build({ scores });
   assert.equal(report.round.status, "completed");
   assert.equal(report.narrative.status, "deterministic_fallback");
   assert.match(report.narrative.round_story.text, /Across the completed round/);
+  assert.match(report.narrative.round_story.text, /1 additional strategy-scored shot was not categorically graded/);
+  assert.match(report.narrative.round_story.text, new RegExp(report.summary.practice_priority_label));
+  assert.doesNotMatch(report.narrative.round_story.text, /decision quality was stronger|execution produced a miss|\b[a-z]+_[a-z_]+\b/i);
 });
 
 test("unified PDF renderer consumes the canonical model and preserves the learning hierarchy", () => {

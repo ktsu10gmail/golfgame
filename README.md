@@ -1,4 +1,4 @@
-# Middlesex — The Strategy Round
+# Jetta Golf — The Strategy Round
 
 A dependency-free, browser-based strategic golf game with four 18-hole courses:
 

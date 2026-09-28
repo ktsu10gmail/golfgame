@@ -38,6 +38,13 @@ class FakeProvider:
         return self.response
 
 
+class FailingProvider(FakeProvider):
+    def generate_json(self, prompt: str, schema: dict):
+        self.prompt = prompt
+        self.schema = schema
+        raise AiProviderError("primary provider unavailable")
+
+
 class AiPromptTests(unittest.TestCase):
     def test_replay_prompt_keeps_engine_grades_authoritative(self) -> None:
         prompt = build_replay_interpretation_prompt({
@@ -293,6 +300,53 @@ class AiServiceTests(unittest.TestCase):
         }])
         self.assertEqual(provider.schema, ROUND_RESPONSE_SCHEMA)
 
+    def test_review_round_uses_local_fallback_when_primary_provider_fails(self) -> None:
+        primary = FailingProvider({})
+        fallback = FakeProvider({
+            "verdict": "The verified round evidence supports one clear focus.",
+            "strength": "Target selection",
+            "priority": "Recovery discipline",
+            "hole_reviews": [],
+        })
+
+        response = AiService(provider=primary, fallback_provider=fallback).review_round({"holes": []})
+
+        self.assertEqual(response["provider"], "fake")
+        self.assertEqual(response["model"], "fake-model")
+        self.assertEqual(response["priority"], "Recovery discipline")
+        self.assertEqual(fallback.schema, ROUND_RESPONSE_SCHEMA)
+
+    def test_review_round_uses_fallback_when_primary_story_is_rejected(self) -> None:
+        primary = FakeProvider({
+            "verdict": "lie_management was sound, but execution produced a miss.",
+            "strength": "",
+            "priority": "",
+            "hole_reviews": [],
+        })
+        fallback = FakeProvider({
+            "verdict": "The verified evidence supports reviewing recovery choices separately from outcomes.",
+            "strength": "Recovery discipline",
+            "priority": "Target selection",
+            "hole_reviews": [],
+        })
+
+        response = AiService(provider=primary, fallback_provider=fallback).review_round({"holes": []})
+
+        self.assertEqual(response["verdict"], fallback.response["verdict"])
+        self.assertEqual(response["provider"], "fake")
+
+    def test_review_round_rejects_code_keys_and_automatic_execution_blame(self) -> None:
+        provider = FakeProvider({
+            "verdict": "lie_management matters because the decision was sound, but execution produced a miss.",
+            "strength": "Target selection",
+            "priority": "Lie management",
+            "hole_reviews": [],
+        })
+
+        response = AiService(provider=provider).review_round({"holes": []})
+
+        self.assertEqual(response["verdict"], "")
+
     def test_review_round_fills_an_omitted_meaningful_hole_from_verified_facts(self) -> None:
         provider = FakeProvider({
             "verdict": "One hole needs attention.",
@@ -344,7 +398,9 @@ class AiServiceTests(unittest.TestCase):
         review = response["hole_reviews"][0]
         self.assertIn("shot 1 (Driver with a full swing)", review["insight"])
         self.assertIn("shot 2 (7 Iron with a full swing)", review["insight"])
-        self.assertIn("decisions were sound", review["insight"])
+        self.assertIn("current evaluator classified", review["insight"])
+        self.assertNotIn("decisions were sound", review["insight"])
+        self.assertIn("does not identify whether the recommendation", review["correction"])
         self.assertIn("execution", review["next_time"])
         self.assertNotIn("Clean tee lie", review["next_time"])
 
@@ -384,7 +440,7 @@ class AiServiceTests(unittest.TestCase):
         self.assertIn("recorded player instruction", review["insight"])
         self.assertIn("2.8 yards right", review["insight"])
         self.assertIn("3-yard left sidehill curve", review["insight"])
-        self.assertIn("decisions were sound", review["insight"])
+        self.assertIn("current evaluator classified", review["insight"])
 
     def test_verified_fallback_reports_temporary_adjustment_reward(self) -> None:
         provider = FakeProvider({"verdict": "Review", "strength": "Plan", "priority": "Repeat", "hole_reviews": []})
@@ -447,7 +503,7 @@ class AiServiceTests(unittest.TestCase):
         review = response["hole_reviews"][0]
         self.assertEqual(review["source"], "verified_fallback")
         self.assertNotIn("struck poorly", review["insight"])
-        self.assertIn("decisions were sound", review["insight"])
+        self.assertIn("current evaluator classified", review["insight"])
 
     def test_critique_strategy_must_recommend_a_supplied_choice(self) -> None:
         provider = FakeProvider({
