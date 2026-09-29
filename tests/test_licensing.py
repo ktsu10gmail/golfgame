@@ -183,6 +183,7 @@ class LicenseServiceTests(unittest.TestCase):
         dashboard = self.licenses.coach_dashboard(coach["id"])
         self.assertEqual(dashboard["sponsored_students"], 1)
         self.assertEqual(dashboard["seats_available"], 9)
+        self.assertIn("email", dashboard["students"][0])
 
     def test_email_invitation_claim_binds_new_account_without_individual_code(self):
         coach = self._coach_with_subscription()

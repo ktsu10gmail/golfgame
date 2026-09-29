@@ -27,3 +27,10 @@ test("accepting or declining clears the arrival notice and stored link", () => {
   assert.match(responder, /localStorage\.removeItem\(COACH_INVITATION_STORAGE_KEY\)/);
   assert.match(responder, /await refreshPlayerAccess\(\)/);
 });
+
+test("an open Coach Dashboard refreshes accepted invitations and identifies students", () => {
+  assert.match(app, /student\.email[^\n]+Coach Sponsored/);
+  assert.match(app, /function startCoachDashboardRefresh\(\)/);
+  assert.match(app, /setInterval\([\s\S]*?loadCoachDashboard/);
+  assert.match(app, /coach-dashboard-dialog[^\n]+addEventListener\("close", stopCoachDashboardRefresh\)/);
+});

@@ -532,6 +532,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const COACH_INVITATION_STORAGE_KEY = "golfgame-coach-invitation-token";
 let coachInvitationArrival = null;
+let coachDashboardRefreshTimer = null;
 
 function captureCoachInvitationLink() {
   const fragment = new URLSearchParams(window.location.hash.slice(1));
@@ -12772,7 +12773,7 @@ function renderCoachDashboard(dashboard) {
   $("#coach-invite-email").disabled = !subscriptionActive;
   $("#coach-invite-button").disabled = !subscriptionActive;
   $("#coach-roster").innerHTML = dashboard.students.length
-    ? dashboard.students.map(student => `<article><div><strong>${escapeHtml(student.player_name)}</strong><small>${student.seat_status === "ACTIVE" ? "Coach Sponsored" : (student.grants.join(", ") || "Historical access")}</small></div><div class="license-row-actions"><button type="button" data-review-coach-student="${student.player_id}" data-student-name="${escapeHtml(student.player_name)}">Rounds</button>${student.seat_status === "ACTIVE" ? `<button type="button" data-release-sponsorship="${escapeHtml(student.relationship_id)}">Release seat</button>` : `<button type="button" data-assign-sponsorship="${escapeHtml(student.relationship_id)}" ${subscriptionActive ? "" : "disabled"}>Sponsor</button>`}<button type="button" data-end-coach-relationship="${escapeHtml(student.relationship_id)}">End coaching</button></div></article>`).join("")
+    ? dashboard.students.map(student => `<article><div><strong>${escapeHtml(student.player_name)}</strong><small>${student.email ? `${escapeHtml(student.email)} · ` : ""}${student.seat_status === "ACTIVE" ? "Coach Sponsored" : (student.grants.join(", ") || "Historical access")}</small></div><div class="license-row-actions"><button type="button" data-review-coach-student="${student.player_id}" data-student-name="${escapeHtml(student.player_name)}">Rounds</button>${student.seat_status === "ACTIVE" ? `<button type="button" data-release-sponsorship="${escapeHtml(student.relationship_id)}">Release seat</button>` : `<button type="button" data-assign-sponsorship="${escapeHtml(student.relationship_id)}" ${subscriptionActive ? "" : "disabled"}>Sponsor</button>`}<button type="button" data-end-coach-relationship="${escapeHtml(student.relationship_id)}">End coaching</button></div></article>`).join("")
     : `<article><div><strong>No active students yet</strong><small>Create an invitation using the student's Jetta account email.</small></div></article>`;
   $("#coach-pending-invitations").innerHTML = dashboard.pending_invitations.length
     ? `<h3>Pending invitations</h3>${dashboard.pending_invitations.map(invitation => {
@@ -12794,11 +12795,32 @@ async function loadCoachDashboard() {
   return payload.dashboard;
 }
 
+function stopCoachDashboardRefresh() {
+  if (coachDashboardRefreshTimer !== null) window.clearInterval(coachDashboardRefreshTimer);
+  coachDashboardRefreshTimer = null;
+}
+
+function startCoachDashboardRefresh() {
+  stopCoachDashboardRefresh();
+  coachDashboardRefreshTimer = window.setInterval(() => {
+    if (!$("#coach-dashboard-dialog").open) {
+      stopCoachDashboardRefresh();
+      return;
+    }
+    void loadCoachDashboard().catch(error => {
+      $("#coach-seat-summary").textContent = error.message;
+    });
+  }, 10_000);
+}
+
 async function openCoachDashboard() {
   $("#account-dialog").close();
   $("#coach-dashboard-dialog").showModal();
   $("#coach-seat-summary").textContent = "Loading sponsored seats…";
-  try { await loadCoachDashboard(); }
+  try {
+    await loadCoachDashboard();
+    startCoachDashboardRefresh();
+  }
   catch (error) { $("#coach-seat-summary").textContent = error.message; }
 }
 
@@ -13978,6 +14000,10 @@ function bindEvents() {
   });
   $("#coach-dashboard-button").addEventListener("click", () => void openCoachDashboard());
   $("[data-close-coach-dashboard]").addEventListener("click", () => $("#coach-dashboard-dialog").close());
+  $("#coach-dashboard-dialog").addEventListener("close", stopCoachDashboardRefresh);
+  window.addEventListener("focus", () => {
+    if ($("#coach-dashboard-dialog").open) void loadCoachDashboard();
+  });
   $("[data-close-coach-student-history]").addEventListener("click", () => $("#coach-student-history-dialog").close());
   $("#coach-invite-button").addEventListener("click", () => void createCoachInvitation());
   $("#coach-roster").addEventListener("click", event => {
