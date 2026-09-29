@@ -8,7 +8,7 @@ import { DECISION_SCORE_VERSION, scorePuttStrategy, scoreStrategy } from "./pack
 import {
   greensideRollRatio,
   simulateGreensideShot
-} from "./packages/simulation/browser_greenside.mjs?v=20260901-2";
+} from "./packages/simulation/browser_greenside.mjs?v=20260928-1";
 import {
   AimType,
   PowerStatus,
@@ -187,6 +187,7 @@ import {
 import {
   coursePointToGps as gpsCoursePointToGps,
   correctGpsRecordedShot,
+  createGpsShotEvidenceSnapshot,
   createGpsRoundId,
   createGpsRound,
   deleteGpsRecordedShot,
@@ -198,6 +199,7 @@ import {
   gpsRoundComplete,
   gpsRoundReviewAction,
   gpsRoundScore,
+  gpsStrategyWithSelectedTarget,
   gpsToCoursePoint,
   latestCompletedGpsHoleIndex,
   manualGpsStrategy,
@@ -205,11 +207,11 @@ import {
   normalizeGpsBallConditions,
   recommendGpsClub,
   undoGpsHoleAction
-} from "./packages/gps/browser_gps_mode.mjs?v=20260920-4";
+} from "./packages/gps/browser_gps_mode.mjs?v=20260928-2";
 import {
   gpsReplayShotEvidence,
   gpsReplaySteps
-} from "./packages/gps/browser_gps_replay.mjs?v=20260904-2";
+} from "./packages/gps/browser_gps_replay.mjs?v=20260928-1";
 
 const METERS_TO_YARDS = 1.09361;
 const PUTTER_RANGE_FEET = 60;
@@ -472,6 +474,7 @@ const state = {
   gpsReplay: null,
   gpsPageView: "actual",
   gpsCaddieExpanded: false,
+  gpsTargetPicking: null,
   livePanelDock: ["top", "bottom"].includes(readBrowserValue("golf-live-panel-dock"))
     ? readBrowserValue("golf-live-panel-dock")
     : "bottom",
@@ -2579,7 +2582,9 @@ function renderMap() {
     ...reference,
     yards: Math.max(0, Math.round(distance(liveBall, reference.point)))
   }));
-  const target = state.liveGpsView ? null : state.target;
+  const target = state.gpsTargetPicking?.point
+    ? pointArrayOrNull(state.gpsTargetPicking.point)
+    : state.liveGpsView ? null : state.target;
   const recoveryCondition = state.liveGpsView || viewMode === "putting" ? null : treeConditionAt(ball);
   // Recovery cards now present the real choice set. Do not leave the legacy
   // single punch-out marker on the course map, where it looks like either a
@@ -2591,7 +2596,9 @@ function renderMap() {
     ? Math.max(1, Math.round(distance(ball, recoveryTarget)))
     : null;
   const targetDistanceText = target
-    ? (mapViewMode() === "putting"
+    ? (state.gpsTargetPicking
+        ? `TARGET ${Math.round(distance(ball, target))} yd`
+        : mapViewMode() === "putting"
         ? `${Math.round(distance(ball, target) * 3)} ft`
         : `${landingTargetActive() ? "LAND " : "LINE "}${Math.round(distance(ball, target))} yd`)
     : "";
@@ -2791,10 +2798,10 @@ function renderMap() {
         <g class="recovery-target-mark" transform="translate(${sx(recoveryTarget[0])},${sy(recoveryTarget[1])})"><circle r="15"/><path d="M0-10L10 0 0 10-10 0Z"><title>Recommended punch-out target</title></path></g>
       </g>` : ""}
       ${target ? `<line class="aim-line" x1="${sx(ball[0])}" y1="${sy(ball[1])}" x2="${sx(target[0])}" y2="${sy(target[1])}"/>
-        <g class="coverage-pattern" transform="translate(${sx(target[0])},${sy(target[1])}) rotate(${targetAngle})">
+        ${state.gpsTargetPicking ? "" : `<g class="coverage-pattern" transform="translate(${sx(target[0])},${sy(target[1])}) rotate(${targetAngle})">
           <ellipse class="coverage-outer" rx="${outerLongitudinal}" ry="${outerLateral}"><title>Larger-miss coverage area</title></ellipse>
           <ellipse class="coverage-likely" rx="${likelyLongitudinal}" ry="${likelyLateral}"><title>Likely landing area</title></ellipse>
-        </g>
+        </g>`}
         <g class="target-distance-label" transform="translate(${sx(target[0])},${sy(target[1]) - 34})">
           <rect x="-40" y="-11" width="80" height="22" rx="4"/><text text-anchor="middle" dominant-baseline="central">${targetDistanceText}</text>
         </g>
@@ -5860,7 +5867,7 @@ function updateLiveMapMeasurement(event) {
 }
 
 function onLiveMapMeasurePointerDown(event) {
-  if (!state.liveGpsView || event.pointerType === "mouse") return;
+  if (!state.liveGpsView || state.gpsTargetPicking || event.pointerType === "mouse") return;
   event.preventDefault();
   liveMapMeasurePointerId = event.pointerId;
   liveMapMeasureSurface = event.currentTarget;
@@ -5874,7 +5881,7 @@ function onLiveMapMeasurePointerDown(event) {
 }
 
 function onLiveMapMeasurePointerMove(event) {
-  if (!state.liveGpsView || event.pointerId !== liveMapMeasurePointerId) return;
+  if (!state.liveGpsView || state.gpsTargetPicking || event.pointerId !== liveMapMeasurePointerId) return;
   event.preventDefault();
   updateLiveMapMeasurement(event);
 }
@@ -6011,6 +6018,10 @@ function setTargetFromPointer(event, announce = false) {
 }
 
 function onMapClick(event) {
+  if (state.liveGpsView && state.gpsTargetPicking) {
+    setGpsTargetPickFromPointer(event);
+    return;
+  }
   if (state.liveGpsView || state.holeFinished || targetDragging || performance.now() < suppressMapClickUntil) return;
   hideMapDistancePreview();
   setTargetFromPointer(event, true);
@@ -6018,6 +6029,10 @@ function onMapClick(event) {
 
 function onMapPointerUp(event) {
   if (event.pointerType === "mouse") return;
+  if (state.liveGpsView && state.gpsTargetPicking) {
+    setGpsTargetPickFromPointer(event);
+    return;
+  }
   if (state.liveGpsView || state.holeFinished || targetDragging || performance.now() < suppressMapClickUntil) return;
   if (event.target.closest(".target-mark")) return;
   setTargetFromPointer(event, true);
@@ -8373,7 +8388,9 @@ function updateHoleBrief() {
   $("#mobile-enlarge-green").hidden = state.greenEnlarged || state.liveGpsView;
   $("#reset-view").hidden = state.liveGpsView;
   $("#mobile-reset-view").hidden = state.liveGpsView;
-  $(".map-hint").innerHTML = state.liveGpsView
+  $(".map-hint").innerHTML = state.gpsTargetPicking
+    ? "<i></i> Select target · tap the intended aim point"
+    : state.liveGpsView
     ? "<i></i> Live GPS · hold the map to measure from your ball"
     : automaticGreenReliefActive()
     ? "<i></i> Green 3D · click to aim · drag to read the contour"
@@ -9662,6 +9679,81 @@ function liveGpsBallPoint() {
   return gpsFixCoursePoint(liveGpsCurrentFix());
 }
 
+function setGpsTargetPickFromPointer(event) {
+  const picker = state.gpsTargetPicking;
+  const svg = $("#course-map svg");
+  if (!picker || !svg) return false;
+  const screenPoint = svgPointFromPointer(event, svg);
+  if (!screenPoint) return false;
+  const frame = mapFrame();
+  if (screenPoint[0] < frame.left - 40 || screenPoint[0] > frame.right + 40
+    || screenPoint[1] < frame.top - 25 || screenPoint[1] > frame.bottom + 25) return false;
+  picker.point = coursePoint(screenPoint[0], screenPoint[1]);
+  hideMapDistancePreview();
+  renderMap();
+  updateCourseMapModeUI();
+  return true;
+}
+
+function returnFromGpsTargetPicker({ save = false } = {}) {
+  const picker = state.gpsTargetPicking;
+  if (!picker) return;
+  let selectedCopy = null;
+  if (save && picker.point) {
+    const holeState = gpsRound?.holes?.[picker.holeIndex];
+    const start = gpsCurrentFix(holeState);
+    const targetLie = lieAt(picker.point).type;
+    const targetYards = gpsFixCoursePoint(start)
+      ? Math.max(0, Math.round(distance(gpsFixCoursePoint(start), picker.point)))
+      : null;
+    try {
+      holeState.pending_strategy = gpsStrategyWithSelectedTarget(holeState.pending_strategy, {
+        coursePoint: picker.point,
+        label: `${targetLie} target`
+      });
+      persistGpsRound();
+      selectedCopy = `${targetLie} target${targetYards == null ? "" : ` · ${targetYards} yd`}`;
+    } catch (error) {
+      showMobileShotToast("Target not saved", error.message);
+    }
+  }
+  state.gpsTargetPicking = null;
+  state.liveGpsView = false;
+  state.liveGpsFollowHole = true;
+  window.clearTimeout(liveGpsPollTimer);
+  updateCourseMapModeUI();
+  openGpsMode();
+  if (selectedCopy) showMobileShotToast("Target selected", selectedCopy);
+}
+
+function startGpsTargetPicker() {
+  if (gpsPagePreviewActive()) return;
+  const holeState = gpsHoleState();
+  const currentFix = gpsCurrentFix(holeState);
+  if (!currentFix || !gpsFixCoursePoint(currentFix)) {
+    setGpsStatus("Record the tee or ball location before selecting a target.", "error");
+    return;
+  }
+  if (!holeState.pending_strategy?.club_name || !Number.isInteger(holeState.pending_strategy?.club_index)) {
+    setGpsStatus("Choose your club before selecting a target.", "error");
+    return;
+  }
+  state.gpsTargetPicking = {
+    holeIndex: state.holeIndex,
+    point: pointArrayOrNull(holeState.pending_strategy.target_course_point)
+  };
+  scheduleGpsRoundSync(0);
+  $("#gps-mode-screen").hidden = true;
+  document.body.classList.remove("gps-mode-open");
+  syncGameModeSelector();
+  state.liveGpsView = true;
+  state.liveGpsFollowHole = false;
+  state.liveGpsRound = gpsRound;
+  state.gpsReplay = null;
+  window.clearTimeout(liveGpsPollTimer);
+  resetHole();
+}
+
 function liveGpsShotSegments() {
   const visibleShots = state.gpsReplay && state.gpsReplay.holeIndex === state.holeIndex
     ? (liveGpsHoleState()?.shots || []).slice(0, state.gpsReplay.shotIndex + 1)
@@ -9821,8 +9913,10 @@ function setLivePanelCollapsed(collapsed) {
 }
 
 function updateCourseMapModeUI() {
+  const choosingTarget = Boolean(state.gpsTargetPicking);
   $$('[data-course-map-mode]').forEach(button => {
     button.setAttribute("aria-pressed", String((button.dataset.courseMapMode === "live") === state.liveGpsView));
+    button.disabled = choosingTarget;
   });
   document.body.classList.toggle("live-round-view", state.liveGpsView);
   const shotDesk = $(".shot-desk");
@@ -9848,7 +9942,7 @@ function updateCourseMapModeUI() {
     collapseButton.setAttribute("aria-expanded", String(!state.livePanelCollapsed));
     collapseButton.setAttribute("aria-label", state.livePanelCollapsed ? "Open Live summary" : "Hide Live summary");
   }
-  panel.hidden = !state.liveGpsView;
+  panel.hidden = !state.liveGpsView || choosingTarget;
   if (!state.liveGpsView) return;
   requestAnimationFrame(positionLiveRoundPanel);
 
@@ -9857,10 +9951,19 @@ function updateCourseMapModeUI() {
   const currentFix = liveGpsCurrentFix(holeState);
   const currentPoint = gpsFixCoursePoint(currentFix);
   if (measureHint) {
-    $("#live-map-measure-copy").textContent = currentPoint
-      ? "Touch the map to measure; drag to move the point."
-      : "Record GPS first, then touch the map to measure.";
-    $("#live-map-measure-record").hidden = Boolean(currentPoint);
+    $(".live-map-measure-mark").textContent = choosingTarget ? "◎" : "↔";
+    $("#live-map-measure-copy").textContent = choosingTarget
+      ? state.gpsTargetPicking.point
+        ? "Target placed. Tap elsewhere to move it, or use this target."
+        : "Tap the map where you intend to aim."
+      : currentPoint
+        ? "Touch the map to measure; drag to move the point."
+        : "Record GPS first, then touch the map to measure.";
+    $("#live-map-measure-record").hidden = choosingTarget || Boolean(currentPoint);
+    $("#live-map-measure-voice").hidden = choosingTarget;
+    $("#live-map-target-use").hidden = !choosingTarget;
+    $("#live-map-target-use").disabled = !state.gpsTargetPicking?.point;
+    $("#live-map-target-cancel").hidden = !choosingTarget;
   }
   $("#live-round-sync").textContent = state.liveGpsLoading ? "Refreshing…" : liveGpsAgeLabel(round);
   $("#live-round-title").textContent = `${state.course?.shortName || state.course?.name || "Course"} · Hole ${state.holeIndex + 1}`;
@@ -9923,8 +10026,10 @@ function renderGpsReplayControls() {
   $("#gps-replay-result-detail").textContent = evidence.endLie;
   $("#gps-replay-decision").textContent = evidence.decision.label;
   $("#gps-replay-decision-detail").textContent = evidence.decision.detail;
-  $("#gps-replay-target").textContent = evidence.outcomeVsTarget.lateralLabel;
-  $("#gps-replay-target-detail").textContent = evidence.outcomeVsTarget.distanceLabel;
+  $("#gps-replay-target").textContent = evidence.target.label;
+  $("#gps-replay-target-detail").textContent = evidence.outcomeVsTarget.available
+    ? `${evidence.outcomeVsTarget.lateralLabel} · ${evidence.outcomeVsTarget.distanceLabel}`
+    : evidence.outcomeVsTarget.distanceLabel;
   $("#gps-replay-recorded").textContent = evidence.recorded;
   $("#gps-replay-comment").textContent = evidence.comment;
   $("#gps-replay-previous").disabled = position <= 0;
@@ -10013,7 +10118,7 @@ async function fetchLatestGpsRoundForCourse() {
 
 function scheduleLiveGpsPoll(delay = LIVE_GPS_POLL_MS) {
   window.clearTimeout(liveGpsPollTimer);
-  if (!state.liveGpsView || state.gpsReplay) return;
+  if (!state.liveGpsView || state.gpsReplay || state.gpsTargetPicking) return;
   liveGpsPollTimer = window.setTimeout(() => void refreshLiveGpsRound({ silent: true }), delay);
 }
 
@@ -10060,6 +10165,10 @@ async function refreshLiveGpsRound({ followHole = state.liveGpsFollowHole, silen
 }
 
 function setCourseMapMode(mode) {
+  if (state.gpsTargetPicking) {
+    returnFromGpsTargetPicker({ save: false });
+    return;
+  }
   const live = mode === "live";
   if (state.liveGpsView === live) {
     if (live) {
@@ -10098,6 +10207,18 @@ function setCourseMapMode(mode) {
 
 function gpsBallConditions(fix = gpsCurrentFix(), lie = fix?.lie) {
   return normalizeGpsBallConditions(fix?.conditions, lie);
+}
+
+function gpsConditionSummary(conditions, lie, { includeLie = false } = {}) {
+  if (!conditions) return includeLie ? `${lie || "Lie"} · Conditions not recorded` : "Conditions not recorded";
+  const parts = [];
+  if (includeLie && lie) parts.push(lie);
+  parts.push({ level: "Level stance", above_feet: "Ball above feet", below_feet: "Ball below feet", tbd: "Stance not set" }[conditions.stance] || "Stance not recorded");
+  parts.push({ level: "Level slope", uphill: "Uphill slope", downhill: "Downhill slope", tbd: "Slope not set" }[conditions.slope] || "Slope not recorded");
+  if (lie === "Rough" || lie === "Heavy rough") {
+    parts.push({ light: "Light rough", mild: "Moderate rough", deep: "Heavy rough", tbd: "Rough condition not set" }[conditions.rough_depth] || "Rough condition not recorded");
+  }
+  return parts.join(" · ");
 }
 
 function gpsPlanningLie(lie, conditions) {
@@ -10431,8 +10552,19 @@ function renderGpsMode() {
   }
 
   $("#gps-lie-controls").hidden = !currentFix || onGreen || holeState.finished;
-  $$('[data-gps-lie]').forEach(button => button.classList.toggle("active", button.dataset.gpsLie === currentLie));
   const ballConditions = gpsBallConditions(currentFix, currentLie);
+  $$('[data-gps-lie]').forEach(button => {
+    const active = button.dataset.gpsLie === currentLie;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  $$('[data-gps-condition]').forEach(button => {
+    const active = ballConditions[button.dataset.gpsCondition] === button.dataset.gpsConditionValue;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  $("#gps-rough-depth").hidden = currentLie !== "Rough" && currentLie !== "Heavy rough";
+  $("#gps-condition-summary").textContent = gpsConditionSummary(ballConditions, currentLie);
   const showGpsShotPlanner = Boolean(holeState.tee && !onGreen && !holeState.finished);
   $("#gps-mode-screen").classList.toggle("gps-shot-page", showGpsShotPlanner);
   const choices = holeState.finished ? [] : gpsStrategyChoices(currentPoint, currentLie, ballConditions);
@@ -10457,7 +10589,18 @@ function renderGpsMode() {
   }
   const gpsAnalysisKey = choices.length ? gpsStrategyAnalysisKey(currentPoint, currentLie, ballConditions, choices) : null;
   const gpsAnalysis = gpsAnalysisKey ? strategyAnalysisCache.get(gpsAnalysisKey) || null : null;
+  const selectedTarget = pointArrayOrNull(holeState.pending_strategy?.target_course_point);
+  const selectedTargetYards = selectedTarget && currentPoint
+    ? Math.max(0, Math.round(distance(currentPoint, selectedTarget)))
+    : null;
   $("#gps-caddie").hidden = !showGpsShotPlanner;
+  $("#gps-target-select").hidden = !showGpsShotPlanner;
+  $("#gps-target-select").disabled = previewing || !holeState.pending_strategy?.club_name;
+  $("#gps-target-select").setAttribute("aria-pressed", String(Boolean(selectedTarget)));
+  $("#gps-target-select").textContent = selectedTarget ? "Change target" : "Select target";
+  $("#gps-target-status").textContent = selectedTarget
+    ? `Target: ${holeState.pending_strategy.target_label || "Selected map point"}${selectedTargetYards == null ? "" : ` · ${selectedTargetYards} yd`}`
+    : "No target selected. Choose a point in Live view before the shot.";
   $("#gps-caddie-toggle").hidden = !choices.length;
   $("#gps-caddie-toggle").setAttribute("aria-expanded", String(state.gpsCaddieExpanded && choices.length > 0));
   $("#gps-caddie-count").textContent = String(choices.length);
@@ -10515,7 +10658,7 @@ function renderGpsMode() {
   const currentHoleHasRecord = Boolean(holeState.tee || holeState.shots.length || holeState.putts);
   $("#gps-hole-review").disabled = previewing
     || (!currentHoleHasRecord && latestCompletedGpsHoleIndex(gpsRound, state.holeIndex) < 0);
-  $$('[data-gps-lie]').forEach(button => { button.disabled = previewing; });
+  $$('#gps-lie-controls button').forEach(button => { button.disabled = previewing; });
 }
 
 function gpsReviewClubOptions(selectedClubName) {
@@ -10535,6 +10678,8 @@ function gpsReviewShotMarkup(review, holeIndex) {
       <div class="gps-review-shot-selection">
         <strong>${escapeHtml(shot.club_name)}</strong>
         <small>${shot.power ? escapeHtml(shotPowerLabel(shot.power, shot.club_name)) : "Swing not recorded"}</small>
+        <small>${escapeHtml(gpsConditionSummary(shot.conditions, shot.lie, { includeLie: true }))}</small>
+        <small>${shot.target?.target_label ? `Target: ${escapeHtml(shot.target.target_label)}` : "Target not recorded"}</small>
       </div>
       <b>${shot.distance_yards} yd</b>
       <div class="gps-review-shot-actions">
@@ -10566,7 +10711,9 @@ function gpsHoleAiKey(holeState, holeIndex) {
       Math.round(Number(shot.distance_yards) || 0),
       shot.strategy?.club_name || null,
       shot.strategy?.power || null,
-      shot.end?.lie || null
+      shot.end?.lie || null,
+      shot.evidence_snapshot?.situation || shot.start?.conditions || null,
+      shot.evidence_snapshot?.intent || shot.strategy?.target_course_point || null
     ]),
     putts: holeState.putts,
     final_stroke: holeState.final_stroke,
@@ -10603,7 +10750,17 @@ function gpsHoleAiPayload(holeState, holeIndex, review) {
       plan: shot.strategy?.title || null,
       actual_distance_yards: Math.max(0, Math.round(Number(shot.distance_yards) || 0)),
       start_lie: shot.start?.lie || (index === 0 ? "Tee" : null),
-      end_lie: shot.end?.lie || null
+      end_lie: shot.end?.lie || null,
+      ball_conditions: shot.evidence_snapshot?.situation?.conditions || shot.start?.conditions || shot.strategy?.ball_conditions || null,
+      conditions_summary: gpsConditionSummary(
+        shot.evidence_snapshot?.situation?.conditions || shot.start?.conditions || shot.strategy?.ball_conditions || null,
+        shot.evidence_snapshot?.situation?.lie || shot.start?.lie || (index === 0 ? "Tee" : null),
+        { includeLie: true }
+      ),
+      target: shot.evidence_snapshot?.intent || (shot.strategy?.target_course_point ? {
+        target_label: shot.strategy.target_label || null,
+        target_course_point: shot.strategy.target_course_point
+      } : null)
     }))
   };
 }
@@ -10705,6 +10862,11 @@ function saveGpsReviewShotCorrection(row) {
     strategy.ball_conditions = normalizeGpsBallConditions(
       priorConditions,
       shot.start?.lie
+    );
+    shot.evidence_snapshot = createGpsShotEvidenceSnapshot(
+      shot.start,
+      strategy,
+      shot.evidence_snapshot?.captured_at || shot.recorded_at || null
     );
     shot.canonicalAssessment = null;
     shot.canonicalAssessment = gpsReplayShotEvidence({
@@ -10955,6 +11117,7 @@ async function captureGpsLocation({ forcedLie = null } = {}) {
         strategy: holeState.pending_strategy,
         recorded_at: fix.recorded_at
       };
+      gpsShot.evidence_snapshot = createGpsShotEvidenceSnapshot(start, gpsShot.strategy, fix.recorded_at);
       gpsShot.canonicalAssessment = gpsReplayShotEvidence({
         shot: gpsShot,
         holeNumber: state.holeIndex + 1,
@@ -11024,6 +11187,8 @@ function selectGpsStrategy(choiceId) {
     club_index: choice.clubIndex,
     power: choice.power,
     target_label: choice.targetLabel,
+    target_type: choice.id,
+    target_source: "player_selected_caddie_option",
     ball_conditions: conditions,
     hybrid_outlook: probability.hybrid_outlook,
     probability_score: probability.probability_score,
@@ -11203,7 +11368,8 @@ function replayPageShotPoints(shot) {
   if (replayPageState?.kind === "gps") {
     const start = gpsFixCoursePoint(shot?.start);
     const finish = gpsFixCoursePoint(shot?.end);
-    const target = pointArrayOrNull(shot?.strategy?.target_course_point);
+    const target = pointArrayOrNull(shot?.evidence_snapshot?.intent?.target_course_point)
+      || pointArrayOrNull(shot?.strategy?.target_course_point);
     return { start, finish, target, path: [start, finish].filter(Boolean) };
   }
   const packet = shot?.puttPacket || shot?.resultPacket;
@@ -11228,8 +11394,8 @@ function pointArrayOrNull(point) {
 
 function replayPageShotLabel(shot, shotIndex) {
   if (replayPageState?.kind === "gps") {
-    const club = shot?.strategy?.club_name || shot?.strategy?.title || "Recorded shot";
-    const power = Number(shot?.strategy?.power);
+    const club = shot?.evidence_snapshot?.decision?.club || shot?.strategy?.club_name || shot?.strategy?.title || "Recorded shot";
+    const power = Number(shot?.evidence_snapshot?.decision?.swing_effort_percent ?? shot?.strategy?.power);
     return { club, power: Number.isFinite(power) ? Math.round(power) : null, result: shot?.end?.lie || "Recorded finish" };
   }
   return {
@@ -11393,6 +11559,12 @@ async function requestAiReplayCoach(shot, holeIndex, shotIndex, verifiedCoach) {
   renderReplayCoachCard(verifiedCoach, "pending");
   const label = replayPageShotLabel(shot, shotIndex);
   const putt = verifiedCoach.evidence?.puttAnalysis;
+  const gpsEvidence = replayPageState?.kind === "gps" ? gpsReplayShotEvidence({
+    shot,
+    holeNumber: holeIndex + 1,
+    shotIndex,
+    pinPoint: replayPageState.round?.holes?.[holeIndex]?.pin_course_point
+  }) : null;
   const response = await postAiJson("/api/ai/replay", {
     course: { id: state.courseId, name: state.course.name },
     hole: { number: holeIndex + 1, par: card().Par },
@@ -11402,6 +11574,9 @@ async function requestAiReplayCoach(shot, holeIndex, shotIndex, verifiedCoach) {
       power_percent: label.power,
       distance_yards: replayPageState?.kind === "gps" ? Math.round(shot.distance_yards || 0) : Math.round(shot.yards || shot.feet / 3 || 0),
       start_lie: shot?.start?.lie || shot?.conditionSnapshot?.lie || null,
+      ball_conditions: gpsEvidence?.conditions || shot?.conditionSnapshot?.conditions || null,
+      conditions_summary: gpsEvidence ? `${gpsEvidence.startLie} · ${gpsEvidence.conditionLabel}` : null,
+      intended_target: gpsEvidence?.target?.recorded ? gpsEvidence.target : null,
       finish_lie: label.result,
       remaining_yards: Number.isFinite(shot?.remaining) ? shot.remaining : null,
       shot_type: verifiedCoach.evidence?.shotType || null,
@@ -11503,6 +11678,12 @@ function renderReplayPage() {
   }
   const label = replayPageShotLabel(shot, replayPageState.shotIndex);
   const points = replayPageShotPoints(shot);
+  const gpsEvidence = replayPageState.kind === "gps" ? gpsReplayShotEvidence({
+    shot,
+    holeNumber: holeIndex + 1,
+    shotIndex: replayPageState.shotIndex,
+    pinPoint: replayPageState.round?.holes?.[holeIndex]?.pin_course_point
+  }) : null;
   const distanceYards = replayPageState.kind === "gps" ? Math.round(shot.distance_yards || 0) : Math.round(shot.yards || shot.feet / 3 || 0);
   const remaining = replayPageState.kind === "gps"
     ? null
@@ -11514,7 +11695,9 @@ function renderReplayPage() {
     <div><span>Club and swing</span><strong>${escapeHtml(label.club)}${label.power == null ? "" : ` · ${label.power}%`}</strong></div>
     <div><span>Distance</span><strong>${distanceYards} yd</strong></div>
     <div><span>Result</span><strong>${escapeHtml(label.result)}</strong></div>
-    <div><span>${remaining == null ? "Finish" : "Remaining"}</span><strong>${remaining == null ? (points.finish ? "Recorded position" : "Not recorded") : `${remaining} yd`}</strong></div>`;
+    <div><span>${remaining == null ? "Finish" : "Remaining"}</span><strong>${remaining == null ? (points.finish ? "Recorded position" : "Not recorded") : `${remaining} yd`}</strong></div>
+    ${gpsEvidence ? `<div><span>Lie and conditions</span><strong>${escapeHtml(`${gpsEvidence.startLie} · ${gpsEvidence.conditionLabel}`)}</strong></div>
+    <div><span>Target</span><strong>${escapeHtml(gpsEvidence.target.label)}${gpsEvidence.target.distanceYards == null ? "" : ` · ${gpsEvidence.target.distanceYards} yd`}</strong></div>` : ""}`;
   const coach = replayCoachForShot(shot, holeIndex, replayPageState.shotIndex);
   renderReplayCoachCard(coach);
   void requestAiReplayCoach(shot, holeIndex, replayPageState.shotIndex, coach);
@@ -13809,6 +13992,8 @@ function bindEvents() {
   $("#live-round-open-gps").addEventListener("click", openGpsMode);
   $("#live-map-measure-record").addEventListener("click", openGpsMode);
   $("#live-map-measure-voice").addEventListener("click", speakLiveMapInstruction);
+  $("#live-map-target-use").addEventListener("click", () => returnFromGpsTargetPicker({ save: true }));
+  $("#live-map-target-cancel").addEventListener("click", () => returnFromGpsTargetPicker({ save: false }));
   $("#gps-exit").addEventListener("click", () => closeGpsMode("simulator"));
   $("#gps-exit-live").addEventListener("click", () => closeGpsMode("live"));
   $("#gps-previous-hole").addEventListener("click", () => gpsChangeHole(state.holeIndex - 1));
@@ -13860,12 +14045,20 @@ function bindEvents() {
   $("#gps-holed-out").addEventListener("click", finishGpsHoleFromGreen);
   $("#gps-lie-controls").addEventListener("click", event => {
     if (gpsPagePreviewActive()) return;
-    const button = event.target.closest("[data-gps-lie]");
-    if (!button) return;
     const fix = gpsCurrentFix();
     if (!fix) return;
-    fix.lie = button.dataset.gpsLie;
-    fix.conditions = normalizeGpsBallConditions(fix.conditions, fix.lie);
+    const conditionButton = event.target.closest("[data-gps-condition]");
+    const lieButton = event.target.closest("[data-gps-lie]");
+    if (!conditionButton && !lieButton) return;
+    if (conditionButton) {
+      fix.conditions = normalizeGpsBallConditions({
+        ...gpsBallConditions(fix, fix.lie),
+        [conditionButton.dataset.gpsCondition]: conditionButton.dataset.gpsConditionValue
+      }, fix.lie);
+    } else {
+      fix.lie = lieButton.dataset.gpsLie;
+      fix.conditions = normalizeGpsBallConditions(fix.conditions, fix.lie);
+    }
     const holeState = gpsHoleState();
     if (holeState.pending_strategy?.id === "manual-choice") {
       holeState.pending_strategy.ball_conditions = fix.conditions;
@@ -13883,6 +14076,7 @@ function bindEvents() {
     state.gpsCaddieExpanded = !state.gpsCaddieExpanded;
     renderGpsMode();
   });
+  $("#gps-target-select").addEventListener("click", startGpsTargetPicker);
   $("#gps-club-select").addEventListener("change", selectGpsManualShot);
   $("#gps-tee-club-select").addEventListener("change", selectGpsTeeClub);
   $("#gps-power-select").addEventListener("change", selectGpsManualShot);

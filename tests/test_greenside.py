@@ -1,4 +1,5 @@
 from pathlib import Path
+import math
 import unittest
 
 from packages.golf_domain import (
@@ -66,10 +67,10 @@ class GreensideEngineTests(unittest.TestCase):
         self.assertEqual(packet.carry_yards, 8.64)
         self.assertEqual(packet.roll_yards, 8.64)
         self.assertEqual(packet.landing, Vec2(8.6435, -0.3279))
-        self.assertEqual(packet.resolved_ball, Vec2(17.2932, -0.4164))
+        self.assertEqual(packet.resolved_ball, Vec2(17.268, -0.9935))
         self.assertEqual(packet.landing_surface, SurfaceType.GREEN)
         self.assertEqual(packet.resolved_surface, SurfaceType.GREEN)
-        self.assertEqual(packet.remaining_distance_yards, 2.74)
+        self.assertEqual(packet.remaining_distance_yards, 2.91)
         self.assertEqual(packet.assessment.execution_assessment, "on_plan")
 
     def test_seed_identity_replays_and_changes_by_stroke(self) -> None:
@@ -126,6 +127,64 @@ class GreensideEngineTests(unittest.TestCase):
         self.assertGreater(packet.resolved_ball.x, packet.landing.x)
         self.assertEqual(packet.resolved_surface, SurfaceType.GREEN)
 
+    def test_bunker_lie_reduces_rollout(self) -> None:
+        base = context()
+        bunker = GreensideContext(
+            start=base.start,
+            target=base.target,
+            pin=base.pin,
+            club_id=base.club_id,
+            accuracy=base.accuracy,
+            lie_type=LieType.BUNKER_BURIED,
+            power=base.power,
+            roll_slope_factor=base.roll_slope_factor,
+            break_direction=base.break_direction,
+            contour_modifier=base.contour_modifier,
+            surfaces=base.surfaces,
+            profile_version=base.profile_version,
+            lie_version=base.lie_version,
+        )
+        packet = simulate_greenside_shot(
+            bunker, round_seed=90210, hole_number=4, stroke_index=2
+        )
+
+        self.assertEqual(round(packet.roll_yards / packet.carry_yards, 2), 0.35)
+        self.assertEqual(
+            next(item.value for item in packet.audit.modifiers if item.name == "start_lie_roll"),
+            0.35,
+        )
+
+    def test_rollout_preserves_incoming_direction(self) -> None:
+        angled_pin = GreensideContext(
+            start=Vec2(0, 0),
+            target=Vec2(10, 0),
+            pin=Vec2(20, 15),
+            club_id="sand_wedge",
+            accuracy=0.88,
+            lie_type=LieType.FAIRWAY_CLEAN,
+            power=0.9,
+            roll_slope_factor=1,
+            break_direction="right",
+            contour_modifier=1,
+            surfaces=(
+                SurfaceRegion(SurfaceType.GREEN, rectangle(-5, -10, 40, 30), 70, "green"),
+            ),
+            profile_version="test-profile",
+            lie_version="test-lie",
+        )
+        packet = simulate_greenside_shot(
+            angled_pin, round_seed=90210, hole_number=4, stroke_index=2
+        )
+        start, landing, first_roll = packet.path[:3]
+        incoming = Vec2(landing.x - start.x, landing.y - start.y)
+        outgoing = Vec2(first_roll.x - landing.x, first_roll.y - landing.y)
+        cosine = (
+            incoming.x * outgoing.x + incoming.y * outgoing.y
+        ) / (math.hypot(incoming.x, incoming.y) * math.hypot(outgoing.x, outgoing.y))
+
+        self.assertGreater(len(packet.path), 3)
+        self.assertGreater(cosine, 0.995)
+
     def test_real_course_surfaces_are_consumed_for_all_courses(self) -> None:
         for course_id in ("themeadow", "warrenbrook", "cranbury", "gallopinghills"):
             directory = "cranbury-golf-club" if course_id == "cranbury" else course_id
@@ -157,7 +216,7 @@ class GreensideEngineTests(unittest.TestCase):
                 )
                 self.assertIn(packet.landing_surface, set(SurfaceType))
                 self.assertIn(packet.resolved_surface, set(SurfaceType))
-                self.assertEqual(len(packet.path), 3)
+                self.assertGreater(len(packet.path), 3)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   coursePointToGps,
+  createGpsShotEvidenceSnapshot,
   createGpsRoundId,
   createGpsRound,
   completeGpsHole,
@@ -14,6 +15,7 @@ import {
   gpsHoleScore,
   holeOutGpsHole,
   gpsHoleReview,
+  gpsStrategyWithSelectedTarget,
   gpsRoundComplete,
   gpsRoundReviewAction,
   gpsRoundScore,
@@ -26,6 +28,7 @@ import {
   undoGpsHoleAction
 } from "../packages/gps/browser_gps_mode.mjs";
 import {
+  gpsReplayConditionDescription,
   gpsReplayFinishDescription,
   gpsReplayOutcomeVsTarget,
   gpsReplayShotEvidence,
@@ -150,8 +153,8 @@ test("GPS hole review lists shots and determines GIR", () => {
   hole.finished = true;
   const review = gpsHoleReview(hole, 4);
   assert.deepEqual(review.shots, [
-    { number: 1, label: "Tee shot", club_name: "Driver", power: null, distance_yards: 201 },
-    { number: 2, label: "2nd shot", club_name: "3 Wood", power: null, distance_yards: 180 }
+    { number: 1, label: "Tee shot", club_name: "Driver", power: null, distance_yards: 201, lie: "Tee", conditions: null, target: null },
+    { number: 2, label: "2nd shot", club_name: "3 Wood", power: null, distance_yards: 180, lie: null, conditions: null, target: null }
   ]);
   assert.equal(review.green_in_regulation, true);
   assert.equal(review.green_reached_in, 2);
@@ -230,7 +233,10 @@ test("manual GPS club and power retain the caddie plan that was considered", () 
     club_name: "5 Hybrid",
     club_index: 3,
     power: 90,
-    target_label: "Center fairway"
+    target_label: "Center fairway",
+    target_course_point: [12, 180],
+    target_type: "fairway_center",
+    target_source: "player_selected_caddie_option"
   };
   const manual = manualGpsStrategy(recommendation, { clubName: "6 Iron", clubIndex: 4, power: 83 });
   const changedAgain = manualGpsStrategy(manual, { clubName: "6 Iron", clubIndex: 4, power: 70 });
@@ -238,8 +244,37 @@ test("manual GPS club and power retain the caddie plan that was considered", () 
   assert.equal(manual.title, "Player choice");
   assert.equal(manual.power, 75);
   assert.equal(manual.considered_strategy.id, "safe-smart");
+  assert.deepEqual(manual.target_course_point, [12, 180]);
+  assert.equal(manual.target_label, "Center fairway");
+  assert.notEqual(manual.target_course_point, recommendation.target_course_point);
   assert.equal(changedAgain.power, 75);
   assert.equal(changedAgain.considered_strategy.id, "safe-smart");
+  assert.deepEqual(changedAgain.target_course_point, [12, 180]);
+});
+
+test("GPS map target replaces the prior target and turns the plan into a player choice", () => {
+  const strategy = gpsStrategyWithSelectedTarget({
+    id: "safe-smart",
+    title: "Safe & Smart",
+    club_name: "7 Iron",
+    club_index: 5,
+    power: 75,
+    target_label: "Center green",
+    target_course_point: [0, 140],
+    ball_conditions: { stance: "level", slope: "level", rough_depth: null },
+    club_snapshot: { name: "7 Iron", carry_yards: 145 }
+  }, {
+    coursePoint: [18, 132],
+    label: "Fairway target"
+  });
+
+  assert.equal(strategy.id, "manual-choice");
+  assert.equal(strategy.club_name, "7 Iron");
+  assert.equal(strategy.target_label, "Fairway target");
+  assert.deepEqual(strategy.target_course_point, [18, 132]);
+  assert.equal(strategy.target_source, "player_selected_live_map");
+  assert.deepEqual(strategy.considered_strategy.target_course_point, [0, 140]);
+  assert.deepEqual(strategy.ball_conditions, { stance: "level", slope: "level", rough_depth: null });
 });
 
 test("GPS ball conditions normalize defaults and rough depth", () => {
@@ -259,6 +294,46 @@ test("GPS ball conditions normalize defaults and rough depth", () => {
   assert.deepEqual(normalizeGpsBallConditions(null, "Rough"), {
     stance: "level", slope: "level", rough_depth: "light"
   });
+});
+
+test("GPS shot evidence freezes situation, intent, and decision at capture time", () => {
+  const start = {
+    lie: "Rough",
+    course_point: [10, 20],
+    conditions: { stance: "above_feet", slope: "uphill", rough_depth: "mild" }
+  };
+  const strategy = {
+    id: "center-left",
+    club_name: "7 Iron",
+    power: 85,
+    target_label: "Center-left green",
+    target_type: "green_quadrant",
+    target_source: "player_selected_caddie_option",
+    target_course_point: [22, 164]
+  };
+  const snapshot = createGpsShotEvidenceSnapshot(start, strategy, "2026-09-28T12:00:00.000Z");
+
+  assert.deepEqual(snapshot.situation, {
+    lie: "Rough",
+    conditions: { stance: "above_feet", slope: "uphill", rough_depth: "mild" }
+  });
+  assert.equal(snapshot.intent.target_label, "Center-left green");
+  assert.deepEqual(snapshot.intent.target_course_point, [22, 164]);
+  assert.equal(snapshot.intent.target_distance_yards, 144);
+  assert.deepEqual(snapshot.decision, {
+    club: "7 Iron", swing_effort_percent: 85, choice_source: "selected_plan"
+  });
+  start.conditions.stance = "level";
+  strategy.target_course_point[0] = 99;
+  assert.equal(snapshot.situation.conditions.stance, "above_feet");
+  assert.deepEqual(snapshot.intent.target_course_point, [22, 164]);
+});
+
+test("GPS replay condition labels distinguish sidehill, slope, and rough depth", () => {
+  assert.equal(gpsReplayConditionDescription({
+    stance: "below_feet", slope: "downhill", rough_depth: "deep"
+  }, "Rough"), "Ball below feet · Downhill slope · Heavy rough");
+  assert.equal(gpsReplayConditionDescription(null, "Fairway"), "Conditions not recorded");
 });
 
 test("GPS club recommendation matches profile carry and favors a fuller swing", () => {
@@ -353,6 +428,8 @@ test("GPS replay quotes a saved lower-risk modeled alternative without promising
   assert.equal(evidence.decision.detail, "6 Iron · Center-left green");
   assert.equal(evidence.outcomeVsTarget.lateralLabel, "18 yd right");
   assert.equal(evidence.outcomeVsTarget.distanceLabel, "11 yd short");
+  assert.equal(evidence.target.label, "Center-left green");
+  assert.deepEqual(evidence.target.coursePoint, [0, 174]);
   assert.equal(evidence.evidenceType, "modeled");
   assert.match(evidence.comment, /5 Iron modeled 14% bunker risk versus 31%/);
   assert.match(evidence.comment, /did not guarantee/);

@@ -26,11 +26,21 @@ The app must be served over HTTP because browsers do not allow JavaScript module
 
 ### Map a new golf course
 
-Open `http://localhost:8080/editor.html` to align calculation geometry over local
+Start the Course Mapper on its separate port:
+
+```bash
+python3 scripts/serve_mapper.py
+```
+
+Then open `http://localhost:8081/editor.html` to align calculation geometry over local
 aerial or illustrated hole images. The companion editor provides editable tee,
 fairway, rough, bunker, green, water, and boundary shapes; draggable starting-ball,
 tee, pin, and route markers; two-point distance calibration; portable 18-hole
 projects; and complete game packages containing both artwork and geometry.
+
+The main Jetta game remains on port `8080`. Use `--host 0.0.0.0` when the mapper
+must be reachable from another device on the local network, or override the
+mapper port with `--port` when needed.
 
 It requires no map API key or billing account. See [Course Mapper](docs/COURSE_MAPPER.md)
 for setup, mapping, export, and local installation instructions.

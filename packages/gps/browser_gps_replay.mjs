@@ -12,6 +12,18 @@ function titleCase(value) {
   return String(value || "Unknown lie").replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
+export function gpsReplayConditionDescription(conditions, lie) {
+  if (!conditions) return "Conditions not recorded";
+  const parts = [
+    { level: "Level stance", above_feet: "Ball above feet", below_feet: "Ball below feet", tbd: "Stance not set" }[conditions.stance] || "Stance not recorded",
+    { level: "Level slope", uphill: "Uphill slope", downhill: "Downhill slope", tbd: "Slope not set" }[conditions.slope] || "Slope not recorded"
+  ];
+  if (lie === "Rough" || lie === "Heavy rough") {
+    parts.push({ light: "Light rough", mild: "Moderate rough", deep: "Heavy rough", tbd: "Rough condition not set" }[conditions.rough_depth] || "Rough condition not recorded");
+  }
+  return parts.join(" · ");
+}
+
 function shotOrdinal(number) {
   if (number === 1) return "Tee shot";
   const suffix = number % 10 === 2 && number % 100 !== 12
@@ -104,7 +116,8 @@ function decisionEvidence(strategy) {
   };
 }
 
-function intendedTarget(strategy, decision) {
+function intendedTarget(shot, strategy, decision) {
+  if (finitePoint(shot?.evidence_snapshot?.intent?.target_course_point)) return shot.evidence_snapshot.intent.target_course_point;
   if (finitePoint(strategy?.target_course_point)) return strategy.target_course_point;
   if (finitePoint(decision?.selected?.target_course_point)) return decision.selected.target_course_point;
   return null;
@@ -124,14 +137,17 @@ export function gpsReplayShotEvidence({ shot, holeNumber, shotIndex, pinPoint })
   const number = Number(shot?.number) || shotIndex + 1;
   const startPoint = shot?.start?.course_point;
   const endPoint = shot?.end?.course_point;
-  const startLie = shot?.start?.lie || (number === 1 ? "Tee" : "Unknown lie");
+  const snapshot = shot?.evidence_snapshot;
+  const startLie = snapshot?.situation?.lie || shot?.start?.lie || (number === 1 ? "Tee" : "Unknown lie");
   const endLie = shot?.end?.lie || "Unknown lie";
-  const club = shot?.strategy?.club_name || "Club not recorded";
-  const power = Number(shot?.strategy?.power);
+  const conditions = snapshot?.situation?.conditions || shot?.start?.conditions || shot?.strategy?.ball_conditions || null;
+  const club = snapshot?.decision?.club || shot?.strategy?.club_name || "Club not recorded";
+  const power = Number(snapshot?.decision?.swing_effort_percent ?? shot?.strategy?.power);
   const distance = Math.max(0, Math.round(Number(shot?.distance_yards) || 0));
   const finish = gpsReplayFinishDescription(startPoint, endPoint, pinPoint);
   const savedDecision = decisionEvidence(shot?.strategy);
-  const outcomeVsTarget = gpsReplayOutcomeVsTarget(startPoint, intendedTarget(shot?.strategy, savedDecision), endPoint);
+  const targetPoint = intendedTarget(shot, shot?.strategy, savedDecision);
+  const outcomeVsTarget = gpsReplayOutcomeVsTarget(startPoint, targetPoint, endPoint);
   const canonicalAssessment = canonicalAssessmentForGpsShot(shot, outcomeVsTarget.available ? {
     lateral_yards: outcomeVsTarget.lateralYards,
     distance_yards: outcomeVsTarget.distanceYards
@@ -163,7 +179,21 @@ export function gpsReplayShotEvidence({ shot, holeNumber, shotIndex, pinPoint })
   const alternative = modeledAlternative(decision, endLie);
   const swing = Number.isFinite(power) ? ` at ${Math.round(power)}%` : "";
   const finishCopy = finish ? `, ${finish}` : "";
-  const recorded = `${club}${swing} traveled ${distance} yards from ${titleCase(startLie)} and finished in ${titleCase(endLie)}${finishCopy}.`;
+  const conditionLabel = gpsReplayConditionDescription(conditions, startLie);
+  const conditionCopy = conditions ? ` (${conditionLabel.toLowerCase().replaceAll(" · ", ", ")})` : "";
+  const snapshotIntent = snapshot?.intent;
+  const targetLabel = snapshotIntent?.target_label || (targetPoint ? shot?.strategy?.target_label || "Selected map target" : "Target not recorded");
+  const target = targetPoint ? {
+    recorded: true,
+    label: targetLabel,
+    type: snapshotIntent?.target_type || shot?.strategy?.target_type || null,
+    source: snapshotIntent?.target_source || shot?.strategy?.target_source || null,
+    coursePoint: [...targetPoint],
+    distanceYards: Number.isFinite(Number(snapshotIntent?.target_distance_yards))
+      ? Number(snapshotIntent.target_distance_yards)
+      : null
+  } : { recorded: false, label: "Target not recorded" };
+  const recorded = `${club}${swing} traveled ${distance} yards from ${titleCase(startLie)}${conditionCopy} and finished in ${titleCase(endLie)}${finishCopy}.`;
   const outcomeCopy = outcomeVsTarget.available
     ? ` The recorded shot finished ${outcomeVsTarget.summary} of the selected target.`
     : "";
@@ -185,6 +215,9 @@ export function gpsReplayShotEvidence({ shot, holeNumber, shotIndex, pinPoint })
     power: Number.isFinite(power) ? Math.round(power) : null,
     distance,
     startLie: titleCase(startLie),
+    conditions,
+    conditionLabel,
+    target,
     endLie: titleCase(endLie),
     finish,
     result,

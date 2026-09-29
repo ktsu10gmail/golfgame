@@ -59,10 +59,10 @@ test("browser greenside packet exactly matches the Python golden result", () => 
   assert.equal(packet.carry_yards, 8.64);
   assert.equal(packet.roll_yards, 8.64);
   assert.deepEqual(packet.landing, { x: 8.6435, y: -0.3279 });
-  assert.deepEqual(packet.resolved_ball, { x: 17.2932, y: -0.4164 });
+  assert.deepEqual(packet.resolved_ball, { x: 17.268, y: -0.9935 });
   assert.equal(packet.landing_surface, "green");
   assert.equal(packet.resolved_surface, "green");
-  assert.equal(packet.remaining_distance_yards, 2.74);
+  assert.equal(packet.remaining_distance_yards, 2.91);
   assert.equal(packet.assessment.execution_assessment, "on_plan");
   assert.doesNotThrow(() => structuredClone(packet));
   assert.equal(
@@ -109,6 +109,26 @@ test("landing-target carry reuses lie-specific greenside variability", () => {
   const bunker = simulateGreensideShot(context({ nominal_carry_yards: 16, lie_type: "bunker_greenside" }), identity);
   assert.notEqual(bunker.carry_yards, fairway.carry_yards);
   assert.ok(Math.abs(bunker.carry_yards - 16) > Math.abs(fairway.carry_yards - 16));
+  assert.equal(Math.round(bunker.roll_yards / bunker.carry_yards * 100), 35);
+  assert.ok(bunker.roll_yards < fairway.roll_yards);
+});
+
+test("rollout preserves the incoming direction instead of snapping toward the cup", () => {
+  const packet = simulateGreensideShot(context({
+    target: { x: 10, y: 0 },
+    pin: { x: 20, y: 15 },
+    surfaces: [
+      { surface: "green", polygon: rectangle(-5, -10, 40, 30), priority: 70, region_id: "green" }
+    ]
+  }), { roundSeed: 90210, holeNumber: 4, strokeIndex: 2 });
+  const [start, landing, firstRoll] = packet.path;
+  const incoming = { x: landing.x - start.x, y: landing.y - start.y };
+  const outgoing = { x: firstRoll.x - landing.x, y: firstRoll.y - landing.y };
+  const cosine = (incoming.x * outgoing.x + incoming.y * outgoing.y) /
+    (Math.hypot(incoming.x, incoming.y) * Math.hypot(outgoing.x, outgoing.y));
+
+  assert.ok(packet.path.length > 3, "roll should contain progressive contour samples");
+  assert.ok(cosine > .995, `landing direction changed too sharply: ${cosine}`);
 });
 
 test("greenside roll into water receives authoritative relief", () => {

@@ -21,7 +21,7 @@ from packages.golf_domain import (
 from .engine import resolve_penalty_relief
 
 
-GREENSIDE_ENGINE_VERSION = "greenside-chip-v3"
+GREENSIDE_ENGINE_VERSION = "greenside-chip-v4"
 _GREENSIDE_SEED_VERSION = "greenside-chip-v2"
 
 _MASK_64 = (1 << 64) - 1
@@ -103,11 +103,46 @@ def _roll_ratio(club_id: str) -> float:
 
 
 def _lie_spread(context: GreensideContext) -> tuple[float, float]:
+    if context.lie_type in {LieType.BUNKER_FAIRWAY, LieType.BUNKER_BURIED}:
+        return 0.09, 0.045
     if context.lie_type is LieType.ROUGH_DEEP:
         return 0.08, 0.05
     if context.lie_type in {LieType.ROUGH_LIGHT, LieType.ROUGH_MEDIUM, LieType.ROUGH_FLYER}:
         return 0.05, 0.03
     return 0.03, 0.01
+
+
+def _lie_roll_factor(lie_type: LieType) -> float:
+    if lie_type in {LieType.BUNKER_FAIRWAY, LieType.BUNKER_BURIED}:
+        return 0.35
+    return 1.0
+
+
+def _progressive_roll_path(
+    start: Vec2,
+    carry_point: Vec2,
+    roll_yards: float,
+    lateral_break: float,
+    steps: int = 6,
+) -> tuple[Vec2, ...]:
+    if roll_yards <= 1e-9:
+        return ()
+    incoming_x = carry_point.x - start.x
+    incoming_y = carry_point.y - start.y
+    incoming_length = max(math.hypot(incoming_x, incoming_y), 1e-9)
+    forward_target = Vec2(
+        carry_point.x + incoming_x / incoming_length,
+        carry_point.y + incoming_y / incoming_length,
+    )
+    return tuple(
+        project_landing(
+            carry_point,
+            forward_target,
+            roll_yards * progress,
+            lateral_break * progress * progress,
+        )
+        for progress in ((index + 1) / steps for index in range(steps))
+    )
 
 
 def _break_inches(feet: float, contour_modifier: int) -> int:
@@ -158,37 +193,37 @@ def simulate_greenside_shot(
     feet_to_pin = carry_point.distance_to(context.pin) * 3
     break_inches = _break_inches(feet_to_pin, context.contour_modifier)
     roll_ratio = _roll_ratio(context.club_id)
+    start_lie_roll_factor = _lie_roll_factor(context.lie_type)
     surface_factor = 1 if landing_surface is SurfaceType.GREEN else 0.65
-    roll_yards = max(0, actual_carry * roll_ratio * context.roll_slope_factor * surface_factor)
+    roll_yards = max(
+        0,
+        actual_carry
+        * roll_ratio
+        * start_lie_roll_factor
+        * context.roll_slope_factor
+        * surface_factor,
+    )
     break_scale = min(1.3, roll_yards / max(carry_point.distance_to(context.pin), 1))
     lateral_break = break_inches / 36 * break_scale
     if context.break_direction == "left":
         lateral_break *= -1
-    forward_x = context.pin.x - context.start.x
-    forward_y = context.pin.y - context.start.y
-    forward_length = max(math.hypot(forward_x, forward_y), 1e-9)
-    pin_still_ahead = (
-        (context.pin.x - carry_point.x) * forward_x
-        + (context.pin.y - carry_point.y) * forward_y
-    ) > 0
-    # Roll toward the cup while it remains ahead. If carry dispersion has
-    # already passed it, continue forward instead of reversing direction.
-    roll_target = (
-        context.pin
-        if pin_still_ahead
-        else Vec2(
-            carry_point.x + forward_x / forward_length,
-            carry_point.y + forward_y / forward_length,
-        )
+    # Preserve the actual direction at impact. Contour influence builds during
+    # rollout instead of making the ball turn sharply toward the cup.
+    roll_path = _progressive_roll_path(
+        context.start, carry_point, roll_yards, lateral_break
     )
-    final_point = project_landing(carry_point, roll_target, roll_yards, lateral_break)
+    final_point = roll_path[-1] if roll_path else carry_point
     final_surface, final_region_id = resolve_surface(
         final_point, context.surfaces, context.default_surface
     )
 
     rounded_carry = _rounded_point(carry_point)
     rounded_final = _rounded_point(final_point)
-    path = (_rounded_point(context.start), rounded_carry, rounded_final)
+    path = (
+        _rounded_point(context.start),
+        rounded_carry,
+        *(_rounded_point(point) for point in roll_path),
+    )
     relief = resolve_penalty_relief(
         context,  # type: ignore[arg-type]
         landing=rounded_final,
@@ -235,6 +270,7 @@ def simulate_greenside_shot(
         mishit_probability=_round(1 - context.accuracy, 3),
         modifiers=(
             AuditModifier("greenside_roll_ratio", roll_ratio),
+            AuditModifier("start_lie_roll", start_lie_roll_factor),
             AuditModifier("greenside_slope_factor", context.roll_slope_factor),
             AuditModifier("intent_distance", context.power),
             AuditModifier("contour_modifier", context.contour_modifier),

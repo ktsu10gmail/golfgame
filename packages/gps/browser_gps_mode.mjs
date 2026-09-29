@@ -172,7 +172,15 @@ export function gpsHoleReview(holeState, par) {
       label: index === 0 ? "Tee shot" : `${index + 1}${({ 2: "nd", 3: "rd" })[index + 1] || "th"} shot`,
       club_name: shot?.strategy?.club_name || "No shot selected",
       power: Number.isFinite(Number(shot?.strategy?.power)) ? Number(shot.strategy.power) : null,
-      distance_yards: Math.max(0, Math.round(Number(shot?.distance_yards) || 0))
+      distance_yards: Math.max(0, Math.round(Number(shot?.distance_yards) || 0)),
+      lie: shot?.evidence_snapshot?.situation?.lie || shot?.start?.lie || (index === 0 ? "Tee" : null),
+      conditions: shot?.evidence_snapshot?.situation?.conditions || shot?.start?.conditions || shot?.strategy?.ball_conditions || null,
+      target: shot?.evidence_snapshot?.intent || (finiteCoursePoint(shot?.strategy?.target_course_point) ? {
+        target_label: shot.strategy.target_label || "Selected map target",
+        target_course_point: [...shot.strategy.target_course_point],
+        target_distance_yards: null,
+        target_source: shot.strategy.target_source || null
+      } : null)
     }))
   };
 }
@@ -227,6 +235,46 @@ export function normalizeGpsBallConditions(conditions, lie) {
   };
 }
 
+function finiteCoursePoint(point) {
+  return Array.isArray(point) && point.length === 2 && point.every(Number.isFinite);
+}
+
+export function createGpsShotEvidenceSnapshot(start, strategy, capturedAt = null) {
+  const lie = start?.lie || null;
+  const sourceConditions = start?.conditions || strategy?.ball_conditions || null;
+  const conditions = sourceConditions ? normalizeGpsBallConditions(sourceConditions, lie) : null;
+  const targetPoint = finiteCoursePoint(strategy?.target_course_point)
+    ? [...strategy.target_course_point]
+    : null;
+  const startPoint = finiteCoursePoint(start?.course_point) ? start.course_point : null;
+  const targetDistance = startPoint && targetPoint
+    ? Math.round(Math.hypot(targetPoint[0] - startPoint[0], targetPoint[1] - startPoint[1]))
+    : null;
+  const targetLabel = targetPoint ? strategy?.target_label || "Selected map target" : null;
+  return {
+    version: "gps-shot-evidence-v1",
+    captured_at: capturedAt || null,
+    situation: {
+      lie,
+      conditions
+    },
+    intent: targetPoint ? {
+      target_type: strategy?.target_type || strategy?.id || "map_target",
+      target_label: targetLabel,
+      target_course_point: targetPoint,
+      target_x: targetPoint[0],
+      target_y: targetPoint[1],
+      target_distance_yards: targetDistance,
+      target_source: strategy?.target_source || "player_selected_caddie_option"
+    } : null,
+    decision: {
+      club: strategy?.club_name || null,
+      swing_effort_percent: Number.isFinite(Number(strategy?.power)) ? Number(strategy.power) : null,
+      choice_source: strategy?.id === "manual-choice" ? "player_choice" : strategy?.id ? "selected_plan" : null
+    }
+  };
+}
+
 export function recommendGpsClub(clubs, targetYards, { lie = "Fairway", distanceMultiplier = 1 } = {}) {
   const yards = Number(targetYards);
   const multiplier = Number(distanceMultiplier);
@@ -276,9 +324,19 @@ export function manualGpsStrategy(previousStrategy, { clubName, clubIndex, power
           club_index: previousStrategy.club_index,
           power: previousStrategy.power,
           target_label: previousStrategy.target_label,
+          target_type: previousStrategy.target_type,
+          target_source: previousStrategy.target_source,
+          target_course_point: finiteCoursePoint(previousStrategy.target_course_point)
+            ? [...previousStrategy.target_course_point]
+            : null,
           hybrid_outlook: previousStrategy.hybrid_outlook,
           probability_score: previousStrategy.probability_score
         }
+      : null;
+  const retainedTarget = finiteCoursePoint(previousStrategy?.target_course_point)
+    ? [...previousStrategy.target_course_point]
+    : finiteCoursePoint(considered?.target_course_point)
+      ? [...considered.target_course_point]
       : null;
   return {
     id: "manual-choice",
@@ -286,7 +344,33 @@ export function manualGpsStrategy(previousStrategy, { clubName, clubIndex, power
     club_name: clubName,
     club_index: clubIndex,
     power: normalizedPower,
+    target_label: retainedTarget ? previousStrategy?.target_label || considered?.target_label || "Selected map target" : null,
+    target_type: retainedTarget ? previousStrategy?.target_type || considered?.target_type || "map_target" : null,
+    target_source: retainedTarget ? previousStrategy?.target_source || considered?.target_source || "player_selected_caddie_option" : null,
+    target_course_point: retainedTarget,
     considered_strategy: considered
+  };
+}
+
+export function gpsStrategyWithSelectedTarget(previousStrategy, { coursePoint, label }) {
+  if (!finiteCoursePoint(coursePoint)) throw new Error("a valid map target is required");
+  if (!previousStrategy?.club_name || !Number.isInteger(previousStrategy?.club_index)) {
+    throw new Error("choose a club before selecting a target");
+  }
+  const manual = manualGpsStrategy(previousStrategy, {
+    clubName: previousStrategy.club_name,
+    clubIndex: previousStrategy.club_index,
+    power: previousStrategy.power
+  });
+  return {
+    ...manual,
+    ball_conditions: previousStrategy.ball_conditions || null,
+    club_snapshot: previousStrategy.club_snapshot || null,
+    expected_yards: previousStrategy.expected_yards ?? null,
+    target_label: label || "Player-selected target",
+    target_type: "player_map_target",
+    target_source: "player_selected_live_map",
+    target_course_point: [...coursePoint]
   };
 }
 

@@ -198,6 +198,8 @@
             <span id="live-map-measure-copy">Record GPS first, then touch the map to measure.</span>
             <button id="live-map-measure-record" type="button">Record GPS</button>
             <button id="live-map-measure-voice" type="button" aria-label="Hear map measurement instructions" title="Hear instructions">Hear</button>
+            <button id="live-map-target-use" type="button" hidden>Use target</button>
+            <button id="live-map-target-cancel" type="button" hidden>Cancel</button>
           </div>
           <div id="distance-badge" class="distance-badge" hidden></div>
           <section id="live-round-panel" class="live-round-panel" data-dock="bottom" aria-live="polite" hidden>
@@ -233,7 +235,7 @@
                   <small id="gps-replay-decision-detail">Plan not recorded</small>
                 </article>
                 <article class="gps-replay-evidence-card gps-replay-target-card">
-                  <span>Outcome vs target</span>
+                  <span>Target</span>
                   <strong id="gps-replay-target">Target not recorded</strong>
                   <small id="gps-replay-target-detail">Comparison unavailable</small>
                 </article>
@@ -790,15 +792,46 @@
             <button type="button" data-gps-lie="Bunker">Bunker</button>
             <button type="button" data-gps-lie="Trees/Recovery">Recovery</button>
           </div>
+          <div class="gps-condition-groups">
+            <fieldset class="gps-condition-group">
+              <legend>Sidehill lie</legend>
+              <div role="group" aria-label="Sidehill lie">
+                <button type="button" data-gps-condition="stance" data-gps-condition-value="level">Level</button>
+                <button type="button" data-gps-condition="stance" data-gps-condition-value="above_feet">Ball above feet</button>
+                <button type="button" data-gps-condition="stance" data-gps-condition-value="below_feet">Ball below feet</button>
+              </div>
+            </fieldset>
+            <fieldset class="gps-condition-group">
+              <legend>Shot slope</legend>
+              <div role="group" aria-label="Shot slope">
+                <button type="button" data-gps-condition="slope" data-gps-condition-value="level">Level</button>
+                <button type="button" data-gps-condition="slope" data-gps-condition-value="uphill">Uphill</button>
+                <button type="button" data-gps-condition="slope" data-gps-condition-value="downhill">Downhill</button>
+              </div>
+            </fieldset>
+            <fieldset id="gps-rough-depth" class="gps-condition-group" hidden>
+              <legend>Rough condition</legend>
+              <div role="group" aria-label="Rough condition">
+                <button type="button" data-gps-condition="rough_depth" data-gps-condition-value="light">Light</button>
+                <button type="button" data-gps-condition="rough_depth" data-gps-condition-value="mild">Moderate</button>
+                <button type="button" data-gps-condition="rough_depth" data-gps-condition-value="deep">Heavy</button>
+              </div>
+            </fieldset>
+          </div>
+          <small id="gps-condition-summary" class="gps-condition-summary">Level stance · Level slope</small>
         </section>
 
         <section id="gps-caddie" class="gps-caddie" hidden>
           <header>
             <span>Your shot</span>
-            <button id="gps-caddie-toggle" class="gps-caddie-toggle" type="button" aria-expanded="false" aria-controls="gps-caddie-choices">
-              Caddie choices <small id="gps-caddie-count">2</small>
-            </button>
+            <div class="gps-caddie-actions">
+              <button id="gps-target-select" class="gps-target-select" type="button" aria-pressed="false">Select target</button>
+              <button id="gps-caddie-toggle" class="gps-caddie-toggle" type="button" aria-expanded="false" aria-controls="gps-caddie-choices">
+                Caddie choices <small id="gps-caddie-count">2</small>
+              </button>
+            </div>
           </header>
+          <small id="gps-target-status" class="gps-target-status">No target selected</small>
           <section id="gps-manual-choice" class="gps-manual-choice" aria-label="Choose your own club and swing">
             <div class="gps-manual-fields">
               <label for="gps-club-select"><span>Your club</span><select id="gps-club-select" aria-label="Select actual club"></select></label>

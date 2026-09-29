@@ -59,6 +59,8 @@ AI_SERVICE = create_ai_service()
 PLAYER_STORE = PlayerStore(os.getenv("GOLFGAME_PLAYER_DB", ROOT / "data" / "player_accounts.sqlite3"))
 SUPABASE_CONFIG = SupabaseConfig.from_values(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_ANON_KEY"))
 SUPABASE_AUTH = SupabaseAuth(SUPABASE_CONFIG) if SUPABASE_CONFIG else None
+SERVER_ROLE = os.getenv("GOLFGAME_SERVER_ROLE", "app").strip().casefold() or "app"
+MAPPER_PORT = int(os.getenv("GOLFGAME_MAPPER_PORT", "8081"))
 GOLF_INTELLIGENCE_CONFIG = GolfIntelligenceConfig.from_env()
 COURSE_IMPORT_STORE = CourseImportStore(
     os.getenv("GOLFGAME_COURSE_IMPORT_DB", ROOT / "data" / "course_imports.sqlite3")
@@ -98,6 +100,20 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if SERVER_ROLE == "app" and parsed.path == "/editor.html":
+            host = urlparse(f"//{self.headers.get('Host', '')}").hostname or "localhost"
+            safe_host = host if re.fullmatch(r"[A-Za-z0-9.-]+", host) else "localhost"
+            self.send_response(HTTPStatus.TEMPORARY_REDIRECT)
+            self.send_header("Location", f"//{safe_host}:{MAPPER_PORT}/editor.html")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+        if SERVER_ROLE == "mapper" and parsed.path in {"/", "/index.html"}:
+            self.send_response(HTTPStatus.TEMPORARY_REDIRECT)
+            self.send_header("Location", "/editor.html")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
         if parsed.path == "/api/ai/health":
             self._json_response(HTTPStatus.OK, AI_SERVICE.status())
             return
@@ -679,10 +695,10 @@ class AppHandler(SimpleHTTPRequestHandler):
         super().log_message(format, *args)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(*, default_port: int = 8080, description: str | None = None) -> None:
+    parser = argparse.ArgumentParser(description=description or __doc__)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--port", type=int, default=default_port)
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), AppHandler)
     print(f"Serving {ROOT} at http://{args.host}:{args.port}")

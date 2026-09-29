@@ -6,7 +6,7 @@ import {
   resolveSurface
 } from "./browser_engine.mjs?v=20260815-4";
 
-export const GREENSIDE_ENGINE_VERSION = "greenside-chip-v3";
+export const GREENSIDE_ENGINE_VERSION = "greenside-chip-v4";
 const GREENSIDE_SEED_VERSION = "greenside-chip-v2";
 
 const MASK_64 = (1n << 64n) - 1n;
@@ -74,10 +74,35 @@ export function greensideRollRatio(clubId) {
 }
 
 function lieSpread(lieType) {
-  if (["bunker", "bunker_greenside", "bunker_fairway"].includes(lieType)) return [0.09, 0.045];
+  if (["bunker", "bunker_greenside", "bunker_fairway", "bunker_buried"].includes(lieType)) return [0.09, 0.045];
   if (lieType === "rough_deep") return [0.08, 0.05];
   if (["rough_light", "rough_medium", "rough_flyer"].includes(lieType)) return [0.05, 0.03];
   return [0.03, 0.01];
+}
+
+function lieRollFactor(lieType) {
+  if (["bunker", "bunker_greenside", "bunker_fairway", "bunker_buried"].includes(lieType)) return 0.35;
+  return 1;
+}
+
+function progressiveRollPath(start, carryPoint, rollYards, lateralBreak, steps = 6) {
+  if (rollYards <= 1e-9) return [];
+  const incomingX = carryPoint.x - start.x;
+  const incomingY = carryPoint.y - start.y;
+  const incomingLength = Math.max(Math.hypot(incomingX, incomingY), 1e-9);
+  const forwardTarget = {
+    x: carryPoint.x + incomingX / incomingLength,
+    y: carryPoint.y + incomingY / incomingLength
+  };
+  return Array.from({ length: steps }, (_, index) => {
+    const progress = (index + 1) / steps;
+    return projectLanding(
+      carryPoint,
+      forwardTarget,
+      rollYards * progress,
+      lateralBreak * progress * progress
+    );
+  });
 }
 
 function breakInches(feet, contourModifier) {
@@ -154,37 +179,27 @@ export function simulateGreensideShot(context, { roundSeed, holeNumber, strokeIn
   const feetToPin = Math.hypot(carryPoint.x - context.pin.x, carryPoint.y - context.pin.y) * 3;
   const readBreakInches = breakInches(feetToPin, context.contour_modifier);
   const clubRollRatio = greensideRollRatio(context.club_id);
+  const startLieRollFactor = lieRollFactor(context.lie_type);
   const surfaceFactor = landingSurface === "green" ? 1 : 0.65;
   const rollYards = Math.max(
     0,
-    actualCarry * clubRollRatio * context.roll_slope_factor * surfaceFactor
+    actualCarry * clubRollRatio * startLieRollFactor * context.roll_slope_factor * surfaceFactor
   );
   const distanceToPin = Math.hypot(carryPoint.x - context.pin.x, carryPoint.y - context.pin.y);
   const breakScale = Math.min(1.3, rollYards / Math.max(distanceToPin, 1));
   const lateralBreak = readBreakInches / 36 * breakScale *
     (context.break_direction === "right" ? 1 : -1);
-  const forwardX = context.pin.x - context.start.x;
-  const forwardY = context.pin.y - context.start.y;
-  const forwardLength = Math.max(Math.hypot(forwardX, forwardY), 1e-9);
-  const pinStillAhead = (context.pin.x - carryPoint.x) * forwardX +
-    (context.pin.y - carryPoint.y) * forwardY > 0;
-  // Roll toward the cup while it remains ahead. If carry dispersion has
-  // already passed the cup, continue generally forward instead of reversing
-  // the ball back through its landing point.
-  const rollTarget = pinStillAhead
-    ? context.pin
-    : {
-        x: carryPoint.x + forwardX / forwardLength,
-        y: carryPoint.y + forwardY / forwardLength
-      };
-  const finalPoint = projectLanding(carryPoint, rollTarget, rollYards, lateralBreak);
+  // Preserve the ball's actual direction at impact. Contour influence builds
+  // progressively during rollout instead of snapping the ball toward the cup.
+  const rollPath = progressiveRollPath(context.start, carryPoint, rollYards, lateralBreak);
+  const finalPoint = rollPath.at(-1) || carryPoint;
   const [finalSurface, finalRegionId] = resolveSurface(
     finalPoint, context.surfaces, context.default_surface
   );
 
   const roundedCarry = roundedPoint(carryPoint);
   const roundedFinal = roundedPoint(finalPoint);
-  const path = [roundedPoint(context.start), roundedCarry, roundedFinal];
+  const path = [roundedPoint(context.start), roundedCarry, ...rollPath.map(roundedPoint)];
   const relief = resolvePenaltyRelief(context, {
     landing: roundedFinal,
     path,
@@ -242,6 +257,7 @@ export function simulateGreensideShot(context, { roundSeed, holeNumber, strokeIn
       mishit_probability: roundTo(1 - context.accuracy, 3),
       modifiers: [
         { name: "greenside_roll_ratio", value: clubRollRatio },
+        { name: "start_lie_roll", value: startLieRollFactor },
         { name: "greenside_slope_factor", value: context.roll_slope_factor },
         { name: "intent_distance", value: context.power },
         { name: "contour_modifier", value: context.contour_modifier }

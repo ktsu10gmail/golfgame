@@ -15,11 +15,21 @@ the same authoritative coordinates.
 The editor uses local hole images only. It does not require a mapping API,
 account, or billing setup.
 
-Open it while the game server is running:
+Start the dedicated Course Mapper server from the project folder:
+
+```bash
+python3 scripts/serve_mapper.py
+```
+
+Then open:
 
 ```text
-http://localhost:8080/editor.html
+http://localhost:8081/editor.html
 ```
+
+The Jetta game server remains on port `8080`. The mapper launcher accepts the
+same `--host` and `--port` options as the game server when another bind address
+or port is required.
 
 ## Map or correct one hole
 
