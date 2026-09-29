@@ -20,3 +20,10 @@ test("account and coach dashboard expose the final invitation actions", () => {
   assert.match(app, /\/api\/coach\/invitations\/resend/);
   assert.doesNotMatch(app, /Invitation ending/);
 });
+
+test("accepting or declining clears the arrival notice and stored link", () => {
+  const responder = app.match(/async function respondToCoachInvitation[\s\S]*?\n}/)?.[0] || "";
+  assert.match(responder, /coachInvitationArrival = null/);
+  assert.match(responder, /localStorage\.removeItem\(COACH_INVITATION_STORAGE_KEY\)/);
+  assert.match(responder, /await refreshPlayerAccess\(\)/);
+});

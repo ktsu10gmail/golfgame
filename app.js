@@ -12755,6 +12755,8 @@ async function respondToCoachInvitation(invitationId, accept) {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ invitation_id: invitationId })
   });
+  coachInvitationArrival = null;
+  localStorage.removeItem(COACH_INVITATION_STORAGE_KEY);
   await refreshPlayerAccess();
 }
 
