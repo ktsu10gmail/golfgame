@@ -334,6 +334,7 @@ class LicenseService:
         return valid
 
     def access_summary(self, player_id: int) -> dict[str, Any]:
+        self.reconcile_subscription_lifecycle()
         with self._connect() as database:
             grants = self._valid_grants(database, player_id)
             coach = database.execute("""
@@ -515,6 +516,7 @@ class LicenseService:
     def authorize_new_activity(
         self, player_id: int, activity_kind: str, client_activity_id: Any
     ) -> dict[str, Any]:
+        self.reconcile_subscription_lifecycle()
         kind = str(activity_kind).upper()
         client_id = str(client_activity_id or "").strip()
         if kind not in ACTIVITY_KINDS:
@@ -590,6 +592,122 @@ class LicenseService:
             if self._subscription_valid(row, now, True):
                 return row
         raise LicenseError("an active Jetta Coach subscription is required")
+
+    def transition_subscription(
+        self,
+        subscription_id: str,
+        requested_status: str,
+        *,
+        effective_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Normalize provider events into Jetta subscription state.
+
+        A Coach cancellation, expiration, or payment failure begins the same
+        configurable grace period. Individual plans do not receive Coach grace.
+        """
+        requested = str(requested_status).upper()
+        if requested not in {"ACTIVE", "PAST_DUE", "CANCELLED", "EXPIRED"}:
+            raise LicenseError("subscription status is invalid")
+        now = effective_at or _utc_now()
+        stamp = _iso(now)
+        with self._connect() as database:
+            database.execute("BEGIN IMMEDIATE")
+            row = database.execute(
+                "SELECT * FROM subscriptions WHERE id = ?", (subscription_id,)
+            ).fetchone()
+            if row is None:
+                raise LicenseError("subscription was not found")
+            status = requested
+            grace_ends_at = None
+            if requested == "ACTIVE":
+                grace_ends_at = None
+            elif row["plan"] == "COACH":
+                existing_grace = _parse_time(row["grace_ends_at"])
+                if row["status"] == "PAST_DUE" and existing_grace is not None \
+                        and existing_grace <= now and requested in {"CANCELLED", "EXPIRED"}:
+                    status = requested
+                    grace_ends_at = row["grace_ends_at"]
+                else:
+                    status = "PAST_DUE"
+                    grace_ends_at = _iso(now + timedelta(days=self.coach_grace_days))
+            database.execute("""
+                UPDATE subscriptions
+                SET status = ?, grace_ends_at = ?, updated_at = ? WHERE id = ?
+            """, (status, grace_ends_at, stamp, subscription_id))
+            self._audit(database, "SUBSCRIPTION_STATUS_CHANGED",
+                        subject=row["holder_player_id"], entity_type="subscription",
+                        entity_id=subscription_id,
+                        detail={"requested_status": requested, "status": status,
+                                "grace_ends_at": grace_ends_at})
+        return {"id": subscription_id, "status": status, "grace_ends_at": grace_ends_at}
+
+    def reconcile_subscription_lifecycle(self, at: datetime | None = None) -> int:
+        """Apply period expiration and elapsed Coach grace without deleting history."""
+        now = at or _utc_now()
+        stamp = _iso(now)
+        changed = 0
+        with self._connect() as database:
+            database.execute("BEGIN IMMEDIATE")
+            rows = database.execute("""
+                SELECT * FROM subscriptions WHERE status IN ('ACTIVE', 'PAST_DUE')
+            """).fetchall()
+            for row in rows:
+                period_end = _parse_time(row["current_period_end"])
+                grace_end = _parse_time(row["grace_ends_at"])
+                next_status = None
+                next_grace = row["grace_ends_at"]
+                if row["status"] == "ACTIVE" and period_end is not None and period_end <= now:
+                    if row["plan"] == "COACH":
+                        next_status = "PAST_DUE"
+                        next_grace = _iso(period_end + timedelta(days=self.coach_grace_days))
+                        if _parse_time(next_grace) <= now:
+                            next_status = "EXPIRED"
+                    else:
+                        next_status = "EXPIRED"
+                elif row["status"] == "PAST_DUE" and grace_end is not None and grace_end <= now:
+                    next_status = "EXPIRED"
+                if next_status is None:
+                    continue
+                database.execute("""
+                    UPDATE subscriptions
+                    SET status = ?, grace_ends_at = ?, updated_at = ? WHERE id = ?
+                """, (next_status, next_grace, stamp, row["id"]))
+                if next_status == "EXPIRED" and row["plan"] == "COACH":
+                    seats = database.execute("""
+                        SELECT id, player_id FROM coach_seat_assignments
+                        WHERE coach_subscription_id = ? AND status = 'ACTIVE'
+                    """, (row["id"],)).fetchall()
+                    for seat in seats:
+                        database.execute("""
+                            UPDATE coach_seat_assignments
+                            SET status = 'RELEASED', released_at = ?
+                            WHERE id = ? AND status = 'ACTIVE'
+                        """, (stamp, seat["id"]))
+                        database.execute("""
+                            UPDATE entitlement_grants
+                            SET status = 'ENDED', ended_at = ?
+                            WHERE seat_assignment_id = ? AND status = 'ACTIVE'
+                        """, (stamp, seat["id"]))
+                        self._audit(
+                            database,
+                            "COACH_SEAT_RELEASED_AFTER_GRACE",
+                            subject=seat["player_id"],
+                            entity_type="coach_seat",
+                            entity_id=seat["id"],
+                            detail={"subscription_id": row["id"]},
+                        )
+                    database.execute("""
+                        UPDATE entitlement_grants
+                        SET status = 'ENDED', ended_at = ?
+                        WHERE subscription_id = ? AND grant_type = 'COACH_SELF'
+                          AND status = 'ACTIVE'
+                    """, (stamp, row["id"]))
+                self._audit(database, "SUBSCRIPTION_LIFECYCLE_RECONCILED",
+                            subject=row["holder_player_id"], entity_type="subscription",
+                            entity_id=row["id"], detail={"status": next_status,
+                                                         "grace_ends_at": next_grace})
+                changed += 1
+        return changed
 
     def _active_seat_count(self, database: sqlite3.Connection, subscription_id: str) -> int:
         return int(database.execute("""
@@ -863,8 +981,15 @@ class LicenseService:
         return {"relationship_id": relationship_id, "ended": True}
 
     def coach_dashboard(self, coach_id: int) -> dict[str, Any]:
+        self.reconcile_subscription_lifecycle()
         with self._connect() as database:
-            subscription = self._coach_subscription(database, coach_id)
+            subscription = database.execute("""
+                SELECT *, status AS subscription_status FROM subscriptions
+                WHERE holder_player_id = ? AND plan = 'COACH'
+                ORDER BY created_at DESC LIMIT 1
+            """, (coach_id,)).fetchone()
+            if subscription is None:
+                raise LicenseError("a Jetta Coach subscription is required")
             rows = database.execute("""
                 SELECT r.id AS relationship_id, r.player_id,
                        r.status AS relationship_status, r.started_at,
@@ -890,11 +1015,37 @@ class LicenseService:
                 ]
                 students.append(item)
         sponsored = sum(1 for item in students if item["seat_status"] == "ACTIVE")
-        return {"subscription_id": subscription["id"], "students": students,
+        return {"subscription_id": subscription["id"],
+                "subscription_status": subscription["subscription_status"],
+                "grace_ends_at": subscription["grace_ends_at"], "students": students,
                 "pending_invitations": [dict(row) for row in pending],
                 "sponsored_students": sponsored,
                 "seat_capacity": self.coach_seat_capacity,
                 "seats_available": self.coach_seat_capacity - sponsored}
+
+    def coach_relationship_context(self, coach_id: int, player_id: int) -> dict[str, Any]:
+        with self._connect() as database:
+            row = database.execute("""
+                SELECT id, coach_id, player_id, started_at
+                FROM coach_student_relationships
+                WHERE coach_id = ? AND player_id = ? AND status = 'ACTIVE'
+            """, (coach_id, player_id)).fetchone()
+        if row is None:
+            raise LicenseError("active coaching relationship was not found")
+        return dict(row)
+
+    def coach_can_view_round(self, coach_id: int, player_id: int, round_id: str) -> bool:
+        try:
+            relationship = self.coach_relationship_context(coach_id, player_id)
+        except LicenseError:
+            return False
+        with self._connect() as database:
+            row = database.execute("""
+                SELECT completed_at FROM completed_rounds WHERE id = ? AND player_id = ?
+            """, (round_id, player_id)).fetchone()
+        completed_at = _parse_time(row["completed_at"]) if row else None
+        started_at = _parse_time(relationship["started_at"])
+        return bool(completed_at and started_at and completed_at >= started_at)
 
     def record_billing_event(
         self, provider: str, provider_event_id: str, event_type: str, *, processed: bool = False

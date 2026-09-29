@@ -6388,7 +6388,7 @@ async function startChallengeFromSetup(event) {
     const holes = generateChallengeHoles(await challengeCandidates(), { selectionSeed, teeId, recentKeys: recent });
     const gmProfile = cloneStrategistProfile(profile);
     state.challengeReturn ||= { courseId: state.courseId, holeIndex: state.holeIndex };
-    state.challenge = startChallenge(createChallengeState({
+    const challenge = startChallenge(createChallengeState({
       id: newChallengeId(selectionSeed), holes, seeds,
       playerProfile: profile, gmProfile,
       implementationVersions: {
@@ -6401,7 +6401,8 @@ async function startChallengeFromSetup(event) {
         decision_policy: DECISION_POLICY_VERSION
       }
     }));
-    await ensurePlayActivity("THREE_HOLE_MATCH", state.challenge.id, state.challenge);
+    await ensurePlayActivity("THREE_HOLE_MATCH", challenge.id, challenge);
+    state.challenge = challenge;
     writeBrowserValue(playerStorageKey("challenge-recent-holes"), JSON.stringify(holes.map(challengeHoleKey)));
     $("#challenge-dialog").close();
     await loadChallengeSlot(0);
@@ -7489,14 +7490,15 @@ async function startCompetitionFromSetup(event) {
   state.profile = normalizeProfile(structuredClone(profile));
   state.tee = tee;
   state.roundSeed = newRoundSeed();
-  state.competition = createCompetitionRound({
+  const competition = createCompetitionRound({
     courseId, tee, roundSeed: state.roundSeed, humanProfile: state.profile,
     pace, coachingEnabled: $("#competition-coaching").checked
   });
-  state.competition.license_client_id = `competition-${state.courseId}-${state.roundSeed}`;
+  competition.license_client_id = `competition-${state.courseId}-${state.roundSeed}`;
   await ensurePlayActivity(
-    "EIGHTEEN_HOLE_MATCH", state.competition.license_client_id, state.competition
+    "EIGHTEEN_HOLE_MATCH", competition.license_client_id, competition
   );
+  state.competition = competition;
   const fairness = validateSameGameplayProfile(state.profile, state.competition.strategist_profile);
   if (!fairness.same_profile) throw new Error("The Game Master profile clone did not pass fairness validation.");
   state.roundState = createRoundState({ courseId, roundSeed: state.roundSeed, tee });
@@ -11828,10 +11830,12 @@ async function exitReplayPage() {
 async function resetGame() {
   const nextRoundSeed = newRoundSeed();
   const nextAuthorization = {};
+  const activityKind = competitionActive() ? "EIGHTEEN_HOLE_MATCH" : "ROUND";
+  const clientId = competitionActive()
+    ? `competition-${state.courseId}-${nextRoundSeed}`
+    : `round-${state.courseId}-${nextRoundSeed}`;
   try {
-    await ensurePlayActivity(
-      "ROUND", `round-${state.courseId}-${nextRoundSeed}`, nextAuthorization
-    );
+    await ensurePlayActivity(activityKind, clientId, nextAuthorization);
   } catch (error) {
     showAccessRequired();
     throw error;
@@ -11846,7 +11850,7 @@ async function resetGame() {
   if (state.roundState) {
     state.roundState = resetRoundState(state.roundState, { roundSeed: state.roundSeed, tee: state.tee });
     state.roundState.license_activity_id = nextAuthorization.license_activity_id;
-    state.roundState.license_activity_kind = "ROUND";
+    state.roundState.license_activity_kind = activityKind;
     persistRoundState();
     syncRoundStateCaches();
   }
@@ -11860,6 +11864,9 @@ async function resetGame() {
       coachingEnabled: state.competition.coaching_enabled
     });
     state.competition.human_round = structuredClone(state.roundState);
+    state.competition.license_activity_id = nextAuthorization.license_activity_id;
+    state.competition.license_activity_kind = activityKind;
+    state.competition.license_client_id = clientId;
     cacheActiveCompetition();
   }
   state.pinIndex = rotatingPinIndex(0, hole().geometries.green_complex.pin_zones.length);
@@ -12695,9 +12702,18 @@ async function respondToCoachInvitation(invitationId, accept) {
 }
 
 function renderCoachDashboard(dashboard) {
-  $("#coach-seat-summary").innerHTML = `<strong>Sponsored Students: ${dashboard.sponsored_students} / ${dashboard.seat_capacity}</strong><br><span>${dashboard.seats_available} sponsored ${dashboard.seats_available === 1 ? "seat" : "seats"} available · ${dashboard.students.length} active coaching ${dashboard.students.length === 1 ? "relationship" : "relationships"}</span>`;
+  const subscriptionActive = dashboard.subscription_status === "ACTIVE";
+  const graceDate = dashboard.grace_ends_at ? new Date(dashboard.grace_ends_at) : null;
+  const subscriptionNotice = dashboard.subscription_status === "PAST_DUE"
+    ? `<br><span>Access is continuing during the billing grace period${graceDate && !Number.isNaN(graceDate.getTime()) ? ` through ${graceDate.toLocaleDateString()}` : ""}. New invitations and seat assignments are paused.</span>`
+    : dashboard.subscription_status === "EXPIRED"
+      ? `<br><span>The Coach subscription has expired. Coaching relationships and round history remain available; sponsored seats must be reassigned after access is restored.</span>`
+      : "";
+  $("#coach-seat-summary").innerHTML = `<strong>Sponsored Students: ${dashboard.sponsored_students} / ${dashboard.seat_capacity}</strong><br><span>${dashboard.seats_available} sponsored ${dashboard.seats_available === 1 ? "seat" : "seats"} available · ${dashboard.students.length} active coaching ${dashboard.students.length === 1 ? "relationship" : "relationships"}</span>${subscriptionNotice}`;
+  $("#coach-invite-email").disabled = !subscriptionActive;
+  $("#coach-invite-button").disabled = !subscriptionActive;
   $("#coach-roster").innerHTML = dashboard.students.length
-    ? dashboard.students.map(student => `<article><div><strong>${escapeHtml(student.player_name)}</strong><small>${student.seat_status === "ACTIVE" ? "Coach Sponsored" : (student.grants.join(", ") || "Historical access")}</small></div><div class="license-row-actions">${student.seat_status === "ACTIVE" ? `<button type="button" data-release-sponsorship="${escapeHtml(student.relationship_id)}">Release seat</button>` : `<button type="button" data-assign-sponsorship="${escapeHtml(student.relationship_id)}">Sponsor</button>`}<button type="button" data-end-coach-relationship="${escapeHtml(student.relationship_id)}">End coaching</button></div></article>`).join("")
+    ? dashboard.students.map(student => `<article><div><strong>${escapeHtml(student.player_name)}</strong><small>${student.seat_status === "ACTIVE" ? "Coach Sponsored" : (student.grants.join(", ") || "Historical access")}</small></div><div class="license-row-actions"><button type="button" data-review-coach-student="${student.player_id}" data-student-name="${escapeHtml(student.player_name)}">Rounds</button>${student.seat_status === "ACTIVE" ? `<button type="button" data-release-sponsorship="${escapeHtml(student.relationship_id)}">Release seat</button>` : `<button type="button" data-assign-sponsorship="${escapeHtml(student.relationship_id)}" ${subscriptionActive ? "" : "disabled"}>Sponsor</button>`}<button type="button" data-end-coach-relationship="${escapeHtml(student.relationship_id)}">End coaching</button></div></article>`).join("")
     : `<article><div><strong>No active students yet</strong><small>Create an invitation using the student's Jetta account email.</small></div></article>`;
   $("#coach-pending-invitations").innerHTML = dashboard.pending_invitations.length
     ? `<h3>Pending invitations</h3>${dashboard.pending_invitations.map(invitation => `<article><div><strong>${escapeHtml(invitation.invited_email || `Player ${invitation.invited_player_id}`)}</strong><small>Invitation ending ${escapeHtml(invitation.token_hint)}</small></div><button type="button" data-cancel-coach-invitation="${escapeHtml(invitation.id)}">Cancel</button></article>`).join("")}`
@@ -12728,9 +12744,24 @@ async function createCoachInvitation() {
       body: JSON.stringify({ email })
     });
     $("#coach-invite-email").value = "";
-    status.textContent = `Invitation created. Share this once: ${payload.invitation.token}`;
+    status.textContent = `Invitation created for ${payload.invitation.email}. It will appear in that player's Jetta account.`;
     await loadCoachDashboard();
   } catch (error) { status.textContent = error.message; }
+}
+
+async function openCoachStudentHistory(playerId, playerName) {
+  const dialog = $("#coach-student-history-dialog");
+  $("#coach-student-history-title").textContent = `${playerName} · rounds`;
+  $("#coach-student-history-list").innerHTML = `<article><div><strong>Loading round evidence…</strong></div></article>`;
+  dialog.showModal();
+  try {
+    const payload = await playerApi(`/api/coach/students/${encodeURIComponent(playerId)}/round-history`);
+    $("#coach-student-history-list").innerHTML = payload.rounds.length
+      ? payload.rounds.map(round => `<article><div><strong>${escapeHtml(round.course_name || round.course_id)}</strong><small>${new Date(round.completed_at).toLocaleDateString()} · ${round.total_strokes} strokes · Course management ${round.strategy_score ?? "—"}</small></div></article>`).join("")
+      : `<article><div><strong>No shared rounds yet</strong><small>Rounds completed after this coaching relationship began will appear here.</small></div></article>`;
+  } catch (error) {
+    $("#coach-student-history-list").textContent = error.message;
+  }
 }
 
 function renderAccessCodes(codes) {
@@ -13475,10 +13506,12 @@ async function ensurePlayActivity(activityKind, clientActivityId, holder) {
 }
 
 function showAccessRequired() {
-  const access = state.player?.access;
-  if (access?.play_access === "ACTIVE") return;
-  renderPlayerAccess(access);
-  $("#account-dialog")?.showModal();
+  renderPlayerAccess(state.player?.access);
+  const dialog = $("#account-dialog");
+  if (dialog && !dialog.open) dialog.showModal();
+  void refreshPlayerAccess().catch(error => {
+    $("#account-access-detail").textContent = `Access status could not be refreshed: ${error.message}`;
+  });
 }
 
 async function initializeAuthentication() {
@@ -13874,8 +13907,14 @@ function bindEvents() {
   $("#license-admin-button").addEventListener("click", () => void openLicenseAdmin());
   $("[data-close-coach-dashboard]").addEventListener("click", () => $("#coach-dashboard-dialog").close());
   $("[data-close-license-admin]").addEventListener("click", () => $("#license-admin-dialog").close());
+  $("[data-close-coach-student-history]").addEventListener("click", () => $("#coach-student-history-dialog").close());
   $("#coach-invite-button").addEventListener("click", () => void createCoachInvitation());
   $("#coach-roster").addEventListener("click", event => {
+    const review = event.target.closest("[data-review-coach-student]");
+    if (review) {
+      void openCoachStudentHistory(review.dataset.reviewCoachStudent, review.dataset.studentName);
+      return;
+    }
     const action = event.target.closest("[data-release-sponsorship], [data-assign-sponsorship], [data-end-coach-relationship]");
     if (!action) return;
     const [path, relationshipId] = action.dataset.releaseSponsorship

@@ -264,6 +264,48 @@ class AppHandler(SimpleHTTPRequestHandler):
                 return
             self._json_response(HTTPStatus.OK, {"challenge": challenge})
             return
+        coach_history_match = re.fullmatch(r"/api/coach/students/(\d+)/round-history", parsed.path)
+        if coach_history_match:
+            coach = self._require_coach()
+            if coach is None:
+                return
+            try:
+                student_id = int(coach_history_match.group(1))
+                relationship = LICENSE_SERVICE.coach_relationship_context(coach["id"], student_id)
+                limit = int(parse_qs(parsed.query).get("limit", ["50"])[0])
+                rounds = [
+                    item for item in PLAYER_STORE.completed_round_history(student_id, limit)
+                    if item.get("completed_at", "") >= (relationship.get("started_at") or "")
+                ]
+            except (AccountError, LicenseError, TypeError, ValueError) as error:
+                self._json_response(HTTPStatus.FORBIDDEN, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, {"rounds": rounds})
+            return
+        coach_replay_match = re.fullmatch(
+            r"/api/coach/students/(\d+)/rounds/([^/]+)(?:/holes/(\d+))?", parsed.path
+        )
+        if coach_replay_match:
+            coach = self._require_coach()
+            if coach is None:
+                return
+            student_id = int(coach_replay_match.group(1))
+            round_id = unquote(coach_replay_match.group(2))
+            if not LICENSE_SERVICE.coach_can_view_round(coach["id"], student_id, round_id):
+                self._json_response(HTTPStatus.FORBIDDEN, {"error": "round is outside this coaching relationship"})
+                return
+            try:
+                hole_number = coach_replay_match.group(3)
+                payload = PLAYER_STORE.round_replay_hole(student_id, round_id, int(hole_number)) \
+                    if hole_number else PLAYER_STORE.round_replay_index(student_id, round_id)
+            except (AccountError, TypeError, ValueError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            if payload is None:
+                self._json_response(HTTPStatus.NOT_FOUND, {"error": "round replay was not found"})
+                return
+            self._json_response(HTTPStatus.OK, payload)
+            return
         replay_match = re.fullmatch(r"/api/player/rounds/([^/]+)(?:/holes/(\d+))?", parsed.path)
         if replay_match:
             player = self._require_player()

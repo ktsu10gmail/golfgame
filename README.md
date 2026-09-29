@@ -98,6 +98,39 @@ Portable round files remain available as an optional backup. Open **Scorecard**,
 Loading a file replaces the saved round for that course on the receiving
 device. The game asks for confirmation when that course already has progress.
 
+### Jetta access and Coach licensing
+
+Jetta licensing is server-authoritative and stored in the existing player
+database. Authentication never deletes or replaces player history. A player
+without an active entitlement can still sign in and review completed rounds,
+GPS records, Replay, reports, and learning evidence.
+
+The initial rollout uses Jetta Access Codes rather than payment checkout.
+Administrators can generate Individual or Coach codes from **Account →
+Access-code administration**. The plaintext code is displayed once; only its
+hash is stored. Players redeem it from the Jetta Access section of their
+account. Individual codes create temporary `PROMOTIONAL` access, while Coach
+codes activate the Coach Dashboard and ten sponsored student seats.
+
+Deployment defaults to non-blocking shadow mode:
+
+```bash
+GOLFGAME_LICENSE_ENFORCEMENT=shadow
+GOLFGAME_COACH_SEAT_CAPACITY=10
+GOLFGAME_COACH_GRACE_DAYS=30
+```
+
+In shadow mode, Jetta records the entitlement decision and issues a play
+activity authorization without blocking current users. Before changing the
+first setting to `enforced`, generate access for every current player who
+should continue starting new rounds and inspect the license audit records.
+Already-authorized activities remain playable after a later entitlement
+change. Historical access never requires an entitlement.
+
+Stripe is deliberately not required. Future verified Stripe webhooks will
+update the same provider-neutral subscriptions and grants used by Access Codes;
+the checkout return page will never be an authorization source.
+
 ### Player feedback and developer replies
 
 Signed-in players can open **Account → Feedback Center** without leaving or
