@@ -908,6 +908,10 @@ function currentRoundSave({ includePostRoundReport = true } = {}) {
     postRoundReport
   });
   round.course_version_id = courseVersionId();
+  if (state.roundState.license_activity_id) {
+    round.license_activity_id = state.roundState.license_activity_id;
+    round.license_activity_kind = state.roundState.license_activity_kind || "ROUND";
+  }
   round.round_state.course_version_id = round.course_version_id;
   const geometryKey = `${round.course_id}:${round.course_version_id}:${state.holeIndex + 1}`;
   if (!syncedGeometryRefs.has(geometryKey)) {
@@ -6397,6 +6401,7 @@ async function startChallengeFromSetup(event) {
         decision_policy: DECISION_POLICY_VERSION
       }
     }));
+    await ensurePlayActivity("THREE_HOLE_MATCH", state.challenge.id, state.challenge);
     writeBrowserValue(playerStorageKey("challenge-recent-holes"), JSON.stringify(holes.map(challengeHoleKey)));
     $("#challenge-dialog").close();
     await loadChallengeSlot(0);
@@ -7028,6 +7033,7 @@ async function startAcademyFromSetup(event) {
       profile: structuredClone(state.profile)
     };
     state.academy = {
+      id: `academy-${crypto.randomUUID?.() || `${Date.now().toString(36)}-${newRoundSeed().toString(36)}`}`,
       version: "academy-session-v1",
       policyVersion: ACADEMY_DECISION_POLICY_VERSION,
       status: "LOADING",
@@ -7037,6 +7043,7 @@ async function startAcademyFromSetup(event) {
       selectedId: null,
       startedAt: new Date().toISOString()
     };
+    await ensurePlayActivity("ACADEMY", state.academy.id, state.academy);
     await loadData(courseId);
     state.profile = normalizeProfile(structuredClone(profile));
     state.tee = tee;
@@ -7486,9 +7493,15 @@ async function startCompetitionFromSetup(event) {
     courseId, tee, roundSeed: state.roundSeed, humanProfile: state.profile,
     pace, coachingEnabled: $("#competition-coaching").checked
   });
+  state.competition.license_client_id = `competition-${state.courseId}-${state.roundSeed}`;
+  await ensurePlayActivity(
+    "EIGHTEEN_HOLE_MATCH", state.competition.license_client_id, state.competition
+  );
   const fairness = validateSameGameplayProfile(state.profile, state.competition.strategist_profile);
   if (!fairness.same_profile) throw new Error("The Game Master profile clone did not pass fairness validation.");
   state.roundState = createRoundState({ courseId, roundSeed: state.roundSeed, tee });
+  state.roundState.license_activity_id = state.competition.license_activity_id;
+  state.roundState.license_activity_kind = "EIGHTEEN_HOLE_MATCH";
   state.competition.human_round = structuredClone(state.roundState);
   state.holeIndex = 0;
   state.pinIndex = rotatingPinIndex(0, hole().geometries.green_complex.pin_zones.length);
@@ -7522,6 +7535,26 @@ async function playShot() {
     state.competitionComparisonTurnId ||= state.competition.turns.at(-1)?.id || null;
     showCompetitionComparison();
     addGmMessage("Review the last paired shot, then press Continue before playing the next one.");
+    return;
+  }
+  try {
+    if (challengeActive()) {
+      await ensurePlayActivity("THREE_HOLE_MATCH", state.challenge.id, state.challenge);
+    } else if (competitionActive()) {
+      state.competition.license_client_id ||= `competition-${state.courseId}-${state.roundSeed}`;
+      await ensurePlayActivity(
+        "EIGHTEEN_HOLE_MATCH", state.competition.license_client_id, state.competition
+      );
+      state.roundState.license_activity_id = state.competition.license_activity_id;
+      state.roundState.license_activity_kind = "EIGHTEEN_HOLE_MATCH";
+    } else {
+      const clientId = `round-${state.courseId}-${state.roundState?.round_seed || state.roundSeed}`;
+      await ensurePlayActivity("ROUND", clientId, state.roundState);
+      state.roundState.license_activity_kind = "ROUND";
+    }
+  } catch (error) {
+    addGmMessage(error.message);
+    showAccessRequired();
     return;
   }
   state.desktopCaddieExpanded = false;
@@ -11083,6 +11116,14 @@ async function captureGpsLocation({ forcedLie = null } = {}) {
   if (gpsPagePreviewActive()) return;
   const calibration = gpsCalibration();
   if (!calibration) return;
+  try {
+    gpsRound ||= loadGpsRound();
+    await ensurePlayActivity("GPS", gpsRound.round_id, gpsRound);
+  } catch (error) {
+    setGpsStatus(error.message, "error");
+    showAccessRequired();
+    return;
+  }
   const existingHoleState = gpsHoleState();
   if (gpsCurrentFix(existingHoleState)?.lie === "Green") {
     renderGpsMode();
@@ -11784,8 +11825,18 @@ async function exitReplayPage() {
   resetHole();
 }
 
-function resetGame() {
-  state.roundSeed = newRoundSeed();
+async function resetGame() {
+  const nextRoundSeed = newRoundSeed();
+  const nextAuthorization = {};
+  try {
+    await ensurePlayActivity(
+      "ROUND", `round-${state.courseId}-${nextRoundSeed}`, nextAuthorization
+    );
+  } catch (error) {
+    showAccessRequired();
+    throw error;
+  }
+  state.roundSeed = nextRoundSeed;
   localStorage.removeItem(storageKey("scores"));
   localStorage.removeItem(storageKey("history"));
   localStorage.setItem(storageKey("round-seed"), String(state.roundSeed));
@@ -11794,6 +11845,8 @@ function resetGame() {
   state.postRoundReport = null;
   if (state.roundState) {
     state.roundState = resetRoundState(state.roundState, { roundSeed: state.roundSeed, tee: state.tee });
+    state.roundState.license_activity_id = nextAuthorization.license_activity_id;
+    state.roundState.license_activity_kind = "ROUND";
     persistRoundState();
     syncRoundStateCaches();
   }
@@ -12564,7 +12617,155 @@ function updatePlayerAccountUI() {
   $("#account-monogram").textContent = initial;
   $("#account-name").textContent = state.player.name;
   $("#account-dialog-name").textContent = state.player.name;
+  renderPlayerAccess(state.player.access);
   updateAccountProfileSummary();
+}
+
+const ACCESS_GRANT_LABELS = {
+  SELF_PAID: "Individual",
+  PROMOTIONAL: "Promotional Access",
+  COACH_SELF: "Coach Plan",
+  COACH_SPONSORED: "Coach Sponsored"
+};
+
+function renderPlayerAccess(access = null) {
+  const title = $("#account-access-title");
+  if (!title) return;
+  const grants = Array.isArray(access?.grants) ? access.grants : [];
+  const active = access?.play_access === "ACTIVE";
+  const primary = grants[0];
+  title.textContent = active
+    ? `Active — ${ACCESS_GRANT_LABELS[primary?.type] || "Jetta Access"}`
+    : "Historical Access";
+  $("#account-access-badge").textContent = active ? "ACTIVE" : "HISTORY";
+  const coach = access?.current_coach;
+  const expiry = primary?.expires_at ? new Date(primary.expires_at) : null;
+  $("#account-access-detail").textContent = active
+    ? `${coach ? `Current Coach: ${coach.coach_name}. ` : ""}${expiry && !Number.isNaN(expiry.getTime()) ? `Available through ${expiry.toLocaleDateString()}.` : "New play is available."}`
+    : `${coach ? `Current Coach: ${coach.coach_name}. ` : ""}Previous rounds, replays, and learning history remain available.`;
+  const invitations = Array.isArray(access?.pending_invitations) ? access.pending_invitations : [];
+  const invitationPanel = $("#account-coach-invitations");
+  invitationPanel.hidden = invitations.length === 0;
+  invitationPanel.innerHTML = invitations.map(invitation => `<article class="account-invitation">
+    <strong>${escapeHtml(invitation.coach_name)} invited you to Jetta Coach</strong>
+    <small>Accepting creates a coaching relationship and requests a sponsored seat.</small>
+    <div><button type="button" data-accept-coach-invitation="${escapeHtml(invitation.id)}">Accept</button><button type="button" data-decline-coach-invitation="${escapeHtml(invitation.id)}">Decline</button></div>
+  </article>`).join("");
+  $("#coach-dashboard-button").hidden = !state.player?.roles?.includes("COACH");
+  $("#license-admin-button").hidden = !state.player?.roles?.includes("ADMIN");
+}
+
+async function refreshPlayerAccess() {
+  const payload = await playerApi("/api/player/access");
+  state.player.access = payload.access;
+  state.player.roles = payload.access.roles;
+  renderPlayerAccess(payload.access);
+  return payload.access;
+}
+
+async function redeemPlayerAccessCode() {
+  const input = $("#account-access-code");
+  const status = $("#account-access-code-status");
+  const button = $("#account-redeem-code");
+  button.disabled = true;
+  status.textContent = "Activating access…";
+  try {
+    const payload = await playerApi("/api/player/access-code/redeem", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: input.value })
+    });
+    state.player.access = payload.access;
+    state.player.roles = payload.access.roles;
+    input.value = "";
+    status.textContent = `${payload.plan === "COACH" ? "Coach" : "Individual"} access activated.`;
+    renderPlayerAccess(payload.access);
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function respondToCoachInvitation(invitationId, accept) {
+  await playerApi(`/api/player/coach-invitations/${accept ? "accept" : "decline"}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ invitation_id: invitationId })
+  });
+  await refreshPlayerAccess();
+}
+
+function renderCoachDashboard(dashboard) {
+  $("#coach-seat-summary").innerHTML = `<strong>Sponsored Students: ${dashboard.sponsored_students} / ${dashboard.seat_capacity}</strong><br><span>${dashboard.seats_available} sponsored ${dashboard.seats_available === 1 ? "seat" : "seats"} available · ${dashboard.students.length} active coaching ${dashboard.students.length === 1 ? "relationship" : "relationships"}</span>`;
+  $("#coach-roster").innerHTML = dashboard.students.length
+    ? dashboard.students.map(student => `<article><div><strong>${escapeHtml(student.player_name)}</strong><small>${student.seat_status === "ACTIVE" ? "Coach Sponsored" : (student.grants.join(", ") || "Historical access")}</small></div><div class="license-row-actions">${student.seat_status === "ACTIVE" ? `<button type="button" data-release-sponsorship="${escapeHtml(student.relationship_id)}">Release seat</button>` : `<button type="button" data-assign-sponsorship="${escapeHtml(student.relationship_id)}">Sponsor</button>`}<button type="button" data-end-coach-relationship="${escapeHtml(student.relationship_id)}">End coaching</button></div></article>`).join("")
+    : `<article><div><strong>No active students yet</strong><small>Create an invitation using the student's Jetta account email.</small></div></article>`;
+  $("#coach-pending-invitations").innerHTML = dashboard.pending_invitations.length
+    ? `<h3>Pending invitations</h3>${dashboard.pending_invitations.map(invitation => `<article><div><strong>${escapeHtml(invitation.invited_email || `Player ${invitation.invited_player_id}`)}</strong><small>Invitation ending ${escapeHtml(invitation.token_hint)}</small></div><button type="button" data-cancel-coach-invitation="${escapeHtml(invitation.id)}">Cancel</button></article>`).join("")}`
+    : "";
+}
+
+async function loadCoachDashboard() {
+  const payload = await playerApi("/api/coach/dashboard");
+  renderCoachDashboard(payload.dashboard);
+  return payload.dashboard;
+}
+
+async function openCoachDashboard() {
+  $("#account-dialog").close();
+  $("#coach-dashboard-dialog").showModal();
+  $("#coach-seat-summary").textContent = "Loading sponsored seats…";
+  try { await loadCoachDashboard(); }
+  catch (error) { $("#coach-seat-summary").textContent = error.message; }
+}
+
+async function createCoachInvitation() {
+  const email = $("#coach-invite-email").value.trim();
+  const status = $("#coach-invite-status");
+  status.textContent = "Creating invitation…";
+  try {
+    const payload = await playerApi("/api/coach/invitations", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    $("#coach-invite-email").value = "";
+    status.textContent = `Invitation created. Share this once: ${payload.invitation.token}`;
+    await loadCoachDashboard();
+  } catch (error) { status.textContent = error.message; }
+}
+
+function renderAccessCodes(codes) {
+  $("#license-code-list").innerHTML = codes.length
+    ? codes.map(code => `<article><div><strong>${escapeHtml(code.plan)} · ending ${escapeHtml(code.code_hint)}</strong><small>${code.status} · ${code.redemption_count}/${code.max_redemptions} redeemed · ${code.duration_days} days</small></div>${code.status === "ACTIVE" ? `<button type="button" data-revoke-access-code="${escapeHtml(code.id)}">Revoke</button>` : ""}</article>`).join("")
+    : `<article><div><strong>No access codes yet</strong><small>Generate the first controlled pilot code above.</small></div></article>`;
+}
+
+async function loadAccessCodes() {
+  const payload = await playerApi("/api/admin/access-codes");
+  renderAccessCodes(payload.codes);
+}
+
+async function openLicenseAdmin() {
+  $("#account-dialog").close();
+  $("#license-admin-dialog").showModal();
+  try { await loadAccessCodes(); }
+  catch (error) { $("#license-code-list").textContent = error.message; }
+}
+
+async function createAdminAccessCode() {
+  const output = $("#license-created-code");
+  output.textContent = "Generating…";
+  try {
+    const payload = await playerApi("/api/admin/access-codes", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plan: $("#license-code-plan").value,
+        duration_days: Number($("#license-code-days").value),
+        max_redemptions: Number($("#license-code-redemptions").value)
+      })
+    });
+    output.textContent = `${payload.access_code.code} — copy it now; Jetta will not show it again.`;
+    await loadAccessCodes();
+  } catch (error) { output.textContent = error.message; }
 }
 
 function updateAccountProfileSummary() {
@@ -13260,6 +13461,26 @@ async function playerApi(path, options = {}) {
   return payload;
 }
 
+async function ensurePlayActivity(activityKind, clientActivityId, holder) {
+  if (!holder || typeof holder !== "object") throw new Error("The play session could not be prepared.");
+  if (holder.license_activity_id) return holder.license_activity_id;
+  const payload = await playerApi("/api/player/play-activities", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ activity_kind: activityKind, client_activity_id: clientActivityId })
+  });
+  holder.license_activity_id = payload.activity.id;
+  holder.license_activity_kind = activityKind;
+  return payload.activity.id;
+}
+
+function showAccessRequired() {
+  const access = state.player?.access;
+  if (access?.play_access === "ACTIVE") return;
+  renderPlayerAccess(access);
+  $("#account-dialog")?.showModal();
+}
+
 async function initializeAuthentication() {
   const response = await fetch("/api/auth/config", { cache: "no-store" });
   if (!response.ok) throw new Error("The player login configuration could not be loaded.");
@@ -13493,6 +13714,10 @@ async function restorePlayerRound() {
   }
   const profileId = storeImportedProfile(portableSave.player_profile);
   state.roundState = structuredClone(portableSave.round_state);
+  if (portableSave.license_activity_id) {
+    state.roundState.license_activity_id = portableSave.license_activity_id;
+    state.roundState.license_activity_kind = portableSave.license_activity_kind || "ROUND";
+  }
   state.postRoundReport = portableSave.post_round_report ? structuredClone(portableSave.post_round_report) : null;
   saveBrowserRoundState(state.roundState, state.player.id);
   writeBrowserValue(profileStorageKey(), profileId);
@@ -13631,6 +13856,54 @@ function bindEvents() {
   $("#account-button").addEventListener("click", () => {
     updatePlayerAccountUI();
     $("#account-dialog").showModal();
+    void refreshPlayerAccess().catch(error => {
+      $("#account-access-detail").textContent = `Access status could not be refreshed: ${error.message}`;
+    });
+  });
+  $("#account-redeem-code").addEventListener("click", () => void redeemPlayerAccessCode());
+  $("#account-access-code").addEventListener("keydown", event => {
+    if (event.key === "Enter") { event.preventDefault(); void redeemPlayerAccessCode(); }
+  });
+  $("#account-coach-invitations").addEventListener("click", event => {
+    const accept = event.target.closest("[data-accept-coach-invitation]");
+    const decline = event.target.closest("[data-decline-coach-invitation]");
+    if (accept) void respondToCoachInvitation(accept.dataset.acceptCoachInvitation, true);
+    if (decline) void respondToCoachInvitation(decline.dataset.declineCoachInvitation, false);
+  });
+  $("#coach-dashboard-button").addEventListener("click", () => void openCoachDashboard());
+  $("#license-admin-button").addEventListener("click", () => void openLicenseAdmin());
+  $("[data-close-coach-dashboard]").addEventListener("click", () => $("#coach-dashboard-dialog").close());
+  $("[data-close-license-admin]").addEventListener("click", () => $("#license-admin-dialog").close());
+  $("#coach-invite-button").addEventListener("click", () => void createCoachInvitation());
+  $("#coach-roster").addEventListener("click", event => {
+    const action = event.target.closest("[data-release-sponsorship], [data-assign-sponsorship], [data-end-coach-relationship]");
+    if (!action) return;
+    const [path, relationshipId] = action.dataset.releaseSponsorship
+      ? ["/api/coach/sponsorship/release", action.dataset.releaseSponsorship]
+      : action.dataset.assignSponsorship
+        ? ["/api/coach/sponsorship/assign", action.dataset.assignSponsorship]
+        : ["/api/player/coach-relationship/end", action.dataset.endCoachRelationship];
+    void playerApi(path, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ relationship_id: relationshipId })
+    }).then(loadCoachDashboard).catch(error => { $("#coach-seat-summary").textContent = error.message; });
+  });
+  $("#coach-pending-invitations").addEventListener("click", event => {
+    const button = event.target.closest("[data-cancel-coach-invitation]");
+    if (!button) return;
+    void playerApi("/api/coach/invitations/cancel", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invitation_id: button.dataset.cancelCoachInvitation })
+    }).then(loadCoachDashboard).catch(error => { $("#coach-seat-summary").textContent = error.message; });
+  });
+  $("#license-create-code").addEventListener("click", () => void createAdminAccessCode());
+  $("#license-code-list").addEventListener("click", event => {
+    const button = event.target.closest("[data-revoke-access-code]");
+    if (!button) return;
+    void playerApi("/api/admin/access-codes/revoke", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code_id: button.dataset.revokeAccessCode })
+    }).then(loadAccessCodes).catch(error => { $("#license-created-code").textContent = error.message; });
   });
   $("#account-edit-profile").addEventListener("click", () => {
     $("#account-dialog").close();
@@ -14140,7 +14413,9 @@ function bindEvents() {
   $("#reset-game-button").addEventListener("click", () => $("#reset-game-dialog").showModal());
   $("#declare-unplayable").addEventListener("click", declareLastShotUnplayable);
   $("#reset-game-dialog").addEventListener("close", () => {
-    if ($("#reset-game-dialog").returnValue === "confirm") resetGame();
+    if ($("#reset-game-dialog").returnValue === "confirm") {
+      void resetGame().catch(error => console.warn("A new round could not start", error));
+    }
   });
   $("#reset-hole-dialog").addEventListener("close", () => {
     if ($("#reset-hole-dialog").returnValue === "confirm") resetCurrentHole();

@@ -2409,6 +2409,51 @@ body.green-view-open .mobile-round-nav { display: none; }
 .account-history-button strong, .account-history-button small { display: block; }
 .account-history-button strong { font-size: .74rem; }
 .account-history-button small { margin-top: 3px; color: var(--ink-soft); font-size: .58rem; line-height: 1.3; }
+.account-access-card,
+.license-summary-card,
+.license-create-card {
+  margin: 14px 0;
+  padding: 15px;
+  border: 1px solid rgba(49,90,59,.18);
+  border-radius: 12px;
+  background: rgba(247,249,242,.86);
+}
+.account-access-heading { display: flex; justify-content: space-between; gap: 14px; align-items: start; }
+.account-access-heading strong { display: block; margin-top: 3px; font-size: .84rem; }
+.account-access-heading p { margin: 4px 0 0; color: var(--ink-soft); font-size: .65rem; line-height: 1.4; }
+#account-access-badge { padding: 5px 8px; border-radius: 999px; background: rgba(49,90,59,.12); color: var(--green); font-size: .58rem; font-weight: 800; white-space: nowrap; }
+.account-code-entry { margin-top: 12px; }
+.account-code-entry label,
+.license-create-card label { display: block; margin-bottom: 6px; font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.account-code-entry > div,
+.license-create-card > div { display: flex; gap: 7px; }
+.account-code-entry input,
+.license-create-card input,
+.license-create-card select { min-width: 0; flex: 1; padding: 9px; border: 1px solid rgba(49,90,59,.2); border-radius: 8px; background: #fff; }
+.account-code-entry button,
+.license-create-card button { padding: 9px 12px; border-radius: 8px; background: var(--green); color: #fff; }
+.account-code-entry small,
+.license-create-card small { display: block; min-height: 1.2em; margin-top: 6px; color: var(--ink-soft); font-size: .62rem; }
+.account-coach-invitations { margin-top: 12px; display: grid; gap: 7px; }
+.account-invitation,
+.license-roster article { padding: 10px; border-radius: 9px; background: #fff; border: 1px solid rgba(49,90,59,.12); }
+.account-invitation strong,
+.license-roster strong { display: block; font-size: .72rem; }
+.account-invitation small,
+.license-roster small { color: var(--ink-soft); font-size: .6rem; }
+.account-invitation div,
+.license-roster .license-row-actions { display: flex; gap: 6px; margin-top: 8px; }
+.account-license-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.license-dashboard-modal .modal-card { width: min(720px, calc(100vw - 28px)); max-height: min(800px, calc(100vh - 30px)); overflow: auto; }
+.license-summary-card { font-size: .78rem; line-height: 1.45; }
+.license-code-options { flex-wrap: wrap; }
+.license-code-options select { flex-basis: 150px; }
+.license-code-options input { flex-basis: 90px; }
+.license-created-code { display: block; margin-top: 9px; padding: 10px; border-radius: 8px; background: #17372b; color: #fff; overflow-wrap: anywhere; font-family: var(--font-data); font-size: .72rem; }
+.license-created-code:empty { display: none; }
+.license-roster { display: grid; gap: 8px; margin-top: 12px; }
+.license-roster article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.license-roster button { padding: 7px 9px; border-radius: 7px; }
 .account-replay-button { border-color: rgba(71,109,132,.28); background: linear-gradient(110deg, rgba(71,109,132,.11), rgba(255,255,255,.42)); }
 .account-replay-button .account-history-mark { border-color: #476d84; background: #476d84; color: white; }
 .gps-replay-library-dialog { width: min(760px, calc(100% - 28px)); }

@@ -42,7 +42,10 @@ _load_local_environment(ROOT / ".env")
 from packages.ai import AiProviderError, create_ai_service
 from packages.accounts import (
     AccountError,
+    LicenseError,
+    LicenseService,
     PlayerStore,
+    PlayAccessDenied,
     SupabaseAuth,
     SupabaseConfig,
     attach_verified_learning_context,
@@ -56,7 +59,14 @@ from packages.course_import import (
 from scripts.import_mapped_course import install_package, validate_package
 
 AI_SERVICE = create_ai_service()
-PLAYER_STORE = PlayerStore(os.getenv("GOLFGAME_PLAYER_DB", ROOT / "data" / "player_accounts.sqlite3"))
+PLAYER_DB_PATH = Path(os.getenv("GOLFGAME_PLAYER_DB", ROOT / "data" / "player_accounts.sqlite3"))
+PLAYER_STORE = PlayerStore(PLAYER_DB_PATH)
+LICENSE_SERVICE = LicenseService(
+    PLAYER_DB_PATH,
+    enforcement=os.getenv("GOLFGAME_LICENSE_ENFORCEMENT", "shadow"),
+    coach_seat_capacity=int(os.getenv("GOLFGAME_COACH_SEAT_CAPACITY", "10")),
+    coach_grace_days=int(os.getenv("GOLFGAME_COACH_GRACE_DAYS", "30")),
+)
 SUPABASE_CONFIG = SupabaseConfig.from_values(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_ANON_KEY"))
 SUPABASE_AUTH = SupabaseAuth(SUPABASE_CONFIG) if SUPABASE_CONFIG else None
 SERVER_ROLE = os.getenv("GOLFGAME_SERVER_ROLE", "app").strip().casefold() or "app"
@@ -142,6 +152,29 @@ class AppHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/player/session":
             player = self._current_player()
             self._json_response(HTTPStatus.OK, {"player": player})
+            return
+        if parsed.path == "/api/player/access":
+            player = self._require_player()
+            if player is not None:
+                self._json_response(HTTPStatus.OK, {"access": LICENSE_SERVICE.access_summary(player["id"])})
+            return
+        if parsed.path == "/api/admin/access-codes":
+            player = self._require_admin()
+            if player is not None:
+                query = parse_qs(parsed.query)
+                limit = int(query.get("limit", ["100"])[0])
+                self._json_response(HTTPStatus.OK, {"codes": LICENSE_SERVICE.list_access_codes(limit)})
+            return
+        if parsed.path == "/api/coach/dashboard":
+            player = self._require_coach()
+            if player is None:
+                return
+            try:
+                dashboard = LICENSE_SERVICE.coach_dashboard(player["id"])
+            except LicenseError as error:
+                self._json_response(HTTPStatus.FORBIDDEN, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, {"dashboard": dashboard})
             return
         if parsed.path == "/api/auth/config":
             payload = SUPABASE_CONFIG.public_payload() if SUPABASE_CONFIG else {"provider": "local"}
@@ -365,6 +398,132 @@ class AppHandler(SimpleHTTPRequestHandler):
                 headers={"Set-Cookie": self._expired_session_cookie()},
             )
             return
+        if parsed.path == "/api/player/access-code/redeem":
+            player = self._require_player()
+            if player is None:
+                return
+            remote_key = self.client_address[0] if self.client_address else "unknown"
+            try:
+                payload = self._read_json_body()
+                LICENSE_SERVICE.check_redemption_rate(player["id"], remote_key)
+                result = LICENSE_SERVICE.redeem_access_code(player["id"], payload.get("code"))
+                LICENSE_SERVICE.record_redemption_attempt(player["id"], remote_key, True)
+            except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+                LICENSE_SERVICE.record_redemption_attempt(player["id"], remote_key, False)
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, result)
+            return
+        if parsed.path == "/api/player/play-activities":
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                payload = self._read_json_body()
+                result = LICENSE_SERVICE.authorize_new_activity(
+                    player["id"], payload.get("activity_kind"), payload.get("client_activity_id")
+                )
+            except PlayAccessDenied as error:
+                self._json_response(HTTPStatus.FORBIDDEN, {
+                    "error": str(error), "code": "PLAY_ACCESS_REQUIRED",
+                    "access": LICENSE_SERVICE.access_summary(player["id"]),
+                })
+                return
+            except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.CREATED, {"activity": result})
+            return
+        if parsed.path == "/api/admin/access-codes":
+            player = self._require_admin()
+            if player is None:
+                return
+            try:
+                payload = self._read_json_body()
+                result = LICENSE_SERVICE.create_access_code(
+                    player["id"], plan=payload.get("plan", "INDIVIDUAL"),
+                    duration_days=payload.get("duration_days", 90),
+                    max_redemptions=payload.get("max_redemptions", 1),
+                    redeem_by=payload.get("redeem_by"),
+                )
+            except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.CREATED, {"access_code": result})
+            return
+        if parsed.path == "/api/admin/access-codes/revoke":
+            player = self._require_admin()
+            if player is None:
+                return
+            try:
+                payload = self._read_json_body()
+                LICENSE_SERVICE.revoke_access_code(player["id"], str(payload.get("code_id") or ""))
+            except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, {"revoked": True})
+            return
+        if parsed.path == "/api/coach/invitations":
+            player = self._require_coach()
+            if player is None:
+                return
+            try:
+                payload = self._read_json_body()
+                result = LICENSE_SERVICE.create_coach_invitation(
+                    player["id"], player_id=payload.get("player_id"), email=payload.get("email")
+                )
+            except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.CREATED, {"invitation": result})
+            return
+        if parsed.path in {
+            "/api/player/coach-invitations/accept", "/api/player/coach-invitations/decline",
+            "/api/coach/invitations/cancel", "/api/coach/sponsorship/assign",
+            "/api/coach/sponsorship/release", "/api/player/coach-relationship/end",
+        }:
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                payload = self._read_json_body()
+                if parsed.path.endswith("/accept"):
+                    result = LICENSE_SERVICE.accept_coach_invitation(
+                        player["id"], str(payload.get("invitation_id") or "")
+                    )
+                elif parsed.path.endswith("/decline"):
+                    LICENSE_SERVICE.decline_coach_invitation(
+                        player["id"], str(payload.get("invitation_id") or "")
+                    )
+                    result = {"declined": True}
+                elif parsed.path.endswith("invitations/cancel"):
+                    if "COACH" not in player.get("roles", []):
+                        raise LicenseError("Coach access required")
+                    LICENSE_SERVICE.cancel_coach_invitation(
+                        player["id"], str(payload.get("invitation_id") or "")
+                    )
+                    result = {"cancelled": True}
+                elif parsed.path.endswith("sponsorship/assign"):
+                    if "COACH" not in player.get("roles", []):
+                        raise LicenseError("Coach access required")
+                    result = LICENSE_SERVICE.assign_sponsorship(
+                        player["id"], str(payload.get("relationship_id") or "")
+                    )
+                elif parsed.path.endswith("sponsorship/release"):
+                    if "COACH" not in player.get("roles", []):
+                        raise LicenseError("Coach access required")
+                    result = LICENSE_SERVICE.release_sponsorship(
+                        player["id"], str(payload.get("relationship_id") or "")
+                    )
+                else:
+                    result = LICENSE_SERVICE.end_coach_relationship(
+                        player["id"], str(payload.get("relationship_id") or "")
+                    )
+            except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, result)
+            return
         if parsed.path in {"/api/player/feedback", "/api/player/feedback/reply"}:
             player = self._require_player()
             if player is None:
@@ -404,11 +563,15 @@ class AppHandler(SimpleHTTPRequestHandler):
                 result = PLAYER_STORE.save_profile(player["id"], payload.get("profile"))
             elif parsed.path == "/api/player/gps-round":
                 payload = self._read_json_body(max_bytes=2 * 1024 * 1024)
-                result = PLAYER_STORE.save_gps_round(player["id"], payload.get("round"))
+                round_value = payload.get("round")
+                self._validate_play_save(player["id"], round_value, "GPS")
+                result = PLAYER_STORE.save_gps_round(player["id"], round_value)
             elif parsed.path == "/api/player/challenge":
                 payload = self._read_json_body(max_bytes=5 * 1024 * 1024)
+                challenge = payload.get("challenge")
+                self._validate_play_save(player["id"], challenge, "THREE_HOLE_MATCH")
                 result = PLAYER_STORE.save_challenge(
-                    player["id"], payload.get("challenge"), payload.get("geometry_snapshot")
+                    player["id"], challenge, payload.get("geometry_snapshot")
                 )
             elif parsed.path == "/api/player/rating":
                 payload = self._read_json_body()
@@ -423,13 +586,25 @@ class AppHandler(SimpleHTTPRequestHandler):
                 )
             else:
                 payload = self._read_json_body(max_bytes=10 * 1024 * 1024)
-                result = PLAYER_STORE.save_round(player["id"], payload.get("round"))
+                round_value = payload.get("round")
+                activity_kind = str(
+                    round_value.get("license_activity_kind", "ROUND")
+                    if isinstance(round_value, dict) else "ROUND"
+                ).upper()
+                self._validate_play_save(player["id"], round_value, activity_kind)
+                result = PLAYER_STORE.save_round(player["id"], round_value)
         except (AccountError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
             if parsed.path == "/api/player/gps-round":
                 print(f"GPS round sync rejected: {error}", flush=True)
             self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
             return
         self._json_response(HTTPStatus.OK, result)
+
+    @staticmethod
+    def _validate_play_save(player_id: int, value: Any, activity_kind: str) -> None:
+        activity_id = value.get("license_activity_id") if isinstance(value, dict) else None
+        if not LICENSE_SERVICE.validate_activity(player_id, activity_id, activity_kind):
+            raise AccountError("play activity authorization is invalid")
 
     def _session_token(self) -> str | None:
         cookies = SimpleCookie()
@@ -463,6 +638,12 @@ class AppHandler(SimpleHTTPRequestHandler):
             str(player.get("email") or "").casefold() in DEVELOPER_EMAILS
             or str(player.get("name") or "").casefold() in DEVELOPER_NAMES
         )
+        LICENSE_SERVICE.ensure_role(player["id"], "PLAYER")
+        if player["is_developer"]:
+            LICENSE_SERVICE.ensure_role(player["id"], "ADMIN")
+        player["roles"] = LICENSE_SERVICE.roles(player["id"])
+        player["is_admin"] = "ADMIN" in player["roles"]
+        player["access"] = LICENSE_SERVICE.access_summary(player["id"])
         return player
 
     def _require_player(self) -> dict | None:
@@ -475,6 +656,20 @@ class AppHandler(SimpleHTTPRequestHandler):
         player = self._require_player()
         if player is not None and not player.get("is_developer"):
             self._json_response(HTTPStatus.FORBIDDEN, {"error": "developer access required"})
+            return None
+        return player
+
+    def _require_admin(self) -> dict | None:
+        player = self._require_player()
+        if player is not None and not player.get("is_admin"):
+            self._json_response(HTTPStatus.FORBIDDEN, {"error": "administrator access required"})
+            return None
+        return player
+
+    def _require_coach(self) -> dict | None:
+        player = self._require_player()
+        if player is not None and "COACH" not in player.get("roles", []):
+            self._json_response(HTTPStatus.FORBIDDEN, {"error": "Coach access required"})
             return None
         return player
 

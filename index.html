@@ -998,6 +998,26 @@
             <p id="account-sync-status">Your unfinished round is stored on this server.</p>
           </div>
         </div>
+        <section id="account-access-card" class="account-access-card" aria-labelledby="account-access-title">
+          <div class="account-access-heading">
+            <div>
+              <span class="eyebrow">Jetta access</span>
+              <strong id="account-access-title">Checking access…</strong>
+              <p id="account-access-detail">Your history remains available regardless of plan status.</p>
+            </div>
+            <span id="account-access-badge">—</span>
+          </div>
+          <div id="account-access-code-panel" class="account-code-entry">
+            <label for="account-access-code">Jetta Access Code</label>
+            <div><input id="account-access-code" autocomplete="off" maxlength="80" placeholder="JETTA-…" /><button id="account-redeem-code" type="button">Activate</button></div>
+            <small id="account-access-code-status" role="status" aria-live="polite"></small>
+          </div>
+          <div id="account-coach-invitations" class="account-coach-invitations" hidden></div>
+          <div class="account-license-actions">
+            <button id="coach-dashboard-button" class="secondary-action" type="button" hidden>Coach Dashboard</button>
+            <button id="license-admin-button" class="secondary-action" type="button" hidden>Access-code administration</button>
+          </div>
+        </section>
         <section class="account-profile-card" aria-labelledby="account-profile-name">
           <div class="account-profile-mark" aria-hidden="true">MY</div>
           <div>
@@ -1039,6 +1059,37 @@
           <button class="primary-action" value="close">Keep playing</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="coach-dashboard-dialog" class="modal account-modal license-dashboard-modal">
+      <div class="modal-card">
+        <header><div><span class="eyebrow">Jetta Coach</span><h2>Coach Dashboard</h2></div><button class="modal-close" type="button" data-close-coach-dashboard aria-label="Close Coach Dashboard">×</button></header>
+        <section id="coach-seat-summary" class="license-summary-card">Loading sponsored seats…</section>
+        <section class="license-create-card">
+          <label for="coach-invite-email">Invite student by Jetta account email</label>
+          <div><input id="coach-invite-email" type="email" autocomplete="email" placeholder="student@example.com" /><button id="coach-invite-button" type="button">Create invitation</button></div>
+          <small id="coach-invite-status" role="status" aria-live="polite"></small>
+        </section>
+        <div id="coach-roster" class="license-roster"></div>
+        <div id="coach-pending-invitations" class="license-roster"></div>
+      </div>
+    </dialog>
+
+    <dialog id="license-admin-dialog" class="modal account-modal license-dashboard-modal">
+      <div class="modal-card">
+        <header><div><span class="eyebrow">Administration</span><h2>Jetta Access Codes</h2></div><button class="modal-close" type="button" data-close-license-admin aria-label="Close access-code administration">×</button></header>
+        <section class="license-create-card">
+          <label>New access code</label>
+          <div class="license-code-options">
+            <select id="license-code-plan"><option value="INDIVIDUAL">Individual</option><option value="COACH">Coach</option></select>
+            <input id="license-code-days" type="number" min="1" max="3650" value="90" aria-label="Access duration in days" />
+            <input id="license-code-redemptions" type="number" min="1" max="10000" value="1" aria-label="Maximum redemptions" />
+            <button id="license-create-code" type="button">Generate code</button>
+          </div>
+          <output id="license-created-code" class="license-created-code" aria-live="polite"></output>
+        </section>
+        <div id="license-code-list" class="license-roster"></div>
+      </div>
     </dialog>
 
     <dialog id="feedback-dialog" class="modal feedback-modal">
