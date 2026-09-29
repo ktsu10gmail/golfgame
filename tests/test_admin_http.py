@@ -97,6 +97,11 @@ class AdminHttpTests(unittest.TestCase):
         self.assertEqual(payload["admin"]["id"], self.admin["id"])
         self.assertEqual(payload["enforcement_mode"], "SHADOW")
 
+    def test_player_session_uses_unauthorized_status_to_trigger_browser_refresh(self):
+        status, _, body = self.request("GET", "/api/player/session")
+        self.assertEqual(status, 401)
+        self.assertEqual(json.loads(body)["error"], "player login required")
+
     def test_unknown_admin_route_cannot_bypass_central_gate(self):
         self.assertEqual(self.request("GET", "/api/admin/not-real")[0], 401)
         self.assertEqual(self.request("GET", "/api/admin/not-real", role="player")[0], 403)

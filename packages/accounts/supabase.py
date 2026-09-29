@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -49,10 +50,20 @@ class SupabaseAuth:
                 "Accept": "application/json",
             },
         )
-        try:
-            with urlopen(request, timeout=10) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError):
+        payload = None
+        for attempt in range(2):
+            try:
+                with urlopen(request, timeout=10) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                break
+            except HTTPError as error:
+                if error.code not in {429, 500, 502, 503, 504} or attempt == 1:
+                    return None
+            except (URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError):
+                if attempt == 1:
+                    return None
+            time.sleep(0.15)
+        if not isinstance(payload, dict):
             return None
         user_id = payload.get("id")
         email = payload.get("email")

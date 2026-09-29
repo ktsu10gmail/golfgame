@@ -162,8 +162,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             self._handle_geocode(parsed.query)
             return
         if parsed.path == "/api/player/session":
-            player = self._current_player()
-            self._json_response(HTTPStatus.OK, {"player": player})
+            player = self._require_player()
+            if player is not None:
+                self._json_response(HTTPStatus.OK, {"player": player})
             return
         if parsed.path == "/api/player/access":
             player = self._require_player()

@@ -1,5 +1,6 @@
 import json
 import unittest
+from urllib.error import HTTPError, URLError
 from unittest.mock import patch
 
 from packages.accounts import AccountError, SupabaseAuth, SupabaseConfig
@@ -50,6 +51,35 @@ class SupabaseAuthTests(unittest.TestCase):
         })
         sent = request.call_args.args[0]
         self.assertEqual(sent.headers["Authorization"], "Bearer access-token")
+
+    @patch("packages.accounts.supabase.time.sleep")
+    @patch("packages.accounts.supabase.urlopen")
+    def test_transient_identity_lookup_is_retried(self, request, sleep):
+        request.side_effect = [
+            URLError("temporary DNS failure"),
+            FakeResponse({
+                "id": "user-123",
+                "email": "golfer@example.com",
+                "user_metadata": {"display_name": "Kay Smith"},
+            }),
+        ]
+        auth = SupabaseAuth(SupabaseConfig("https://project.supabase.co", "anon-key"))
+
+        self.assertEqual(auth.get_user("access-token")["external_id"], "user-123")
+        self.assertEqual(request.call_count, 2)
+        sleep.assert_called_once_with(0.15)
+
+    @patch("packages.accounts.supabase.time.sleep")
+    @patch("packages.accounts.supabase.urlopen")
+    def test_rejected_identity_token_is_not_retried(self, request, sleep):
+        request.side_effect = HTTPError(
+            "https://project.supabase.co/auth/v1/user", 401, "Unauthorized", {}, None
+        )
+        auth = SupabaseAuth(SupabaseConfig("https://project.supabase.co", "anon-key"))
+
+        self.assertIsNone(auth.get_user("rejected-token"))
+        self.assertEqual(request.call_count, 1)
+        sleep.assert_not_called()
 
 
 if __name__ == "__main__":
