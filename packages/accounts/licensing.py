@@ -364,6 +364,62 @@ class LicenseService:
             "pending_invitations": [dict(row) for row in invitations],
         }
 
+    def entitlement_diagnostic(self, player_id: int) -> dict[str, Any]:
+        """Explain entitlement and runtime policy without authorizing activity."""
+        self.reconcile_subscription_lifecycle()
+        with self._connect() as database:
+            player = database.execute(
+                "SELECT id FROM players WHERE id = ?", (player_id,)
+            ).fetchone()
+            if player is None:
+                raise LicenseError("player account was not found")
+            valid_grants = self._valid_grants(database, player_id)
+            relationship = database.execute("""
+                SELECT r.id, r.coach_id, p.display_name AS coach_name, r.status,
+                       r.started_at, s.id AS seat_id, s.status AS seat_status,
+                       s.released_at
+                FROM coach_student_relationships r
+                JOIN players p ON p.id = r.coach_id
+                LEFT JOIN coach_seat_assignments s ON s.id = (
+                    SELECT id FROM coach_seat_assignments
+                    WHERE relationship_id = r.id ORDER BY assigned_at DESC LIMIT 1
+                )
+                WHERE r.player_id = ? AND r.status = 'ACTIVE'
+            """, (player_id,)).fetchone()
+            grant_history = database.execute("""
+                SELECT g.grant_type, g.status AS grant_status, g.expires_at,
+                       g.ended_at, s.plan, s.billing_provider,
+                       s.status AS subscription_status, s.current_period_end,
+                       s.grace_ends_at, a.status AS seat_status
+                FROM entitlement_grants g
+                JOIN subscriptions s ON s.id = g.subscription_id
+                LEFT JOIN coach_seat_assignments a ON a.id = g.seat_assignment_id
+                WHERE g.player_id = ?
+                ORDER BY g.created_at DESC LIMIT 25
+            """, (player_id,)).fetchall()
+        entitled = bool(valid_grants)
+        runtime_allowed = entitled or self.enforcement != "enforced"
+        if entitled:
+            entitlement_reason = "At least one valid entitlement grant permits new play."
+        else:
+            entitlement_reason = "No valid entitlement grant permits new play."
+        if runtime_allowed and not entitled:
+            runtime_reason = f"Allowed by {self.enforcement}-mode policy."
+        elif runtime_allowed:
+            runtime_reason = "Allowed by a valid entitlement grant."
+        else:
+            runtime_reason = "Denied because enforcement is active and no valid grant exists."
+        return {
+            "entitlement_decision": "ALLOWED" if entitled else "DENIED",
+            "entitlement_reason": entitlement_reason,
+            "enforcement_mode": self.enforcement.upper(),
+            "runtime_result": "ALLOWED" if runtime_allowed else "DENIED",
+            "runtime_reason": runtime_reason,
+            "valid_grants": valid_grants,
+            "current_coach_relationship": dict(relationship) if relationship else None,
+            "grant_history": [dict(row) for row in grant_history],
+        }
+
     def create_access_code(
         self,
         actor_player_id: int,

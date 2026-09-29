@@ -2423,6 +2423,7 @@ body.green-view-open .mobile-round-nav { display: none; }
 .account-access-heading p { margin: 4px 0 0; color: var(--ink-soft); font-size: .65rem; line-height: 1.4; }
 #account-access-badge { padding: 5px 8px; border-radius: 999px; background: rgba(49,90,59,.12); color: var(--green); font-size: .58rem; font-weight: 800; white-space: nowrap; }
 .account-code-entry { margin-top: 12px; }
+.account-code-entry p { margin: 6px 0 0; color: var(--ink-soft); font-size: .61rem; }
 .account-code-entry label,
 .license-create-card label { display: block; margin-bottom: 6px; font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
 .account-code-entry > div,
@@ -2446,11 +2447,6 @@ body.green-view-open .mobile-round-nav { display: none; }
 .account-license-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .license-dashboard-modal .modal-card { width: min(720px, calc(100vw - 28px)); max-height: min(800px, calc(100vh - 30px)); overflow: auto; }
 .license-summary-card { font-size: .78rem; line-height: 1.45; }
-.license-code-options { flex-wrap: wrap; }
-.license-code-options select { flex-basis: 150px; }
-.license-code-options input { flex-basis: 90px; }
-.license-created-code { display: block; margin-top: 9px; padding: 10px; border-radius: 8px; background: #17372b; color: #fff; overflow-wrap: anywhere; font-family: var(--font-data); font-size: .72rem; }
-.license-created-code:empty { display: none; }
 .license-roster { display: grid; gap: 8px; margin-top: 12px; }
 .license-roster article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .license-roster button { padding: 7px 9px; border-radius: 7px; }

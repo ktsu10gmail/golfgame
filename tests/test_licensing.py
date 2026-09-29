@@ -140,6 +140,25 @@ class LicenseServiceTests(unittest.TestCase):
         self.assertEqual(activity["authorization_source"], "SHADOW_ALLOW")
         self.assertEqual(shadow.access_summary(self.player["id"])["grants"], [])
 
+    def test_diagnostic_separates_entitlement_enforcement_and_runtime(self):
+        shadow = LicenseService(self.path, enforcement="shadow")
+        shadow_result = shadow.entitlement_diagnostic(self.player["id"])
+        self.assertEqual(shadow_result["entitlement_decision"], "DENIED")
+        self.assertEqual(shadow_result["enforcement_mode"], "SHADOW")
+        self.assertEqual(shadow_result["runtime_result"], "ALLOWED")
+
+        enforced_result = self.licenses.entitlement_diagnostic(self.player["id"])
+        self.assertEqual(enforced_result["entitlement_decision"], "DENIED")
+        self.assertEqual(enforced_result["enforcement_mode"], "ENFORCED")
+        self.assertEqual(enforced_result["runtime_result"], "DENIED")
+
+        code = self.licenses.create_access_code(self.admin["id"])
+        self.licenses.redeem_access_code(self.player["id"], code["code"])
+        entitled = self.licenses.entitlement_diagnostic(self.player["id"])
+        self.assertEqual(entitled["entitlement_decision"], "ALLOWED")
+        self.assertEqual(entitled["runtime_result"], "ALLOWED")
+        self.assertEqual(entitled["valid_grants"][0]["type"], "PROMOTIONAL")
+
     def test_billing_event_boundary_is_idempotent(self):
         self.assertTrue(self.licenses.record_billing_event("STRIPE", "evt_123", "invoice.paid"))
         self.assertFalse(self.licenses.record_billing_event("STRIPE", "evt_123", "invoice.paid"))

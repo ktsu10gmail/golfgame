@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Jetta Back Office</title>
+  <link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+  <div class="admin-frame">
+    <aside class="admin-rail">
+      <a class="brand" href="/admin/" aria-label="Jetta Back Office home">
+        <span class="brand-mark" aria-hidden="true">J</span>
+        <span><strong>JETTA</strong><small>Back Office</small></span>
+      </a>
+      <nav aria-label="Back Office sections">
+        <button type="button" data-section="home" aria-current="page">Overview</button>
+        <button type="button" data-section="users">Users</button>
+        <button type="button" data-section="licensing">Access &amp; Licensing</button>
+        <button type="button" data-section="coaches">Coaches</button>
+        <button type="button" data-section="audit">Audit</button>
+      </nav>
+      <div class="site-map" aria-label="Jetta website boundaries">
+        <span>Jetta sites</span>
+        <a href="https://www.jetta.com">www.jetta.com<small>Public marketing website</small></a>
+        <a href="https://golfgame.jetta.com">golfgame.jetta.com<small>Jetta product application</small></a>
+        <a href="https://golfgame.jetta.com/admin/" aria-current="location">golfgame.jetta.com/admin/<small>Restricted Jetta Back Office</small></a>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div><span class="context-label">Restricted operations</span><h1 id="page-title">Back Office</h1></div>
+        <div class="admin-identity"><span id="enforcement-badge">Checking access</span><strong id="admin-name">Jetta administrator</strong></div>
+      </header>
+
+      <section id="access-state" class="access-state" aria-live="polite">
+        <span class="pulse" aria-hidden="true"></span>
+        <div><strong>Verifying administrative access</strong><p>The shell contains no account or licensing data. Authorized records load only after the server verifies ADMIN.</p></div>
+      </section>
+
+      <div id="workspace" hidden>
+        <section class="panel active" data-panel="home">
+          <div class="hero-ledger">
+            <div><span class="kicker">Operational home</span><h2>Trace access.<br />Protect the player record.</h2></div>
+            <p>Investigate why play is allowed, issue controlled access, and inspect Coach sponsorship without changing historical ownership.</p>
+          </div>
+          <div class="section-grid">
+            <button class="section-card" data-open-section="users"><span>Identity</span><strong>Users</strong><p>Find an account and inspect the evidence behind its current access.</p></button>
+            <button class="section-card" data-open-section="licensing"><span>Entitlement</span><strong>Access &amp; Licensing</strong><p>Generate Jetta Access Codes and inspect redemption history.</p></button>
+            <button class="section-card" data-open-section="coaches"><span>Relationships</span><strong>Coaches</strong><p>Review subscriptions, grace state, sponsored seats, and students.</p></button>
+            <button class="section-card" data-open-section="audit"><span>Evidence</span><strong>Audit</strong><p>Read append-oriented licensing and administrative events.</p></button>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="users" hidden>
+          <header class="panel-heading"><div><span class="kicker">Account investigation</span><h2>Users</h2></div><p>Search by player ID, display name, email, or Supabase identity.</p></header>
+          <form id="user-search-form" class="search-line"><label><span>User search</span><input id="user-search" minlength="2" placeholder="Name, email, or player ID" /></label><button>Search users</button></form>
+          <div id="user-results" class="record-list empty-state">Enter at least two characters to search.</div>
+          <div id="user-detail" class="detail-drawer" hidden></div>
+        </section>
+
+        <section class="panel" data-panel="licensing" hidden>
+          <header class="panel-heading"><div><span class="kicker">Controlled activation</span><h2>Access &amp; Licensing</h2></div><p>Plaintext codes appear once. Jetta stores only the secure hash.</p></header>
+          <form id="code-form" class="code-forge">
+            <label><span>Access type</span><select id="code-plan"><option value="INDIVIDUAL">Individual</option><option value="COACH">Coach</option></select></label>
+            <label><span>Duration</span><input id="code-days" type="number" min="1" max="3650" value="90" /><small>days</small></label>
+            <label><span>Maximum redemptions</span><input id="code-redemptions" type="number" min="1" max="10000" value="1" /></label>
+            <button>Generate code</button>
+          </form>
+          <output id="created-code" class="created-code" hidden></output>
+          <div class="list-heading"><h3>Issued codes</h3><button id="refresh-codes" class="quiet-button" type="button">Refresh</button></div>
+          <div id="code-list" class="record-list"></div>
+        </section>
+
+        <section class="panel" data-panel="coaches" hidden>
+          <header class="panel-heading"><div><span class="kicker">Subscription inspection</span><h2>Coaches</h2></div><p>Seat sponsorship and coaching relationships remain separate.</p></header>
+          <form id="coach-search-form" class="search-line"><label><span>Coach search</span><input id="coach-search" placeholder="Name or email; leave blank for all" /></label><button>Search coaches</button></form>
+          <div id="coach-results" class="record-list"></div>
+          <div id="coach-detail" class="detail-drawer" hidden></div>
+        </section>
+
+        <section class="panel" data-panel="audit" hidden>
+          <header class="panel-heading"><div><span class="kicker">Immutable operational evidence</span><h2>Audit</h2></div><p>Licensing events are read-only and ordered newest first.</p></header>
+          <form id="audit-filter-form" class="audit-filters">
+            <label><span>Event type</span><input id="audit-event-type" placeholder="ACCESS_CODE_REDEEMED" /></label>
+            <label><span>Subject player ID</span><input id="audit-subject" inputmode="numeric" /></label>
+            <label><span>Actor player ID</span><input id="audit-actor" inputmode="numeric" /></label>
+            <button>Apply filters</button>
+          </form>
+          <div id="audit-list" class="record-list"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="/admin/admin.js"></script>
+</body>
+</html>

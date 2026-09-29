@@ -12659,7 +12659,6 @@ function renderPlayerAccess(access = null) {
     <div><button type="button" data-accept-coach-invitation="${escapeHtml(invitation.id)}">Accept</button><button type="button" data-decline-coach-invitation="${escapeHtml(invitation.id)}">Decline</button></div>
   </article>`).join("");
   $("#coach-dashboard-button").hidden = !state.player?.roles?.includes("COACH");
-  $("#license-admin-button").hidden = !state.player?.roles?.includes("ADMIN");
 }
 
 async function refreshPlayerAccess() {
@@ -12762,41 +12761,6 @@ async function openCoachStudentHistory(playerId, playerName) {
   } catch (error) {
     $("#coach-student-history-list").textContent = error.message;
   }
-}
-
-function renderAccessCodes(codes) {
-  $("#license-code-list").innerHTML = codes.length
-    ? codes.map(code => `<article><div><strong>${escapeHtml(code.plan)} · ending ${escapeHtml(code.code_hint)}</strong><small>${code.status} · ${code.redemption_count}/${code.max_redemptions} redeemed · ${code.duration_days} days</small></div>${code.status === "ACTIVE" ? `<button type="button" data-revoke-access-code="${escapeHtml(code.id)}">Revoke</button>` : ""}</article>`).join("")
-    : `<article><div><strong>No access codes yet</strong><small>Generate the first controlled pilot code above.</small></div></article>`;
-}
-
-async function loadAccessCodes() {
-  const payload = await playerApi("/api/admin/access-codes");
-  renderAccessCodes(payload.codes);
-}
-
-async function openLicenseAdmin() {
-  $("#account-dialog").close();
-  $("#license-admin-dialog").showModal();
-  try { await loadAccessCodes(); }
-  catch (error) { $("#license-code-list").textContent = error.message; }
-}
-
-async function createAdminAccessCode() {
-  const output = $("#license-created-code");
-  output.textContent = "Generating…";
-  try {
-    const payload = await playerApi("/api/admin/access-codes", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        plan: $("#license-code-plan").value,
-        duration_days: Number($("#license-code-days").value),
-        max_redemptions: Number($("#license-code-redemptions").value)
-      })
-    });
-    output.textContent = `${payload.access_code.code} — copy it now; Jetta will not show it again.`;
-    await loadAccessCodes();
-  } catch (error) { output.textContent = error.message; }
 }
 
 function updateAccountProfileSummary() {
@@ -13904,9 +13868,7 @@ function bindEvents() {
     if (decline) void respondToCoachInvitation(decline.dataset.declineCoachInvitation, false);
   });
   $("#coach-dashboard-button").addEventListener("click", () => void openCoachDashboard());
-  $("#license-admin-button").addEventListener("click", () => void openLicenseAdmin());
   $("[data-close-coach-dashboard]").addEventListener("click", () => $("#coach-dashboard-dialog").close());
-  $("[data-close-license-admin]").addEventListener("click", () => $("#license-admin-dialog").close());
   $("[data-close-coach-student-history]").addEventListener("click", () => $("#coach-student-history-dialog").close());
   $("#coach-invite-button").addEventListener("click", () => void createCoachInvitation());
   $("#coach-roster").addEventListener("click", event => {
@@ -13934,15 +13896,6 @@ function bindEvents() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ invitation_id: button.dataset.cancelCoachInvitation })
     }).then(loadCoachDashboard).catch(error => { $("#coach-seat-summary").textContent = error.message; });
-  });
-  $("#license-create-code").addEventListener("click", () => void createAdminAccessCode());
-  $("#license-code-list").addEventListener("click", event => {
-    const button = event.target.closest("[data-revoke-access-code]");
-    if (!button) return;
-    void playerApi("/api/admin/access-codes/revoke", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code_id: button.dataset.revokeAccessCode })
-    }).then(loadAccessCodes).catch(error => { $("#license-created-code").textContent = error.message; });
   });
   $("#account-edit-profile").addEventListener("click", () => {
     $("#account-dialog").close();

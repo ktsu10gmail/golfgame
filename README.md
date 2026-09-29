@@ -109,6 +109,18 @@ See the [Jetta License Model Guide](docs/JETTA_LICENSE_MODEL_GUIDE.md) for the
 access-code format, administrator/player/Coach workflows, safe testing steps,
 and the shadow-to-enforced production rollout.
 
+Administrative licensing operations are separated from the player experience:
+
+```text
+www.jetta.com                 Public marketing website
+golfgame.jetta.com            Jetta product application
+golfgame.jetta.com/admin/     Restricted Jetta Back Office
+```
+
+See the [Back Office Operations Guide](docs/JETTA_BACK_OFFICE_OPERATIONS_GUIDE.md)
+for ADMIN authorization, Access Code operations, entitlement diagnostics, and
+Coach/audit inspection.
+
 The initial rollout uses Jetta Access Codes rather than payment checkout.
 Administrators can generate Individual or Coach codes from **Account →
 Access-code administration**. The plaintext code is displayed once; only its

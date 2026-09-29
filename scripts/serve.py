@@ -13,6 +13,7 @@ from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -42,6 +43,7 @@ _load_local_environment(ROOT / ".env")
 from packages.ai import AiProviderError, create_ai_service
 from packages.accounts import (
     AccountError,
+    AdminOperationsService,
     LicenseError,
     LicenseService,
     PlayerStore,
@@ -67,6 +69,7 @@ LICENSE_SERVICE = LicenseService(
     coach_seat_capacity=int(os.getenv("GOLFGAME_COACH_SEAT_CAPACITY", "10")),
     coach_grace_days=int(os.getenv("GOLFGAME_COACH_GRACE_DAYS", "30")),
 )
+ADMIN_OPERATIONS = AdminOperationsService(PLAYER_DB_PATH, LICENSE_SERVICE)
 SUPABASE_CONFIG = SupabaseConfig.from_values(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_ANON_KEY"))
 SUPABASE_AUTH = SupabaseAuth(SUPABASE_CONFIG) if SUPABASE_CONFIG else None
 SERVER_ROLE = os.getenv("GOLFGAME_SERVER_ROLE", "app").strip().casefold() or "app"
@@ -102,7 +105,7 @@ class AppHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         """Keep the game shell fresh while allowing conditional asset requests."""
         path = urlparse(self.path).path
-        if path in {"/", "/index.html"}:
+        if path in {"/", "/index.html", "/admin", "/admin/", "/admin/index.html"}:
             self.send_header("Cache-Control", "no-store, max-age=0")
         elif Path(path).suffix.lower() in {".js", ".mjs", ".css"}:
             self.send_header("Cache-Control", "no-cache")
@@ -110,6 +113,15 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/admin":
+            self.send_response(HTTPStatus.PERMANENT_REDIRECT)
+            self.send_header("Location", "/admin/")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+        if parsed.path.startswith("/api/admin/"):
+            self._handle_admin_get(parsed)
+            return
         if SERVER_ROLE == "app" and parsed.path == "/editor.html":
             host = urlparse(f"//{self.headers.get('Host', '')}").hostname or "localhost"
             safe_host = host if re.fullmatch(r"[A-Za-z0-9.-]+", host) else "localhost"
@@ -157,13 +169,6 @@ class AppHandler(SimpleHTTPRequestHandler):
             player = self._require_player()
             if player is not None:
                 self._json_response(HTTPStatus.OK, {"access": LICENSE_SERVICE.access_summary(player["id"])})
-            return
-        if parsed.path == "/api/admin/access-codes":
-            player = self._require_admin()
-            if player is not None:
-                query = parse_qs(parsed.query)
-                limit = int(query.get("limit", ["100"])[0])
-                self._json_response(HTTPStatus.OK, {"codes": LICENSE_SERVICE.list_access_codes(limit)})
             return
         if parsed.path == "/api/coach/dashboard":
             player = self._require_coach()
@@ -401,6 +406,9 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/admin/"):
+            self._handle_admin_post(parsed)
+            return
         if parsed.path == "/api/ai/shot":
             self._handle_json_route(AI_SERVICE.narrate_shot)
             return
@@ -475,35 +483,6 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
                 return
             self._json_response(HTTPStatus.CREATED, {"activity": result})
-            return
-        if parsed.path == "/api/admin/access-codes":
-            player = self._require_admin()
-            if player is None:
-                return
-            try:
-                payload = self._read_json_body()
-                result = LICENSE_SERVICE.create_access_code(
-                    player["id"], plan=payload.get("plan", "INDIVIDUAL"),
-                    duration_days=payload.get("duration_days", 90),
-                    max_redemptions=payload.get("max_redemptions", 1),
-                    redeem_by=payload.get("redeem_by"),
-                )
-            except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
-                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
-                return
-            self._json_response(HTTPStatus.CREATED, {"access_code": result})
-            return
-        if parsed.path == "/api/admin/access-codes/revoke":
-            player = self._require_admin()
-            if player is None:
-                return
-            try:
-                payload = self._read_json_body()
-                LICENSE_SERVICE.revoke_access_code(player["id"], str(payload.get("code_id") or ""))
-            except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
-                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
-                return
-            self._json_response(HTTPStatus.OK, {"revoked": True})
             return
         if parsed.path == "/api/coach/invitations":
             player = self._require_coach()
@@ -647,6 +626,124 @@ class AppHandler(SimpleHTTPRequestHandler):
         activity_id = value.get("license_activity_id") if isinstance(value, dict) else None
         if not LICENSE_SERVICE.validate_activity(player_id, activity_id, activity_kind):
             raise AccountError("play activity authorization is invalid")
+
+    @staticmethod
+    def _query_value(query: dict[str, list[str]], name: str, default: Any = None) -> Any:
+        values = query.get(name)
+        return values[0] if values else default
+
+    def _handle_admin_get(self, parsed) -> None:
+        admin = self._require_admin()
+        if admin is None:
+            return
+        path = parsed.path
+        query = parse_qs(parsed.query)
+        try:
+            if path == "/api/admin/session":
+                self._json_response(HTTPStatus.OK, {"admin": {
+                    "id": admin["id"], "name": admin["name"],
+                    "email": admin.get("email") or None, "roles": admin.get("roles", []),
+                }, "enforcement_mode": LICENSE_SERVICE.enforcement.upper(),
+                    "capabilities": ["users:view", "licensing:manage", "coaches:view", "audit:view"]})
+                return
+            if path == "/api/admin/access-codes":
+                result = ADMIN_OPERATIONS.access_codes(
+                    limit=self._query_value(query, "limit", "50")
+                )
+                self._json_response(HTTPStatus.OK, {"codes": result["items"],
+                                                    "limit": result["limit"]})
+                return
+            redemption_match = re.fullmatch(
+                r"/api/admin/access-codes/([^/]+)/redemptions", path
+            )
+            if redemption_match:
+                result = ADMIN_OPERATIONS.code_redemptions(
+                    unquote(redemption_match.group(1)),
+                    limit=self._query_value(query, "limit", "50"),
+                )
+                self._json_response(HTTPStatus.OK, result)
+                return
+            if path == "/api/admin/users":
+                result = ADMIN_OPERATIONS.search_users(
+                    self._query_value(query, "query", ""),
+                    limit=self._query_value(query, "limit", "25"),
+                    cursor=self._query_value(query, "cursor"),
+                )
+                self._json_response(HTTPStatus.OK, result)
+                return
+            user_diagnostic_match = re.fullmatch(
+                r"/api/admin/users/(\d+)/entitlement-diagnostic", path
+            )
+            if user_diagnostic_match:
+                result = LICENSE_SERVICE.entitlement_diagnostic(
+                    int(user_diagnostic_match.group(1))
+                )
+                self._json_response(HTTPStatus.OK, {"diagnostic": result})
+                return
+            user_match = re.fullmatch(r"/api/admin/users/(\d+)", path)
+            if user_match:
+                self._json_response(
+                    HTTPStatus.OK,
+                    ADMIN_OPERATIONS.user_detail(int(user_match.group(1))),
+                )
+                return
+            if path == "/api/admin/coaches":
+                result = ADMIN_OPERATIONS.search_coaches(
+                    self._query_value(query, "query", ""),
+                    limit=self._query_value(query, "limit", "25"),
+                    cursor=self._query_value(query, "cursor"),
+                )
+                self._json_response(HTTPStatus.OK, result)
+                return
+            coach_match = re.fullmatch(r"/api/admin/coaches/(\d+)", path)
+            if coach_match:
+                self._json_response(
+                    HTTPStatus.OK,
+                    ADMIN_OPERATIONS.coach_detail(int(coach_match.group(1))),
+                )
+                return
+            if path == "/api/admin/audit":
+                result = ADMIN_OPERATIONS.audit_events(
+                    event_type=self._query_value(query, "event_type"),
+                    subject_id=self._query_value(query, "subject_id"),
+                    actor_id=self._query_value(query, "actor_id"),
+                    entity_type=self._query_value(query, "entity_type"),
+                    entity_id=self._query_value(query, "entity_id"),
+                    before=self._query_value(query, "before"),
+                    limit=self._query_value(query, "limit", "50"),
+                )
+                self._json_response(HTTPStatus.OK, result)
+                return
+        except (LicenseError, ValueError, TypeError) as error:
+            self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            return
+        self._json_response(HTTPStatus.NOT_FOUND, {"error": "unknown admin route"})
+
+    def _handle_admin_post(self, parsed) -> None:
+        admin = self._require_admin()
+        if admin is None:
+            return
+        try:
+            payload = self._read_json_body()
+            if parsed.path == "/api/admin/access-codes":
+                result = LICENSE_SERVICE.create_access_code(
+                    admin["id"], plan=payload.get("plan", "INDIVIDUAL"),
+                    duration_days=payload.get("duration_days", 90),
+                    max_redemptions=payload.get("max_redemptions", 1),
+                    redeem_by=payload.get("redeem_by"),
+                )
+                self._json_response(HTTPStatus.CREATED, {"access_code": result})
+                return
+            if parsed.path == "/api/admin/access-codes/revoke":
+                LICENSE_SERVICE.revoke_access_code(
+                    admin["id"], str(payload.get("code_id") or "")
+                )
+                self._json_response(HTTPStatus.OK, {"revoked": True})
+                return
+        except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+            self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            return
+        self._json_response(HTTPStatus.NOT_FOUND, {"error": "unknown admin route"})
 
     def _session_token(self) -> str | None:
         cookies = SimpleCookie()
