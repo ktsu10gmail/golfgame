@@ -105,6 +105,10 @@ database. Authentication never deletes or replaces player history. A player
 without an active entitlement can still sign in and review completed rounds,
 GPS records, Replay, reports, and learning evidence.
 
+See the [Jetta License Model Guide](docs/JETTA_LICENSE_MODEL_GUIDE.md) for the
+access-code format, administrator/player/Coach workflows, safe testing steps,
+and the shadow-to-enforced production rollout.
+
 The initial rollout uses Jetta Access Codes rather than payment checkout.
 Administrators can generate Individual or Coach codes from **Account →
 Access-code administration**. The plaintext code is displayed once; only its
