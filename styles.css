@@ -2445,10 +2445,27 @@ body.green-view-open .mobile-round-nav { display: none; }
 .account-invitation div,
 .license-roster .license-row-actions { display: flex; gap: 6px; margin-top: 8px; }
 .account-license-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
-.license-dashboard-modal .modal-card { width: min(720px, calc(100vw - 28px)); max-height: min(800px, calc(100vh - 30px)); overflow: auto; }
+.license-dashboard-modal {
+  width: min(820px, calc(100% - 28px));
+  max-height: min(880px, calc(100dvh - 28px));
+  overflow: hidden;
+}
+#coach-dashboard-dialog { width: min(960px, calc(100% - 28px)); }
+.license-dashboard-modal .modal-card {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-height: min(880px, calc(100dvh - 28px));
+  overflow-x: hidden;
+  overflow-y: auto;
+}
 .license-summary-card { font-size: .78rem; line-height: 1.45; }
 .license-roster { display: grid; gap: 8px; margin-top: 12px; }
-.license-roster article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.license-roster article { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.license-roster article > div { min-width: 0; }
+.license-roster strong,
+.license-roster small { overflow-wrap: anywhere; }
+.license-roster .license-row-actions { flex-wrap: wrap; justify-content: flex-end; }
 .license-roster button { padding: 7px 9px; border-radius: 7px; }
 .account-replay-button { border-color: rgba(71,109,132,.28); background: linear-gradient(110deg, rgba(71,109,132,.11), rgba(255,255,255,.42)); }
 .account-replay-button .account-history-mark { border-color: #476d84; background: #476d84; color: white; }
@@ -3788,6 +3805,24 @@ strong, h1, h2, h3 { font-weight: 600; }
   .login-fields h2 { max-width: 320px; font-size: 2.25rem; }
   .login-actions { grid-template-columns: 1fr; }
   .account-modal { width: calc(100% - 20px); }
+  .license-dashboard-modal,
+  #coach-dashboard-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+  .license-dashboard-modal .modal-card {
+    min-height: 100dvh;
+    max-height: 100dvh;
+    padding: 20px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  .license-create-card > div { flex-direction: column; }
+  .license-create-card button { width: 100%; }
+  .license-roster article { grid-template-columns: minmax(0, 1fr); }
+  .license-roster .license-row-actions { justify-content: flex-start; }
+  .license-roster .license-row-actions button { flex: 1 1 120px; }
   .account-profile-card { grid-template-columns: auto minmax(0, 1fr); }
   .account-profile-card .secondary-action { grid-column: 1 / -1; width: 100%; }
   .feedback-modal { width: 100%; max-width: none; max-height: 100dvh; border-radius: 0; }
