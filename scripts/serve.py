@@ -44,9 +44,12 @@ from packages.ai import AiProviderError, create_ai_service
 from packages.accounts import (
     AccountError,
     AdminOperationsService,
+    EmailDeliveryError,
     LicenseError,
     LicenseService,
     PlayerStore,
+    SMTP2GOConfig,
+    SMTP2GOMailer,
     PlayAccessDenied,
     SupabaseAuth,
     SupabaseConfig,
@@ -72,6 +75,16 @@ LICENSE_SERVICE = LicenseService(
 ADMIN_OPERATIONS = AdminOperationsService(PLAYER_DB_PATH, LICENSE_SERVICE)
 SUPABASE_CONFIG = SupabaseConfig.from_values(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_ANON_KEY"))
 SUPABASE_AUTH = SupabaseAuth(SUPABASE_CONFIG) if SUPABASE_CONFIG else None
+SMTP2GO_CONFIG = SMTP2GOConfig.from_values(
+    os.getenv("SMTP2GO_API_KEY"),
+    os.getenv("SMTP2GO_SENDER"),
+    os.getenv("GOLFGAME_PUBLIC_URL"),
+    os.getenv("SMTP2GO_REPLY_TO"),
+)
+EMAIL_DELIVERY_ENABLED = os.getenv("GOLFGAME_EMAIL_DELIVERY", "disabled").strip().casefold() == "enabled"
+SMTP2GO_MAILER = (
+    SMTP2GOMailer(SMTP2GO_CONFIG) if SMTP2GO_CONFIG and EMAIL_DELIVERY_ENABLED else None
+)
 SERVER_ROLE = os.getenv("GOLFGAME_SERVER_ROLE", "app").strip().casefold() or "app"
 MAPPER_PORT = int(os.getenv("GOLFGAME_MAPPER_PORT", "8081"))
 GOLF_INTELLIGENCE_CONFIG = GolfIntelligenceConfig.from_env()
@@ -497,7 +510,48 @@ class AppHandler(SimpleHTTPRequestHandler):
             except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
                 self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
                 return
-            self._json_response(HTTPStatus.CREATED, {"invitation": result})
+            delivery = self._deliver_coach_invitation_email(player, result)
+            self._json_response(HTTPStatus.CREATED, {"invitation": {
+                "id": result["id"], "email": result.get("email"),
+                "status": "PENDING", "created_at": result["created_at"],
+                "email_delivery": delivery,
+            }})
+            return
+        if parsed.path == "/api/coach/invitations/resend":
+            player = self._require_coach()
+            if player is None:
+                return
+            try:
+                payload = self._read_json_body()
+                result = LICENSE_SERVICE.prepare_coach_invitation_resend(
+                    player["id"], str(payload.get("invitation_id") or "")
+                )
+            except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            delivery = self._deliver_coach_invitation_email(player, result)
+            self._json_response(HTTPStatus.OK, {"invitation": {
+                "id": result["id"], "email": result["email"],
+                "status": "PENDING", "resent_at": result["resent_at"],
+                "email_delivery": delivery,
+            }})
+            return
+        if parsed.path == "/api/player/coach-invitations/claim":
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                payload = self._read_json_body()
+                result = LICENSE_SERVICE.claim_coach_invitation(
+                    player["id"], payload.get("token")
+                )
+            except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, {"invitation": {
+                "id": result["id"], "coach_name": result["coach_name"],
+                "claimed_at": result["claimed_at"],
+            }, "access": result["access"]})
             return
         if parsed.path in {
             "/api/player/coach-invitations/accept", "/api/player/coach-invitations/decline",
@@ -627,6 +681,36 @@ class AppHandler(SimpleHTTPRequestHandler):
         activity_id = value.get("license_activity_id") if isinstance(value, dict) else None
         if not LICENSE_SERVICE.validate_activity(player_id, activity_id, activity_kind):
             raise AccountError("play activity authorization is invalid")
+
+    @staticmethod
+    def _deliver_coach_invitation_email(coach: dict, invitation: dict) -> dict[str, Any]:
+        delivery: dict[str, Any] = {"status": "NO_ADDRESS", "provider": "SMTP2GO"}
+        if invitation.get("email"):
+            if SMTP2GO_MAILER is None:
+                delivery["status"] = "NOT_CONFIGURED"
+            else:
+                try:
+                    delivery = SMTP2GO_MAILER.send_coach_invitation(
+                        invitation["email"], coach["name"], invitation["token"]
+                    )
+                except EmailDeliveryError:
+                    delivery["status"] = "FAILED"
+        try:
+            LICENSE_SERVICE.record_coach_invitation_delivery(
+                coach["id"], invitation["id"], delivery["status"],
+                provider_message_id=delivery.get("message_id"),
+            )
+        except LicenseError:
+            pass
+        if delivery["status"] != "SENT" and invitation.get("_previous_token_hash"):
+            try:
+                LICENSE_SERVICE.restore_coach_invitation_token(
+                    coach["id"], invitation["id"], invitation["token"],
+                    invitation["_previous_token_hash"], invitation["_previous_token_hint"],
+                )
+            except LicenseError:
+                pass
+        return delivery
 
     @staticmethod
     def _query_value(query: dict[str, list[str]], name: str, default: Any = None) -> Any:

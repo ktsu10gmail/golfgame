@@ -530,6 +530,23 @@ function puttingConsistency(profile = state.profile) {
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
+const COACH_INVITATION_STORAGE_KEY = "golfgame-coach-invitation-token";
+let coachInvitationArrival = null;
+
+function captureCoachInvitationLink() {
+  const fragment = new URLSearchParams(window.location.hash.slice(1));
+  const token = fragment.get("coach_invitation");
+  if (!token?.startsWith("JINV-")) return false;
+  localStorage.setItem(COACH_INVITATION_STORAGE_KEY, token);
+  history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  coachInvitationArrival = { status: "pending" };
+  return true;
+}
+
+function pendingCoachInvitationToken() {
+  const token = localStorage.getItem(COACH_INVITATION_STORAGE_KEY);
+  return token?.startsWith("JINV-") ? token : null;
+}
 
 let audioContext = null;
 let targetDragging = false;
@@ -12659,6 +12676,47 @@ function renderPlayerAccess(access = null) {
     <div><button type="button" data-accept-coach-invitation="${escapeHtml(invitation.id)}">Accept</button><button type="button" data-decline-coach-invitation="${escapeHtml(invitation.id)}">Decline</button></div>
   </article>`).join("");
   $("#coach-dashboard-button").hidden = !state.player?.roles?.includes("COACH");
+  renderCoachInvitationArrival();
+}
+
+function renderCoachInvitationArrival() {
+  const panel = $("#account-coach-invitation-arrival");
+  if (!panel) return;
+  panel.hidden = !coachInvitationArrival;
+  panel.classList.toggle("is-error", coachInvitationArrival?.status === "error");
+  panel.querySelector("p").textContent = coachInvitationArrival?.message || "";
+}
+
+async function claimCoachInvitationFromEmail() {
+  const token = pendingCoachInvitationToken();
+  if (!token || !state.player) return false;
+  coachInvitationArrival = {
+    status: "pending",
+    message: "Opening your Coach invitation…"
+  };
+  renderCoachInvitationArrival();
+  try {
+    const payload = await playerApi("/api/player/coach-invitations/claim", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token })
+    });
+    localStorage.removeItem(COACH_INVITATION_STORAGE_KEY);
+    state.player.access = payload.access;
+    state.player.roles = payload.access.roles;
+    coachInvitationArrival = {
+      status: "success",
+      message: `${payload.invitation.coach_name} invited you to connect on Jetta. Review the invitation below, then accept or decline.`
+    };
+    renderPlayerAccess(payload.access);
+    return true;
+  } catch (error) {
+    coachInvitationArrival = {
+      status: "error",
+      message: "This Coach invitation could not be opened for the signed-in account. Sign in with the email address that received the invitation, or ask the Coach to resend it."
+    };
+    renderCoachInvitationArrival();
+    return false;
+  }
 }
 
 async function refreshPlayerAccess() {
@@ -12715,7 +12773,16 @@ function renderCoachDashboard(dashboard) {
     ? dashboard.students.map(student => `<article><div><strong>${escapeHtml(student.player_name)}</strong><small>${student.seat_status === "ACTIVE" ? "Coach Sponsored" : (student.grants.join(", ") || "Historical access")}</small></div><div class="license-row-actions"><button type="button" data-review-coach-student="${student.player_id}" data-student-name="${escapeHtml(student.player_name)}">Rounds</button>${student.seat_status === "ACTIVE" ? `<button type="button" data-release-sponsorship="${escapeHtml(student.relationship_id)}">Release seat</button>` : `<button type="button" data-assign-sponsorship="${escapeHtml(student.relationship_id)}" ${subscriptionActive ? "" : "disabled"}>Sponsor</button>`}<button type="button" data-end-coach-relationship="${escapeHtml(student.relationship_id)}">End coaching</button></div></article>`).join("")
     : `<article><div><strong>No active students yet</strong><small>Create an invitation using the student's Jetta account email.</small></div></article>`;
   $("#coach-pending-invitations").innerHTML = dashboard.pending_invitations.length
-    ? `<h3>Pending invitations</h3>${dashboard.pending_invitations.map(invitation => `<article><div><strong>${escapeHtml(invitation.invited_email || `Player ${invitation.invited_player_id}`)}</strong><small>Invitation ending ${escapeHtml(invitation.token_hint)}</small></div><button type="button" data-cancel-coach-invitation="${escapeHtml(invitation.id)}">Cancel</button></article>`).join("")}`
+    ? `<h3>Pending invitations</h3>${dashboard.pending_invitations.map(invitation => {
+      const attempted = invitation.email_attempted_at ? new Date(invitation.email_attempted_at) : null;
+      const attemptedCopy = attempted && !Number.isNaN(attempted.getTime())
+        ? ` · ${attempted.toLocaleString()}` : "";
+      const deliveryCopy = invitation.email_status === "SENT"
+        ? "Email sent" : invitation.email_status === "FAILED"
+          ? "Email failed" : invitation.email_status === "NOT_CONFIGURED"
+            ? "Email delivery not configured" : "Email pending";
+      return `<article><div><strong>${escapeHtml(invitation.invited_email || `Player ${invitation.invited_player_id}`)}</strong><small>${deliveryCopy}${attemptedCopy}</small></div><div class="license-row-actions"><button type="button" data-resend-coach-invitation="${escapeHtml(invitation.id)}">Resend email</button><button type="button" data-cancel-coach-invitation="${escapeHtml(invitation.id)}">Cancel</button></div></article>`;
+    }).join("")}`
     : "";
 }
 
@@ -12736,16 +12803,43 @@ async function openCoachDashboard() {
 async function createCoachInvitation() {
   const email = $("#coach-invite-email").value.trim();
   const status = $("#coach-invite-status");
-  status.textContent = "Creating invitation…";
+  status.textContent = "Sending invitation…";
   try {
     const payload = await playerApi("/api/coach/invitations", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })
     });
     $("#coach-invite-email").value = "";
-    status.textContent = `Invitation created for ${payload.invitation.email}. It will appear in that player's Jetta account.`;
+    const deliveryStatus = payload.invitation.email_delivery?.status;
+    status.textContent = deliveryStatus === "SENT"
+      ? `Invitation sent to ${payload.invitation.email}. They'll receive an email inviting them to Jetta. If they don't have an account yet, they'll be asked to create one.`
+      : deliveryStatus === "NOT_CONFIGURED"
+        ? `Invitation saved for ${payload.invitation.email}, but SMTP2GO is not configured yet. It appears in the student's Jetta account.`
+        : deliveryStatus === "FAILED"
+          ? `Invitation saved for ${payload.invitation.email}, but the email could not be sent. It appears in the student's Jetta account.`
+          : `Invitation saved. The student can review it in their Jetta account.`;
     await loadCoachDashboard();
   } catch (error) { status.textContent = error.message; }
+}
+
+async function resendCoachInvitation(invitationId) {
+  const status = $("#coach-invite-status");
+  status.textContent = "Resending invitation…";
+  try {
+    const payload = await playerApi("/api/coach/invitations/resend", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invitation_id: invitationId })
+    });
+    const deliveryStatus = payload.invitation.email_delivery?.status;
+    status.textContent = deliveryStatus === "SENT"
+      ? `Invitation resent to ${payload.invitation.email}.`
+      : deliveryStatus === "NOT_CONFIGURED"
+        ? "The invitation remains pending, but email delivery is not configured."
+        : "The invitation remains pending, but the email could not be sent.";
+    await loadCoachDashboard();
+  } catch (error) {
+    status.textContent = error.message;
+  }
 }
 
 async function openCoachStudentHistory(playerId, playerName) {
@@ -13452,7 +13546,11 @@ async function playerApi(path, options = {}) {
     }
   }
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `player account request failed (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(payload.error || `player account request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return payload;
 }
 
@@ -13543,6 +13641,11 @@ function waitForPlayerLogin() {
   const form = $("#player-login-form");
   const status = $("#player-login-status");
   configureLoginForm();
+  if (pendingCoachInvitationToken()) {
+    status.textContent = authConfig.provider === "supabase"
+      ? "Sign in with the email address that received the Coach invitation. New to Jetta? Choose Create new player."
+      : "Sign in to open the Coach invitation. Email invitations require a Jetta account with the invited email address.";
+  }
   dialog.showModal();
   window.setTimeout(() => {
     (authConfig.provider === "supabase" && !authRecoveryMode
@@ -13867,6 +13970,10 @@ function bindEvents() {
     if (accept) void respondToCoachInvitation(accept.dataset.acceptCoachInvitation, true);
     if (decline) void respondToCoachInvitation(decline.dataset.declineCoachInvitation, false);
   });
+  $("[data-dismiss-coach-invitation-arrival]").addEventListener("click", () => {
+    coachInvitationArrival = null;
+    renderCoachInvitationArrival();
+  });
   $("#coach-dashboard-button").addEventListener("click", () => void openCoachDashboard());
   $("[data-close-coach-dashboard]").addEventListener("click", () => $("#coach-dashboard-dialog").close());
   $("[data-close-coach-student-history]").addEventListener("click", () => $("#coach-student-history-dialog").close());
@@ -13890,6 +13997,11 @@ function bindEvents() {
     }).then(loadCoachDashboard).catch(error => { $("#coach-seat-summary").textContent = error.message; });
   });
   $("#coach-pending-invitations").addEventListener("click", event => {
+    const resend = event.target.closest("[data-resend-coach-invitation]");
+    if (resend) {
+      void resendCoachInvitation(resend.dataset.resendCoachInvitation);
+      return;
+    }
     const button = event.target.closest("[data-cancel-coach-invitation]");
     if (!button) return;
     void playerApi("/api/coach/invitations/cancel", {
@@ -14455,9 +14567,11 @@ function bindEvents() {
 
 async function init() {
   try {
+    captureCoachInvitationLink();
     await initializeAuthentication();
     await loadMappedCourseCatalog();
     await ensurePlayerAccount();
+    await claimCoachInvitationFromEmail();
     restoreGmVoicePreference();
     await restorePlayerLearning();
     const hasSavedPlayerProfile = await restorePlayerProfile();
@@ -14475,6 +14589,10 @@ async function init() {
     $("#app").hidden = false;
     $("#loading").style.opacity = 0;
     setTimeout(() => $("#loading").remove(), 500);
+    if (coachInvitationArrival) {
+      updatePlayerAccountUI();
+      $("#account-dialog").showModal();
+    }
     if (challengeResumed) {
       addGmMessage("Quick 3-Hole Match resumed. Your current paired hole is ready.");
       setAccountSyncStatus("Challenge resumed", `Challenge hole ${challengeSlot() + 1} of 3 is ready.`);

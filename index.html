@@ -8,7 +8,7 @@
       content="A strategic golf game featuring four complete 18-hole courses."
     />
     <title>Jetta Golf — The Strategy Round</title>
-  <link rel="stylesheet" href="styles.css?v=20260929-2" />
+  <link rel="stylesheet" href="styles.css?v=20260929-3" />
   </head>
   <body>
     <div id="loading" class="loading-screen">
@@ -1013,6 +1013,10 @@
             <p>Enter the code provided by Jetta.</p>
             <small id="account-access-code-status" role="status" aria-live="polite"></small>
           </div>
+          <div id="account-coach-invitation-arrival" class="account-invitation-arrival" role="status" aria-live="polite" hidden>
+            <p></p>
+            <button type="button" data-dismiss-coach-invitation-arrival>Dismiss</button>
+          </div>
           <div id="account-coach-invitations" class="account-coach-invitations" hidden></div>
           <div class="account-license-actions">
             <button id="coach-dashboard-button" class="secondary-action" type="button" hidden>Coach Dashboard</button>
@@ -1067,7 +1071,7 @@
         <section id="coach-seat-summary" class="license-summary-card">Loading sponsored seats…</section>
         <section class="license-create-card">
           <label for="coach-invite-email">Invite student by Jetta account email</label>
-          <div><input id="coach-invite-email" type="email" autocomplete="email" placeholder="student@example.com" /><button id="coach-invite-button" type="button">Create invitation</button></div>
+          <div><input id="coach-invite-email" type="email" autocomplete="email" placeholder="student@example.com" /><button id="coach-invite-button" type="button">Send invitation</button></div>
           <small id="coach-invite-status" role="status" aria-live="polite"></small>
         </section>
         <div id="coach-roster" class="license-roster"></div>
@@ -1599,6 +1603,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="app.js?v=20260929-1"></script>
+    <script type="module" src="app.js?v=20260929-2"></script>
   </body>
 </html>

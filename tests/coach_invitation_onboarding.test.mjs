@@ -1,0 +1,22 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+const index = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+
+test("coach invitation link is captured from the fragment and claimed after login", () => {
+  assert.match(app, /fragment\.get\("coach_invitation"\)/);
+  assert.match(app, /localStorage\.setItem\(COACH_INVITATION_STORAGE_KEY/);
+  assert.match(app, /history\.replaceState/);
+  assert.match(app, /\/api\/player\/coach-invitations\/claim/);
+  assert.match(app, /await claimCoachInvitationFromEmail\(\)/);
+});
+
+test("account and coach dashboard expose the final invitation actions", () => {
+  assert.match(index, /id="account-coach-invitation-arrival"/);
+  assert.match(index, />Send invitation<\/button>/);
+  assert.match(app, /data-resend-coach-invitation/);
+  assert.match(app, /\/api\/coach\/invitations\/resend/);
+  assert.doesNotMatch(app, /Invitation ending/);
+});

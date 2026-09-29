@@ -22,6 +22,9 @@ class PlayAccessDenied(LicenseError):
 ROLES = {"PLAYER", "COACH", "ADMIN"}
 PLANS = {"INDIVIDUAL", "COACH"}
 ACTIVITY_KINDS = {"ROUND", "GPS", "ACADEMY", "THREE_HOLE_MATCH", "EIGHTEEN_HOLE_MATCH"}
+COACH_INVITATION_CREATE_LIMIT = 20
+COACH_INVITATION_RESEND_LIMIT = 5
+COACH_INVITATION_RESEND_COOLDOWN_SECONDS = 60
 
 
 def _utc_now() -> datetime:
@@ -55,6 +58,18 @@ def _hash_code(value: Any) -> str:
     if len(canonical) < 20:
         raise LicenseError("access code is invalid")
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()
+
+
+def _normalize_email(value: Any) -> str | None:
+    email = str(value or "").strip().lower()
+    if not email:
+        return None
+    if len(email) > 254 or email.count("@") != 1 or any(character.isspace() for character in email):
+        raise LicenseError("enter a valid student email address")
+    local, domain = email.split("@", 1)
+    if not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
+        raise LicenseError("enter a valid student email address")
+    return email
 
 
 class LicenseService:
@@ -774,13 +789,21 @@ class LicenseService:
     def create_coach_invitation(
         self, coach_id: int, *, player_id: int | None = None, email: str | None = None
     ) -> dict[str, Any]:
-        clean_email = str(email or "").strip().lower() or None
+        clean_email = _normalize_email(email)
         if player_id is None and clean_email is None:
             raise LicenseError("choose an existing player or enter an email address")
         stamp = _iso(_utc_now())
         with self._connect() as database:
             database.execute("BEGIN IMMEDIATE")
             subscription = self._coach_subscription(database, coach_id, require_active=True)
+            created_since = _iso(_utc_now() - timedelta(hours=1))
+            recent_creations = database.execute("""
+                SELECT COUNT(*) FROM license_audit_events
+                WHERE actor_player_id = ? AND event_type = 'COACH_INVITATION_CREATED'
+                  AND created_at >= ?
+            """, (coach_id, created_since)).fetchone()[0]
+            if recent_creations >= COACH_INVITATION_CREATE_LIMIT:
+                raise LicenseError("too many Coach invitations were created; try again later")
             if self._active_seat_count(database, subscription["id"]) >= self.coach_seat_capacity:
                 raise LicenseError("all sponsored student seats are currently occupied")
             if player_id is not None:
@@ -825,6 +848,158 @@ class LicenseService:
                         subject=player_id, entity_type="coach_invitation", entity_id=invitation_id)
         return {"id": invitation_id, "token": raw_token, "token_hint": canonical[-6:],
                 "player_id": player_id, "email": clean_email, "created_at": stamp}
+
+    def claim_coach_invitation(self, player_id: int, token: Any) -> dict[str, Any]:
+        try:
+            token_hash = _hash_code(token)
+        except LicenseError as error:
+            raise LicenseError("Coach invitation link is invalid or no longer available") from error
+        stamp = _iso(_utc_now())
+        with self._connect() as database:
+            database.execute("BEGIN IMMEDIATE")
+            invitation = database.execute("""
+                SELECT i.*, p.display_name AS coach_name
+                FROM coach_invitations i
+                JOIN players p ON p.id = i.coach_id
+                WHERE i.token_hash = ? AND i.status = 'PENDING'
+            """, (token_hash,)).fetchone()
+            player = database.execute(
+                "SELECT email FROM players WHERE id = ?", (player_id,)
+            ).fetchone()
+            if invitation is None or player is None or not self._invitation_matches_player(
+                invitation, player_id, player["email"]
+            ):
+                raise LicenseError("Coach invitation link is invalid or belongs to another account")
+            relationship_id = invitation["relationship_id"]
+            if invitation["invited_player_id"] is None:
+                relationship_id = relationship_id or _new_id("relationship")
+                database.execute("""
+                    INSERT INTO coach_student_relationships(
+                        id, coach_id, player_id, status, created_at
+                    ) VALUES (?, ?, ?, 'INVITED', ?)
+                """, (relationship_id, invitation["coach_id"], player_id,
+                      invitation["created_at"]))
+                database.execute("""
+                    UPDATE coach_invitations
+                    SET invited_player_id = ?, relationship_id = ? WHERE id = ?
+                """, (player_id, relationship_id, invitation["id"]))
+            self._audit(
+                database, "COACH_INVITATION_CLAIMED", actor=player_id, subject=player_id,
+                entity_type="coach_invitation", entity_id=invitation["id"],
+                detail={"coach_id": invitation["coach_id"]},
+            )
+        return {
+            "id": invitation["id"],
+            "coach_id": invitation["coach_id"],
+            "coach_name": invitation["coach_name"],
+            "claimed_at": stamp,
+            "access": self.access_summary(player_id),
+        }
+
+    def prepare_coach_invitation_resend(
+        self, coach_id: int, invitation_id: str
+    ) -> dict[str, Any]:
+        now = _utc_now()
+        stamp = _iso(now)
+        with self._connect() as database:
+            database.execute("BEGIN IMMEDIATE")
+            invitation = database.execute("""
+                SELECT i.*, p.display_name AS coach_name
+                FROM coach_invitations i
+                JOIN players p ON p.id = i.coach_id
+                WHERE i.id = ? AND i.coach_id = ? AND i.status = 'PENDING'
+            """, (invitation_id, coach_id)).fetchone()
+            if invitation is None:
+                raise LicenseError("pending Coach invitation was not found")
+            if not invitation["invited_email"]:
+                raise LicenseError("this invitation has no email address")
+            latest = database.execute("""
+                SELECT created_at FROM license_audit_events
+                WHERE actor_player_id = ? AND entity_id = ?
+                  AND event_type = 'COACH_INVITATION_RESENT'
+                ORDER BY created_at DESC LIMIT 1
+            """, (coach_id, invitation_id)).fetchone()
+            latest_at = _parse_time(latest["created_at"]) if latest else None
+            if latest_at and (now - latest_at).total_seconds() < COACH_INVITATION_RESEND_COOLDOWN_SECONDS:
+                raise LicenseError("wait one minute before resending this invitation")
+            day_start = _iso(now - timedelta(hours=24))
+            resend_count = database.execute("""
+                SELECT COUNT(*) FROM license_audit_events
+                WHERE actor_player_id = ? AND entity_id = ?
+                  AND event_type = 'COACH_INVITATION_RESENT' AND created_at >= ?
+            """, (coach_id, invitation_id, day_start)).fetchone()[0]
+            if resend_count >= COACH_INVITATION_RESEND_LIMIT:
+                raise LicenseError("this invitation has reached its daily resend limit")
+            raw_token = f"JINV-{secrets.token_urlsafe(24)}"
+            canonical = _canonical_code(raw_token)
+            previous_token_hash = invitation["token_hash"]
+            previous_token_hint = invitation["token_hint"]
+            database.execute("""
+                UPDATE coach_invitations SET token_hash = ?, token_hint = ? WHERE id = ?
+            """, (_hash_code(raw_token), canonical[-6:], invitation_id))
+            self._audit(
+                database, "COACH_INVITATION_RESENT", actor=coach_id,
+                subject=invitation["invited_player_id"], entity_type="coach_invitation",
+                entity_id=invitation_id,
+            )
+        return {
+            "id": invitation_id,
+            "token": raw_token,
+            "email": invitation["invited_email"],
+            "coach_name": invitation["coach_name"],
+            "created_at": invitation["created_at"],
+            "resent_at": stamp,
+            "_previous_token_hash": previous_token_hash,
+            "_previous_token_hint": previous_token_hint,
+        }
+
+    def restore_coach_invitation_token(
+        self, coach_id: int, invitation_id: str, attempted_token: Any,
+        previous_token_hash: str, previous_token_hint: str,
+    ) -> None:
+        """Restore the last usable link when a rotated resend was not delivered."""
+        attempted_hash = _hash_code(attempted_token)
+        with self._connect() as database:
+            database.execute("BEGIN IMMEDIATE")
+            invitation = database.execute("""
+                SELECT token_hash FROM coach_invitations
+                WHERE id = ? AND coach_id = ? AND status = 'PENDING'
+            """, (invitation_id, coach_id)).fetchone()
+            if invitation is None or invitation["token_hash"] != attempted_hash:
+                return
+            database.execute("""
+                UPDATE coach_invitations SET token_hash = ?, token_hint = ? WHERE id = ?
+            """, (previous_token_hash, previous_token_hint, invitation_id))
+
+    def record_coach_invitation_delivery(
+        self,
+        coach_id: int,
+        invitation_id: str,
+        status: str,
+        *,
+        provider_message_id: str | None = None,
+    ) -> None:
+        normalized = str(status or "").strip().upper()
+        if normalized not in {"SENT", "FAILED", "NOT_CONFIGURED", "NO_ADDRESS"}:
+            raise LicenseError("Coach invitation delivery status is invalid")
+        with self._connect() as database:
+            invitation = database.execute(
+                "SELECT id FROM coach_invitations WHERE id = ? AND coach_id = ?",
+                (invitation_id, coach_id),
+            ).fetchone()
+            if invitation is None:
+                raise LicenseError("Coach invitation was not found")
+            self._audit(
+                database,
+                f"COACH_INVITATION_EMAIL_{normalized}",
+                actor=coach_id,
+                entity_type="coach_invitation",
+                entity_id=invitation_id,
+                detail={
+                    "provider": "SMTP2GO",
+                    "provider_message_id": provider_message_id,
+                },
+            )
 
     @staticmethod
     def _invitation_matches_player(
@@ -945,6 +1120,9 @@ class LicenseService:
                     UPDATE coach_student_relationships
                     SET status = 'ENDED', ended_at = ? WHERE id = ? AND status = 'INVITED'
                 """, (stamp, invitation["relationship_id"]))
+            self._audit(database, "COACH_INVITATION_DECLINED", actor=player_id,
+                        subject=player_id, entity_type="coach_invitation",
+                        entity_id=invitation_id)
 
     def cancel_coach_invitation(self, coach_id: int, invitation_id: str) -> None:
         stamp = _iso(_utc_now())
@@ -964,6 +1142,9 @@ class LicenseService:
                     UPDATE coach_student_relationships
                     SET status = 'ENDED', ended_at = ? WHERE id = ? AND status = 'INVITED'
                 """, (stamp, invitation["relationship_id"]))
+            self._audit(database, "COACH_INVITATION_CANCELLED", actor=coach_id,
+                        subject=invitation["invited_player_id"],
+                        entity_type="coach_invitation", entity_id=invitation_id)
 
     def assign_sponsorship(self, coach_id: int, relationship_id: str) -> dict[str, Any]:
         stamp = _iso(_utc_now())
@@ -1059,9 +1240,10 @@ class LicenseService:
                 ORDER BY lower(p.display_name)
             """, (coach_id,)).fetchall()
             pending = database.execute("""
-                SELECT id, invited_player_id, invited_email, token_hint, created_at
+                SELECT id, invited_player_id, invited_email, created_at
                 FROM coach_invitations
-                WHERE coach_id = ? AND status = 'PENDING' ORDER BY created_at DESC
+                WHERE coach_id = ? AND status = 'PENDING'
+                ORDER BY created_at DESC LIMIT 100
             """, (coach_id,)).fetchall()
             students = []
             for row in rows:
@@ -1070,11 +1252,31 @@ class LicenseService:
                     grant["type"] for grant in self._valid_grants(database, row["player_id"])
                 ]
                 students.append(item)
+            pending_invitations = []
+            for row in pending:
+                item = dict(row)
+                delivery = database.execute("""
+                    SELECT event_type, created_at FROM license_audit_events
+                    WHERE entity_type = 'coach_invitation' AND entity_id = ?
+                      AND event_type IN (
+                        'COACH_INVITATION_EMAIL_SENT',
+                        'COACH_INVITATION_EMAIL_FAILED',
+                        'COACH_INVITATION_EMAIL_NOT_CONFIGURED',
+                        'COACH_INVITATION_EMAIL_NO_ADDRESS'
+                      )
+                    ORDER BY created_at DESC LIMIT 1
+                """, (row["id"],)).fetchone()
+                item["email_status"] = (
+                    delivery["event_type"].removeprefix("COACH_INVITATION_EMAIL_")
+                    if delivery else "NOT_ATTEMPTED"
+                )
+                item["email_attempted_at"] = delivery["created_at"] if delivery else None
+                pending_invitations.append(item)
         sponsored = sum(1 for item in students if item["seat_status"] == "ACTIVE")
         return {"subscription_id": subscription["id"],
                 "subscription_status": subscription["subscription_status"],
                 "grace_ends_at": subscription["grace_ends_at"], "students": students,
-                "pending_invitations": [dict(row) for row in pending],
+                "pending_invitations": pending_invitations,
                 "sponsored_students": sponsored,
                 "seat_capacity": self.coach_seat_capacity,
                 "seats_available": self.coach_seat_capacity - sponsored}

@@ -184,6 +184,107 @@ class LicenseServiceTests(unittest.TestCase):
         self.assertEqual(dashboard["sponsored_students"], 1)
         self.assertEqual(dashboard["seats_available"], 9)
 
+    def test_email_invitation_claim_binds_new_account_without_individual_code(self):
+        coach = self._coach_with_subscription()
+        invitation = self.licenses.create_coach_invitation(
+            coach["id"], email="new.student@example.com"
+        )
+        with sqlite3.connect(self.path) as database:
+            created = database.execute("""
+                SELECT invited_player_id, relationship_id FROM coach_invitations WHERE id = ?
+            """, (invitation["id"],)).fetchone()
+            relationship_count = database.execute(
+                "SELECT COUNT(*) FROM coach_student_relationships WHERE coach_id = ?",
+                (coach["id"],),
+            ).fetchone()[0]
+        self.assertEqual(created, (None, None))
+        self.assertEqual(relationship_count, 0)
+
+        student = self.players.upsert_supabase_player(
+            "auth-new-student", "New.Student@example.com", "New Student"
+        )
+        claimed = self.licenses.claim_coach_invitation(student["id"], invitation["token"])
+        self.assertEqual(len(claimed["access"]["pending_invitations"]), 1)
+        accepted = self.licenses.accept_coach_invitation(student["id"], invitation["id"])
+        self.assertTrue(accepted["sponsored"])
+        self.assertEqual(
+            [grant["type"] for grant in accepted["access"]["grants"]],
+            ["COACH_SPONSORED"],
+        )
+
+    def test_invitation_token_cannot_be_claimed_by_a_different_email(self):
+        coach = self._coach_with_subscription()
+        invitation = self.licenses.create_coach_invitation(
+            coach["id"], email="invited@example.com"
+        )
+        other = self.players.upsert_supabase_player(
+            "auth-other-student", "other@example.com", "Other Student"
+        )
+        with self.assertRaisesRegex(LicenseError, "another account"):
+            self.licenses.claim_coach_invitation(other["id"], invitation["token"])
+
+    def test_resend_rotates_token_without_duplicate_invitation_or_relationship(self):
+        coach = self._coach_with_subscription()
+        student = self.players.upsert_supabase_player(
+            "auth-resend-student", "resend@example.com", "Resend Student"
+        )
+        invitation = self.licenses.create_coach_invitation(
+            coach["id"], email="resend@example.com"
+        )
+        resent = self.licenses.prepare_coach_invitation_resend(coach["id"], invitation["id"])
+        with self.assertRaisesRegex(LicenseError, "invalid"):
+            self.licenses.claim_coach_invitation(student["id"], invitation["token"])
+        claimed = self.licenses.claim_coach_invitation(student["id"], resent["token"])
+        self.assertEqual(claimed["id"], invitation["id"])
+        with sqlite3.connect(self.path) as database:
+            self.assertEqual(database.execute(
+                "SELECT COUNT(*) FROM coach_invitations WHERE id = ?", (invitation["id"],)
+            ).fetchone()[0], 1)
+            self.assertEqual(database.execute(
+                "SELECT COUNT(*) FROM coach_student_relationships WHERE coach_id = ?",
+                (coach["id"],),
+            ).fetchone()[0], 1)
+
+    def test_failed_resend_can_restore_previous_valid_token(self):
+        coach = self._coach_with_subscription()
+        student = self.players.upsert_supabase_player(
+            "auth-restore-student", "restore@example.com", "Restore Student"
+        )
+        invitation = self.licenses.create_coach_invitation(
+            coach["id"], email="restore@example.com"
+        )
+        resent = self.licenses.prepare_coach_invitation_resend(coach["id"], invitation["id"])
+        self.licenses.restore_coach_invitation_token(
+            coach["id"], invitation["id"], resent["token"],
+            resent["_previous_token_hash"], resent["_previous_token_hint"],
+        )
+        self.licenses.claim_coach_invitation(student["id"], invitation["token"])
+        with self.assertRaisesRegex(LicenseError, "invalid"):
+            self.licenses.claim_coach_invitation(student["id"], resent["token"])
+
+    def test_cancelled_and_accepted_invitation_links_cannot_be_replayed(self):
+        coach = self._coach_with_subscription()
+        cancelled_student = self.players.upsert_supabase_player(
+            "auth-cancelled", "cancelled@example.com", "Cancelled Student"
+        )
+        cancelled = self.licenses.create_coach_invitation(
+            coach["id"], email="cancelled@example.com"
+        )
+        self.licenses.cancel_coach_invitation(coach["id"], cancelled["id"])
+        with self.assertRaisesRegex(LicenseError, "invalid"):
+            self.licenses.claim_coach_invitation(cancelled_student["id"], cancelled["token"])
+
+        accepted_student = self.players.upsert_supabase_player(
+            "auth-accepted", "accepted@example.com", "Accepted Student"
+        )
+        accepted = self.licenses.create_coach_invitation(
+            coach["id"], email="accepted@example.com"
+        )
+        self.licenses.claim_coach_invitation(accepted_student["id"], accepted["token"])
+        self.licenses.accept_coach_invitation(accepted_student["id"], accepted["id"])
+        with self.assertRaisesRegex(LicenseError, "invalid"):
+            self.licenses.claim_coach_invitation(accepted_student["id"], accepted["token"])
+
     def test_releasing_sponsorship_preserves_active_relationship(self):
         coach = self._coach_with_subscription()
         invitation = self.licenses.create_coach_invitation(

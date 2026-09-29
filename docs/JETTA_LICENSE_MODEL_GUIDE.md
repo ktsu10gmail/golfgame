@@ -171,8 +171,22 @@ The **Coach Dashboard** shows:
 
 1. Open **Coach Dashboard**.
 2. Enter the student's Jetta account email.
-3. Create the invitation.
-4. The student signs in and accepts it from their Account screen.
+3. Choose **Send invitation**.
+4. Jetta emails the student a secure link and keeps the invitation pending in
+   the Coach Dashboard.
+5. The student opens the link and signs in with the invited email address. A
+   new student can create their Jetta player account from the same login screen.
+6. Player Account opens with the invitation ready to accept or decline.
+
+The Coach can resend a pending invitation from the dashboard. Resending keeps
+the same logical invitation, rotates its secure link, and does not create a
+second coaching relationship. A one-minute cooldown and daily resend limit
+reduce accidental and abusive sends. Cancelling makes the link unusable.
+
+An email-only invitation does not pre-create a player account or coaching
+relationship. Jetta binds it to the authenticated player only after the player
+opens the secure link with the matching account email. The invitation token is
+stored only as a hash and is not returned to the Coach's browser.
 
 When capacity is available, acceptance creates:
 
@@ -347,6 +361,29 @@ periods, and the rule that an authorized activity remains playable.
   an email is added through an appropriate test setup; use Supabase test users
   for the complete invitation experience.
 - License enforcement is intentionally left in `shadow` mode by default.
+
+## 13. Coach invitation email configuration
+
+Coach invitation delivery uses SMTP2GO through a golf-game application mailer,
+not through WordPress. Keep the public website and product application as
+separate security boundaries. The SMTP2GO credentials already used by
+`www.jetta.com` must not be copied from the WordPress server. Create a separate
+API key for `golfgame.jetta.com`, even if both keys belong to the same SMTP2GO
+account.
+
+Add the following only to the golf-game server's `.env` file:
+
+```text
+SMTP2GO_API_KEY=<separate golfgame application key>
+SMTP2GO_SENDER=Jetta Golf <verified-sender@jetta.com>
+GOLFGAME_PUBLIC_URL=https://golfgame.jetta.com
+GOLFGAME_EMAIL_DELIVERY=enabled
+```
+
+`SMTP2GO_SENDER` must be authorized in SMTP2GO. `SMTP2GO_REPLY_TO` is optional.
+Restart `golfgame.service` after changing configuration. When configuration is
+absent or delivery fails, Jetta preserves the pending invitation and reports
+the actual delivery state; it does not claim that an email was sent.
 
 These limitations do not change player identity or historical ownership. The
 same provider-neutral subscription and entitlement resolver will remain in use

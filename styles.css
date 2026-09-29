@@ -2436,6 +2436,21 @@ body.green-view-open .mobile-round-nav { display: none; }
 .account-code-entry small,
 .license-create-card small { display: block; min-height: 1.2em; margin-top: 6px; color: var(--ink-soft); font-size: .62rem; }
 .account-coach-invitations { margin-top: 12px; display: grid; gap: 7px; }
+.account-invitation-arrival {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(49,90,59,.28);
+  border-radius: 9px;
+  background: rgba(142,189,119,.13);
+}
+.account-invitation-arrival[hidden] { display: none; }
+.account-invitation-arrival.is-error { border-color: rgba(145,65,51,.28); background: rgba(190,101,81,.1); }
+.account-invitation-arrival p { margin: 0; color: var(--ink); font-size: .65rem; line-height: 1.4; }
+.account-invitation-arrival button { flex: none; padding: 7px 9px; border-radius: 7px; border: 1px solid rgba(49,90,59,.22); background: #fff; color: var(--green); font-size: .6rem; font-weight: 800; }
 .account-invitation,
 .license-roster article { padding: 10px; border-radius: 9px; background: #fff; border: 1px solid rgba(49,90,59,.12); }
 .account-invitation strong,
