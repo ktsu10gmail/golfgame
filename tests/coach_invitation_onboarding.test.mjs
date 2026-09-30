@@ -19,6 +19,9 @@ test("account and coach dashboard expose the final invitation actions", () => {
   assert.match(app, /data-resend-coach-invitation/);
   assert.match(app, /\/api\/coach\/invitations\/resend/);
   assert.doesNotMatch(app, /Invitation ending/);
+  assert.match(index, /Getting your students started/);
+  assert.match(index, /Player Profile/);
+  assert.match(index, /Invitations do not use a sponsored seat/);
 });
 
 test("accepting or declining clears the arrival notice and stored link", () => {

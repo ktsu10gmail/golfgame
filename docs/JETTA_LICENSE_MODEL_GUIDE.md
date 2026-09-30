@@ -95,8 +95,8 @@ An administrator creates controlled pilot access.
 
 1. Sign in with an account listed in `GOLFGAME_DEVELOPER_EMAILS` or, for local
    testing, `GOLFGAME_DEVELOPER_NAMES`.
-2. Open **Account**.
-3. Select **Access-code administration**.
+2. Open the restricted Back Office at `https://golfgame.jetta.com/admin/`.
+3. Open **Access & Licensing**.
 4. Choose `Individual` or `Coach`.
 5. Set the access duration and maximum number of redemptions.
 6. Select **Generate code**.
@@ -134,8 +134,8 @@ that code remains valid until its recorded access expiration.
 ## 5. Player workflow
 
 1. Create or sign in to the permanent Jetta account.
-2. Open **Account**.
-3. Find **Jetta Access Code**.
+2. Open **Player Profile**.
+3. Find **Your Jetta access**.
 4. Enter the complete `JETTA-...` code.
 5. Select **Activate**.
 
@@ -169,21 +169,21 @@ The **Coach Dashboard** shows:
 
 ### Invite and sponsor a student
 
-1. Open **Coach Dashboard**.
+1. Open **Player Profile**, then select **Coach Dashboard**.
 2. Enter the student's Jetta account email.
 3. Choose **Send invitation**.
 4. Jetta emails the student a secure link and keeps the invitation pending in
    the Coach Dashboard.
 5. The student opens the link and signs in with the invited email address. A
-   new student can create their Jetta player account from the same login screen.
-6. Player Account opens with the invitation ready to accept or decline.
+   new student can create their Jetta account from the same login screen.
+6. Player Profile opens with the invitation ready to accept or decline.
 
 The Coach can resend a pending invitation from the dashboard. Resending keeps
 the same logical invitation, rotates its secure link, and does not create a
 second coaching relationship. A one-minute cooldown and daily resend limit
 reduce accidental and abusive sends. Cancelling makes the link unusable.
 
-An email-only invitation does not pre-create a player account or coaching
+An email-only invitation does not pre-create a Jetta account or coaching
 relationship. Jetta binds it to the authenticated player only after the player
 opens the secure link with the matching account email. The invitation token is
 stored only as a hash and is not returned to the Coach's browser.
@@ -193,6 +193,10 @@ When capacity is available, acceptance creates:
 - an active coaching relationship;
 - an active sponsored seat; and
 - a `COACH_SPONSORED` entitlement.
+
+A sponsored student does not need an Individual Access Code. If the student
+also has separate Individual or Promotional access, Jetta keeps both grants;
+accepting Coach sponsorship does not cancel or alter the other access.
 
 The Coach subscription can sponsor up to 10 active students. The Coach may
 maintain more than 10 coaching relationships when additional students use
@@ -289,7 +293,7 @@ Open `http://localhost:8092`.
 ### Test denial and activation
 
 1. Create the local account `License Admin`.
-2. Generate an Individual code from **Access-code administration**.
+2. Generate an Individual code from Back Office **Access & Licensing**.
 3. Sign out and create a different test player.
 4. Confirm the player initially has Historical Access.
 5. Attempt to start Academy, a match, GPS recording, or the first shot of a new

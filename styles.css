@@ -2421,7 +2421,7 @@ body.green-view-open .mobile-round-nav { display: none; }
 .account-access-heading { display: flex; justify-content: space-between; gap: 14px; align-items: start; }
 .account-access-heading strong { display: block; margin-top: 3px; font-size: .84rem; }
 .account-access-heading p { margin: 4px 0 0; color: var(--ink-soft); font-size: .65rem; line-height: 1.4; }
-#account-access-badge { padding: 5px 8px; border-radius: 999px; background: rgba(49,90,59,.12); color: var(--green); font-size: .58rem; font-weight: 800; white-space: nowrap; }
+.account-access-heading .account-access-guidance { margin-top: 8px; color: var(--ink); }
 .account-code-entry { margin-top: 12px; }
 .account-code-entry p { margin: 6px 0 0; color: var(--ink-soft); font-size: .61rem; }
 .account-code-entry label,
@@ -2475,6 +2475,27 @@ body.green-view-open .mobile-round-nav { display: none; }
   overflow-y: auto;
 }
 .license-summary-card { font-size: .78rem; line-height: 1.45; }
+.coach-start-route {
+  margin: 14px 0;
+  padding: 15px;
+  border: 1px solid rgba(49,90,59,.18);
+  border-left: 4px solid #8b6425;
+  border-radius: 12px;
+  background: linear-gradient(105deg, rgba(184,139,55,.08), rgba(247,249,242,.9));
+}
+.coach-start-route h3 { margin: 3px 0 0; font-family: var(--font-display); font-size: 1rem; }
+.coach-start-route ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; margin: 14px 0 10px; padding: 0; list-style: none; }
+.coach-start-route li { position: relative; min-width: 0; padding: 0 10px; border-left: 1px solid rgba(49,90,59,.16); }
+.coach-start-route li:first-child { padding-left: 0; border-left: 0; }
+.coach-start-route li > span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #315a3b; color: #fff; font-family: var(--font-data); font-size: .58rem; font-weight: 850; }
+.coach-start-route li p { margin: 7px 0 0; color: var(--ink); font-size: .58rem; line-height: 1.42; }
+.coach-start-route > p { margin: 0; color: var(--ink-soft); font-size: .61rem; line-height: 1.45; }
+.coach-dashboard-help { margin: 12px 0 2px; padding: 11px 13px; border: 1px solid rgba(49,90,59,.15); border-radius: 9px; background: rgba(255,255,255,.42); }
+.coach-dashboard-help summary { color: var(--green); font-size: .65rem; font-weight: 800; cursor: pointer; }
+.coach-dashboard-help dl { display: grid; gap: 8px; margin: 12px 0 0; }
+.coach-dashboard-help dl > div { display: grid; grid-template-columns: 94px minmax(0, 1fr); gap: 9px; }
+.coach-dashboard-help dt { font-size: .61rem; font-weight: 850; }
+.coach-dashboard-help dd { margin: 0; color: var(--ink-soft); font-size: .61rem; line-height: 1.4; }
 .license-roster { display: grid; gap: 8px; margin-top: 12px; }
 .license-roster article { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .license-roster article > div { min-width: 0; }
@@ -3835,6 +3856,11 @@ strong, h1, h2, h3 { font-weight: 600; }
   }
   .license-create-card > div { flex-direction: column; }
   .license-create-card button { width: 100%; }
+  .coach-start-route ol { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .coach-start-route li,
+  .coach-start-route li:first-child { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; align-items: start; padding: 0; border-left: 0; }
+  .coach-start-route li p { margin: 3px 0 0; }
+  .coach-dashboard-help dl > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .license-roster article { grid-template-columns: minmax(0, 1fr); }
   .license-roster .license-row-actions { justify-content: flex-start; }
   .license-roster .license-row-actions button { flex: 1 1 120px; }

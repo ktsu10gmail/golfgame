@@ -8,7 +8,7 @@
       content="A strategic golf game featuring four complete 18-hole courses."
     />
     <title>Jetta Golf — The Strategy Round</title>
-  <link rel="stylesheet" href="styles.css?v=20260929-3" />
+  <link rel="stylesheet" href="styles.css?v=20260930-1" />
   </head>
   <body>
     <div id="loading" class="loading-screen">
@@ -54,7 +54,7 @@
         </div>
 
         <div class="topbar-actions">
-          <button id="account-button" class="account-button" type="button" aria-label="Open player account">
+          <button id="account-button" class="account-button" type="button" aria-label="Open Player Profile">
             <span id="account-monogram">P</span>
             <span id="account-name">Player</span>
             <svg class="mobile-action-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.7-4 2.9-6 6.5-6s5.8 2 6.5 6"/></svg>
@@ -956,7 +956,7 @@
           <small>Your round</small>
         </div>
         <section class="login-fields">
-          <span class="eyebrow">Player account</span>
+          <span class="eyebrow">Jetta sign in</span>
           <h2>Pick up where you left off.</h2>
           <p>Your unfinished round follows you between your computer and phone.</p>
           <label id="player-name-field" class="player-name-field">
@@ -986,10 +986,10 @@
       <form method="dialog" class="modal-card">
         <header>
           <div>
-            <span class="eyebrow">Player account</span>
+            <span class="eyebrow">Player Profile</span>
             <h2 id="account-dialog-name">Player</h2>
           </div>
-          <button class="modal-close" value="close" aria-label="Close player account">×</button>
+          <button class="modal-close" value="close" aria-label="Close Player Profile">×</button>
         </header>
         <div class="account-sync-card">
           <span class="account-sync-dot" aria-hidden="true"></span>
@@ -1001,16 +1001,16 @@
         <section id="account-access-card" class="account-access-card" aria-labelledby="account-access-title">
           <div class="account-access-heading">
             <div>
-              <span class="eyebrow">Jetta access</span>
+              <span class="eyebrow">Your Jetta access</span>
               <strong id="account-access-title">Checking access…</strong>
               <p id="account-access-detail">Your history remains available regardless of plan status.</p>
+              <p id="account-access-guidance" class="account-access-guidance"></p>
             </div>
-            <span id="account-access-badge">—</span>
           </div>
           <div id="account-access-code-panel" class="account-code-entry">
-            <label for="account-access-code">Have a Jetta Access Code?</label>
+            <label id="account-access-code-label" for="account-access-code">Have a Jetta Access Code?</label>
             <div><input id="account-access-code" autocomplete="off" maxlength="80" placeholder="JETTA-…" /><button id="account-redeem-code" type="button">Activate</button></div>
-            <p>Enter the code provided by Jetta.</p>
+            <p id="account-access-code-help">Enter a valid code provided by Jetta.</p>
             <small id="account-access-code-status" role="status" aria-live="polite"></small>
           </div>
           <div id="account-coach-invitation-arrival" class="account-invitation-arrival" role="status" aria-live="polite" hidden>
@@ -1069,6 +1069,20 @@
       <div class="modal-card">
         <header><div><span class="eyebrow">Jetta Coach</span><h2>Coach Dashboard</h2></div><button class="modal-close" type="button" data-close-coach-dashboard aria-label="Close Coach Dashboard">×</button></header>
         <section id="coach-seat-summary" class="license-summary-card">Loading sponsored seats…</section>
+        <section class="coach-start-route" aria-labelledby="coach-start-route-title">
+          <div>
+            <span class="eyebrow">Coach route</span>
+            <h3 id="coach-start-route-title">Getting your students started</h3>
+          </div>
+          <ol>
+            <li><span>1</span><p>Enter your student’s email and send the invitation.</p></li>
+            <li><span>2</span><p>Jetta emails the student. New students create an account first.</p></li>
+            <li><span>3</span><p>The student opens <strong>Player Profile</strong> and finds the Coach invitation.</p></li>
+            <li><span>4</span><p>The student selects <strong>Accept invitation</strong>.</p></li>
+            <li><span>5</span><p>After acceptance, the student appears here and can use a sponsored seat.</p></li>
+          </ol>
+          <p>Invitations do not use a sponsored seat until the student accepts and sponsorship is assigned.</p>
+        </section>
         <section class="license-create-card">
           <label for="coach-invite-email">Invite student by Jetta account email</label>
           <div><input id="coach-invite-email" type="email" autocomplete="email" placeholder="student@example.com" /><button id="coach-invite-button" type="button">Send invitation</button></div>
@@ -1076,6 +1090,15 @@
         </section>
         <div id="coach-roster" class="license-roster"></div>
         <div id="coach-pending-invitations" class="license-roster"></div>
+        <details class="coach-dashboard-help">
+          <summary>What do the dashboard actions do?</summary>
+          <dl>
+            <div><dt>Rounds</dt><dd>Review eligible rounds completed during the coaching relationship.</dd></div>
+            <div><dt>Release seat</dt><dd>Stops sponsored access but preserves the coaching relationship and history.</dd></div>
+            <div><dt>End coaching</dt><dd>Ends the relationship and releases any sponsored seat.</dd></div>
+            <div><dt>Resend email</dt><dd>Sends a new secure link without creating another invitation.</dd></div>
+          </dl>
+        </details>
       </div>
     </dialog>
 
@@ -1603,6 +1626,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="app.js?v=20260929-4"></script>
+    <script type="module" src="app.js?v=20260930-1"></script>
   </body>
 </html>

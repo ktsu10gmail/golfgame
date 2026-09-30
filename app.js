@@ -89,6 +89,7 @@ import {
   buildPostRoundPdf,
   postRoundReportFilename
 } from "./packages/presentation/post_round_export.mjs?v=20260927-1";
+import { buildAccessGuidance } from "./packages/accounts/browser_access_guidance.mjs?v=20260930-1";
 import {
   attachPostRoundNarrative,
   buildPostRoundReportModel,
@@ -12646,37 +12647,24 @@ function updatePlayerAccountUI() {
   updateAccountProfileSummary();
 }
 
-const ACCESS_GRANT_LABELS = {
-  SELF_PAID: "Individual",
-  PROMOTIONAL: "Promotional Access",
-  COACH_SELF: "Coach Plan",
-  COACH_SPONSORED: "Coach Sponsored"
-};
-
 function renderPlayerAccess(access = null) {
   const title = $("#account-access-title");
   if (!title) return;
-  const grants = Array.isArray(access?.grants) ? access.grants : [];
-  const active = access?.play_access === "ACTIVE";
-  const primary = grants[0];
-  title.textContent = active
-    ? `Active — ${ACCESS_GRANT_LABELS[primary?.type] || "Jetta Access"}`
-    : "Historical Access";
-  $("#account-access-badge").textContent = active ? "ACTIVE" : "HISTORY";
-  const coach = access?.current_coach;
-  const expiry = primary?.expires_at ? new Date(primary.expires_at) : null;
-  $("#account-access-detail").textContent = active
-    ? `${coach ? `Current Coach: ${coach.coach_name}. ` : ""}${expiry && !Number.isNaN(expiry.getTime()) ? `Available through ${expiry.toLocaleDateString()}.` : "New play is available."}`
-    : `${coach ? `Current Coach: ${coach.coach_name}. ` : ""}Previous rounds, replays, and learning history remain available.`;
+  const presentation = buildAccessGuidance(access);
+  title.textContent = presentation.title;
+  $("#account-access-detail").textContent = presentation.detail;
+  $("#account-access-guidance").textContent = presentation.guidance;
+  $("#account-access-code-label").textContent = presentation.codeLabel;
+  $("#account-access-code-help").textContent = presentation.codeHelp;
   const invitations = Array.isArray(access?.pending_invitations) ? access.pending_invitations : [];
   const invitationPanel = $("#account-coach-invitations");
   invitationPanel.hidden = invitations.length === 0;
   invitationPanel.innerHTML = invitations.map(invitation => `<article class="account-invitation">
     <strong>${escapeHtml(invitation.coach_name)} invited you to Jetta Coach</strong>
-    <small>Accepting creates a coaching relationship and requests a sponsored seat.</small>
-    <div><button type="button" data-accept-coach-invitation="${escapeHtml(invitation.id)}">Accept</button><button type="button" data-decline-coach-invitation="${escapeHtml(invitation.id)}">Decline</button></div>
+    <small>Accepting creates a coaching relationship and requests a sponsored seat. You do not need a separate Jetta Access Code while your Coach sponsors you.</small>
+    <div><button type="button" data-accept-coach-invitation="${escapeHtml(invitation.id)}">Accept invitation</button><button type="button" data-decline-coach-invitation="${escapeHtml(invitation.id)}">Decline</button></div>
   </article>`).join("");
-  $("#coach-dashboard-button").hidden = !state.player?.roles?.includes("COACH");
+  $("#coach-dashboard-button").hidden = !presentation.showCoachDashboard;
   renderCoachInvitationArrival();
 }
 
@@ -12706,14 +12694,14 @@ async function claimCoachInvitationFromEmail() {
     state.player.roles = payload.access.roles;
     coachInvitationArrival = {
       status: "success",
-      message: `${payload.invitation.coach_name} invited you to connect on Jetta. Review the invitation below, then accept or decline.`
+      message: `${payload.invitation.coach_name} invited you to Jetta. Open Player Profile and review the Coach invitation below.`
     };
     renderPlayerAccess(payload.access);
     return true;
   } catch (error) {
     coachInvitationArrival = {
       status: "error",
-      message: "This Coach invitation could not be opened for the signed-in account. Sign in with the email address that received the invitation, or ask the Coach to resend it."
+      message: "This Coach invitation could not be opened for the signed-in account. Sign in with the email address that received it, then open Player Profile—or ask the Coach to resend it."
     };
     renderCoachInvitationArrival();
     return false;
@@ -13571,7 +13559,7 @@ async function playerApi(path, options = {}) {
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(payload.error || `player account request failed (${response.status})`);
+    const error = new Error(payload.error || `Player Profile request failed (${response.status})`);
     error.status = response.status;
     throw error;
   }
@@ -13733,7 +13721,7 @@ function waitForPlayerLogin() {
             await supabaseAuth.signIn(email, password);
           }
           payload = await playerApi("/api/player/session");
-          if (!payload.player) throw new Error("Supabase signed in, but the player account could not be opened.");
+          if (!payload.player) throw new Error("Supabase signed in, but Player Profile could not be opened.");
         } else {
           payload = await playerApi(`/api/player/${action}`, {
             method: "POST",
@@ -14637,7 +14625,7 @@ async function init() {
       if (!hasSavedPlayerProfile) await savePlayerProfile(state.profile);
       setAccountSyncStatus(
         "Round resumed",
-        `${state.course.shortName}, hole ${state.holeIndex + 1}, was restored from your player account.`
+        `${state.course.shortName}, hole ${state.holeIndex + 1}, was restored from your Jetta account.`
       );
     } else if (!hasSavedPlayerProfile) {
       renderProfileDialog();

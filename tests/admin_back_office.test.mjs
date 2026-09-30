@@ -32,11 +32,11 @@ test("Back Office shell states the three Jetta website boundaries", () => {
   assert.match(html, /Restricted Jetta Back Office/);
 });
 
-test("Player Account keeps redemption and removes administrative generation", () => {
+test("Player Profile keeps redemption and removes administrative generation", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
   assert.match(html, /Have a Jetta Access Code\?/);
-  assert.match(html, /Enter the code provided by Jetta\./);
+  assert.match(html, /Enter a valid code provided by Jetta\./);
   assert.doesNotMatch(html, /license-admin-dialog/);
   assert.doesNotMatch(html, /license-admin-button/);
   assert.doesNotMatch(app, /createAdminAccessCode/);

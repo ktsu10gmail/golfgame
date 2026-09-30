@@ -50,6 +50,10 @@ class SMTP2GOTests(unittest.TestCase):
         self.assertEqual(payload["to"], ["student@example.com"])
         self.assertIn("/#coach_invitation=JINV-token_value", payload["text_body"])
         self.assertIn("Coach &lt;David&gt;", payload["html_body"])
+        self.assertIn("Open Player Profile", payload["text_body"])
+        self.assertIn("Accept invitation", payload["text_body"])
+        self.assertIn("do not need a separate Jetta Access Code", payload["text_body"])
+        self.assertIn(">Join Jetta</a>", payload["html_body"])
         self.assertNotIn("private-api-key", json.dumps(result))
         self.assertEqual(result["status"], "SENT")
 
