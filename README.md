@@ -287,3 +287,23 @@ data/gallopinghills/
 ```
 
 Shared engine calibration fixtures remain in `data/fixtures/`.
+
+## Licensing lifecycle worker
+
+Coach grace expiration and transactional notifications run independently of
+web traffic through `scripts/run_license_lifecycle.py`. Production uses the
+repository units in `deploy/systemd/`:
+
+```bash
+mkdir -p "$HOME/.config/systemd/user"
+cp deploy/systemd/golfgame-license-lifecycle.service "$HOME/.config/systemd/user/"
+cp deploy/systemd/golfgame-license-lifecycle.timer "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
+systemctl --user enable --now golfgame-license-lifecycle.timer
+systemctl --user list-timers --all
+```
+
+Use `python3 scripts/run_license_lifecycle.py --dry-run` to inspect due work
+without changing subscription, notification, or audit state. The worker uses
+the same `.env`, SQLite database, licensing policy, and application SMTP2GO
+credentials as the web server. It adds no Stripe or payment functionality.

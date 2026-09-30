@@ -2422,6 +2422,22 @@ body.green-view-open .mobile-round-nav { display: none; }
 .account-access-heading strong { display: block; margin-top: 3px; font-size: .84rem; }
 .account-access-heading p { margin: 4px 0 0; color: var(--ink-soft); font-size: .65rem; line-height: 1.4; }
 .account-access-heading .account-access-guidance { margin-top: 8px; color: var(--ink); }
+.access-timeline-card,
+.access-continuation-card,
+.coach-grace-notice {
+  position: relative;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(139,100,37,.28);
+  border-radius: 10px;
+  background: linear-gradient(105deg, rgba(184,139,55,.1), rgba(255,255,255,.72));
+}
+.access-timeline-card { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 10px; }
+.access-timeline-card[hidden], .access-continuation-card[hidden], .coach-grace-notice[hidden] { display: none; }
+.access-timeline-marker { width: 8px; height: 8px; margin-top: 4px; border: 2px solid #fff; border-radius: 50%; background: #b88637; box-shadow: 0 0 0 2px rgba(139,100,37,.35); }
+.access-timeline-card strong, .access-continuation-card strong, .coach-grace-notice strong { display: block; font-size: .72rem; }
+.access-timeline-card p, .access-continuation-card p, .coach-grace-notice p { margin: 4px 0 0; color: var(--ink-soft); font-size: .62rem; line-height: 1.45; }
+.access-continuation-card { border-color: rgba(71,109,132,.25); background: linear-gradient(105deg, rgba(71,109,132,.1), rgba(255,255,255,.72)); }
 .account-code-entry { margin-top: 12px; }
 .account-code-entry p { margin: 6px 0 0; color: var(--ink-soft); font-size: .61rem; }
 .account-code-entry label,

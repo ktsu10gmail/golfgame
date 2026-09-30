@@ -61,9 +61,10 @@ function setSection(name) {
   $$('[data-section]').forEach(button => {
     button.setAttribute("aria-current", button.dataset.section === name ? "page" : "false");
   });
-  const labels = { home: "Back Office", users: "Users", licensing: "Access & Licensing", coaches: "Coaches", audit: "Audit" };
+  const labels = { home: "Back Office", users: "Users", licensing: "Access & Licensing", grace: "Grace & Continuation", coaches: "Coaches", audit: "Audit" };
   $("#page-title").textContent = labels[name] || "Back Office";
   if (name === "licensing") void loadCodes();
+  if (name === "grace") void loadGraceOperations();
   if (name === "coaches") void loadCoaches();
   if (name === "audit") void loadAudit();
 }
@@ -116,6 +117,74 @@ async function loadCodes() {
       return item;
     }));
   } catch (error) { renderError(container, error); }
+}
+
+function renderContinuitySummary(summary) {
+  const container = $("#grace-summary");
+  const entries = [
+    ["Active grace", summary.active_grace_cycles],
+    ["Students at risk", summary.at_risk_sponsored_students],
+    ["Pending notices", summary.pending_notifications],
+    ["Delivery issues", summary.failed_notifications + summary.no_address_notifications],
+    ["Eligible students", summary.eligible_students],
+  ];
+  container.replaceChildren(...entries.map(([label, value]) => {
+    const item = element("div");
+    item.append(element("strong", "", value), element("span", "", label));
+    return item;
+  }));
+}
+
+function renderNotifications(items) {
+  const container = $("#grace-notifications");
+  if (!items.length) {
+    container.replaceChildren(element("div", "empty-state", "No lifecycle notifications recorded."));
+    return;
+  }
+  container.replaceChildren(...items.map(item => record(
+    `${item.notification_type} · ${item.window_key}`,
+    `${item.recipient_name} · ${item.status} · ${item.attempt_count}/3 attempts · due ${displayDate(item.due_at)}${item.last_error_code ? ` · ${item.last_error_code}` : ""}`,
+    [item.status]
+  )));
+}
+
+function renderContinuation(items) {
+  const container = $("#continuation-list");
+  if (!items.length) {
+    container.replaceChildren(element("div", "empty-state", "No continuation eligibility matches."));
+    return;
+  }
+  container.replaceChildren(...items.map(item => {
+    const row = record(
+      item.player_name,
+      `Player ${item.player_id} · ${item.email || "No email"} · qualified ${displayDate(item.qualified_at)}`,
+      [item.status, item.offer_version]
+    );
+    const actions = element("div", "record-actions");
+    actions.append(actionButton("Use in correction", "eligibility-correction", item.player_id));
+    row.append(actions);
+    return row;
+  }));
+}
+
+async function loadGraceOperations() {
+  const notifications = $("#grace-notifications");
+  const eligibility = $("#continuation-list");
+  notifications.replaceChildren(element("div", "empty-state", "Loading notification evidence…"));
+  eligibility.replaceChildren(element("div", "empty-state", "Loading continuation eligibility…"));
+  try {
+    const [summary, noticePayload, eligibilityPayload] = await Promise.all([
+      adminApi("/api/admin/licensing/grace-summary"),
+      adminApi("/api/admin/licensing/notifications?limit=50"),
+      adminApi(adminUrl("/api/admin/licensing/continuation-eligibilities", { query: $("#eligibility-search").value, limit: 50 })),
+    ]);
+    renderContinuitySummary(summary);
+    renderNotifications(noticePayload.items || []);
+    renderContinuation(eligibilityPayload.items || []);
+  } catch (error) {
+    renderError(notifications, error);
+    renderError(eligibility, error);
+  }
 }
 
 async function showRedemptions(codeId) {
@@ -290,6 +359,21 @@ function bindEvents() {
   $("#user-search-form").addEventListener("submit", searchUsers);
   $("#coach-search-form").addEventListener("submit", loadCoaches);
   $("#audit-filter-form").addEventListener("submit", loadAudit);
+  $("#eligibility-search-form").addEventListener("submit", event => { event.preventDefault(); void loadGraceOperations(); });
+  $("#refresh-grace").addEventListener("click", loadGraceOperations);
+  $("#eligibility-correction-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const output = $("#eligibility-correction-status");
+    output.textContent = "Saving audited correction…";
+    try {
+      await adminApi("/api/admin/licensing/continuation-eligibilities/correct", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: Number($("#eligibility-player-id").value), status: $("#eligibility-status").value, reason: $("#eligibility-reason").value })
+      });
+      output.textContent = "Eligibility correction saved and audited.";
+      await loadGraceOperations();
+    } catch (error) { output.textContent = error.message; }
+  });
   $("#refresh-codes").addEventListener("click", loadCodes);
   $("#code-form").addEventListener("submit", async event => {
     event.preventDefault();
@@ -309,6 +393,10 @@ function bindEvents() {
     if (action.dataset.action === "coach-detail") void loadCoachDetail(action.dataset.value);
     if (action.dataset.action === "code-redemptions") void showRedemptions(action.dataset.value);
     if (action.dataset.action === "revoke-code") void revokeCode(action.dataset.value);
+    if (action.dataset.action === "eligibility-correction") {
+      $("#eligibility-player-id").value = action.dataset.value;
+      $("#eligibility-reason").focus();
+    }
   });
 }
 

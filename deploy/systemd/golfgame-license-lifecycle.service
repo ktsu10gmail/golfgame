@@ -1,0 +1,8 @@
+[Unit]
+Description=Jetta licensing lifecycle and notification worker
+After=network-online.target golfgame.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ksu/golfgame
+ExecStart=/usr/bin/python3 /home/ksu/golfgame/scripts/run_license_lifecycle.py

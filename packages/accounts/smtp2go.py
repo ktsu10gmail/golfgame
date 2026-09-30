@@ -95,12 +95,23 @@ class SMTP2GOMailer:
             "<p style=\"font-size:13px;color:#5d6b61\">If you were not expecting this "
             "invitation, you can ignore this email.</p></div>"
         )
+        return self.send_message(email, subject, text_body, html_body)
+
+    def send_message(
+        self, recipient: str, subject: str, text_body: str, html_body: str
+    ) -> dict[str, Any]:
+        email = str(recipient or "").strip().lower()
+        if "@" not in email or len(email) > 254:
+            raise EmailDeliveryError("the message does not have a deliverable email address")
+        clean_subject = " ".join(str(subject or "").strip().split())[:180]
+        if not clean_subject or not str(text_body or "").strip() or not str(html_body or "").strip():
+            raise EmailDeliveryError("the email message is incomplete")
         payload: dict[str, Any] = {
             "sender": self.config.sender,
             "to": [email],
-            "subject": subject,
-            "text_body": text_body,
-            "html_body": html_body,
+            "subject": clean_subject,
+            "text_body": str(text_body),
+            "html_body": str(html_body),
             "fastaccept": True,
         }
         if self.config.reply_to:

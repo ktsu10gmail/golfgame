@@ -150,6 +150,14 @@ class AdminOperationsService:
                 FROM license_audit_events WHERE subject_player_id = ?
                 ORDER BY created_at DESC, id DESC LIMIT 20
             """, (selected_id,)).fetchall()
+            eligibility = database.execute("""
+                SELECT id, player_id, offer_code, offer_version, status, qualified_at,
+                       source_relationship_id, source_seat_assignment_id,
+                       source_grant_id, source_coach_subscription_id, revoked_at,
+                       revoked_by_player_id, correction_reason, created_at, updated_at
+                FROM continuation_eligibilities WHERE player_id = ?
+                ORDER BY created_at DESC LIMIT 10
+            """, (selected_id,)).fetchall()
         account = self._account_payload(player)
         account["roles"] = self.licenses.roles(selected_id)
         return {
@@ -157,6 +165,7 @@ class AdminOperationsService:
             "diagnostic": self.licenses.entitlement_diagnostic(selected_id),
             "subscriptions": [dict(row) for row in subscriptions],
             "grants": [dict(row) for row in grants],
+            "continuation_eligibilities": [dict(row) for row in eligibility],
             "recent_events": [self._audit_payload(row) for row in events],
         }
 
@@ -290,6 +299,22 @@ class AdminOperationsService:
                 FROM coach_invitations WHERE coach_id = ?
                 ORDER BY created_at DESC LIMIT 100
             """, (selected_id,)).fetchall()
+            cycle = database.execute("""
+                SELECT id, subscription_id, started_at, deadline_snapshot_at,
+                       status, closed_at, created_at, updated_at
+                FROM subscription_grace_cycles
+                WHERE subscription_id = COALESCE(?, '')
+                ORDER BY started_at DESC LIMIT 1
+            """, (subscription["id"] if subscription else None,)).fetchone()
+            notifications = database.execute("""
+                SELECT id, recipient_player_id, recipient_email, notification_type,
+                       window_key, window_number, due_at, status, attempt_count,
+                       last_attempt_at, sent_at, provider, provider_message_id,
+                       last_error_code
+                FROM license_notifications
+                WHERE subscription_id = COALESCE(?, '')
+                ORDER BY created_at DESC LIMIT 25
+            """, (subscription["id"] if subscription else None,)).fetchall()
         account = self._account_payload(coach)
         account["roles"] = self.licenses.roles(selected_id)
         active_seats = sum(1 for row in relationships if row["seat_status"] == "ACTIVE")
@@ -301,7 +326,106 @@ class AdminOperationsService:
             "seats_available": max(0, self.licenses.coach_seat_capacity - active_seats),
             "relationships": [dict(row) for row in relationships],
             "invitations": [dict(row) for row in invitations],
+            "grace_cycle": dict(cycle) if cycle else None,
+            "notifications": [dict(row) for row in notifications],
         }
+
+    def grace_summary(self) -> dict[str, int]:
+        with self._connect() as database:
+            active_cycles = database.execute(
+                "SELECT COUNT(*) FROM subscription_grace_cycles WHERE status = 'ACTIVE'"
+            ).fetchone()[0]
+            at_risk = database.execute("""
+                SELECT COUNT(*) FROM coach_seat_assignments a
+                JOIN subscriptions s ON s.id = a.coach_subscription_id
+                WHERE a.status = 'ACTIVE' AND s.status = 'PAST_DUE'
+            """).fetchone()[0]
+            counts = {row["status"].lower(): row["count"] for row in database.execute("""
+                SELECT status, COUNT(*) AS count FROM license_notifications
+                GROUP BY status
+            """).fetchall()}
+            eligibility = {row["status"].lower(): row["count"] for row in database.execute("""
+                SELECT status, COUNT(*) AS count FROM continuation_eligibilities
+                GROUP BY status
+            """).fetchall()}
+        return {
+            "active_grace_cycles": active_cycles,
+            "at_risk_sponsored_students": at_risk,
+            "pending_notifications": counts.get("pending", 0),
+            "failed_notifications": counts.get("failed", 0),
+            "missed_notifications": counts.get("missed", 0),
+            "no_address_notifications": counts.get("no_address", 0),
+            "eligible_students": eligibility.get("eligible", 0),
+            "revoked_eligibilities": eligibility.get("revoked", 0),
+        }
+
+    def notifications(
+        self, *, subscription_id: Any = None, status: Any = None, limit: Any = None
+    ) -> dict[str, Any]:
+        page_size = _limit(limit, 50)
+        clauses = ["1 = 1"]
+        parameters: list[Any] = []
+        if subscription_id not in (None, ""):
+            clauses.append("n.subscription_id = ?")
+            parameters.append(str(subscription_id).strip())
+        if status not in (None, ""):
+            normalized = str(status).strip().upper()
+            allowed = {"PENDING", "CLAIMED", "FAILED", "SENT", "MISSED", "CANCELLED", "NO_ADDRESS"}
+            if normalized not in allowed:
+                raise LicenseError("notification status is invalid")
+            clauses.append("n.status = ?")
+            parameters.append(normalized)
+        parameters.append(page_size)
+        with self._connect() as database:
+            rows = database.execute(f"""
+                SELECT n.id, n.subscription_id, n.grace_cycle_id,
+                       n.recipient_player_id, p.display_name AS recipient_name,
+                       n.recipient_email, n.notification_type, n.window_key,
+                       n.window_number, n.due_at, n.window_ends_at, n.status,
+                       n.attempt_count, n.last_attempt_at, n.sent_at, n.provider,
+                       n.provider_message_id, n.last_error_code, n.created_at, n.updated_at
+                FROM license_notifications n
+                JOIN players p ON p.id = n.recipient_player_id
+                WHERE {' AND '.join(clauses)}
+                ORDER BY n.created_at DESC, n.id DESC LIMIT ?
+            """, parameters).fetchall()
+        return {"items": [dict(row) for row in rows], "limit": page_size}
+
+    def continuation_eligibilities(
+        self, query: Any = "", *, status: Any = None, limit: Any = None
+    ) -> dict[str, Any]:
+        page_size = _limit(limit, 50)
+        clauses = ["1 = 1"]
+        parameters: list[Any] = []
+        term = " ".join(str(query or "").strip().split())
+        if term:
+            if len(term) < 2:
+                raise LicenseError("enter at least two characters to search eligibility")
+            lowered = f"%{term.casefold()}%"
+            numeric = int(term) if term.isdigit() else -1
+            clauses.append("(p.id = ? OR lower(p.display_name) LIKE ? OR lower(COALESCE(p.email, '')) LIKE ?)")
+            parameters.extend([numeric, lowered, lowered])
+        if status not in (None, ""):
+            normalized = str(status).upper()
+            if normalized not in {"ELIGIBLE", "REVOKED"}:
+                raise LicenseError("eligibility status is invalid")
+            clauses.append("e.status = ?")
+            parameters.append(normalized)
+        parameters.append(page_size)
+        with self._connect() as database:
+            rows = database.execute(f"""
+                SELECT e.id, e.player_id, p.display_name AS player_name, p.email,
+                       e.offer_code, e.offer_version, e.status, e.qualified_at,
+                       e.source_relationship_id, e.source_seat_assignment_id,
+                       e.source_grant_id, e.source_coach_subscription_id,
+                       e.revoked_at, e.revoked_by_player_id, e.correction_reason,
+                       e.created_at, e.updated_at
+                FROM continuation_eligibilities e
+                JOIN players p ON p.id = e.player_id
+                WHERE {' AND '.join(clauses)}
+                ORDER BY e.qualified_at DESC, e.id DESC LIMIT ?
+            """, parameters).fetchall()
+        return {"items": [dict(row) for row in rows], "limit": page_size}
 
     @staticmethod
     def _audit_payload(row: sqlite3.Row) -> dict[str, Any]:

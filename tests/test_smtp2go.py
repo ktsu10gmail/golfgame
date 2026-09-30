@@ -64,6 +64,22 @@ class SMTP2GOTests(unittest.TestCase):
         with self.assertRaises(EmailDeliveryError):
             mailer.send_coach_invitation("student@example.com", "Coach", "JINV-token")
 
+    @patch("packages.accounts.smtp2go.urlopen")
+    def test_generic_transactional_message_uses_same_safe_transport(self, urlopen):
+        urlopen.return_value = _Response({
+            "request_id": "request-2",
+            "data": {"succeeded": 1, "failed": 0, "email_id": "message-2"},
+        })
+        mailer = SMTP2GOMailer(SMTP2GOConfig("private-key", "sender@example.com"))
+        result = mailer.send_message(
+            "coach@example.com", "Coach grace notice", "Text body", "<p>HTML body</p>"
+        )
+        payload = json.loads(urlopen.call_args.args[0].data)
+        self.assertEqual(payload["subject"], "Coach grace notice")
+        self.assertEqual(payload["to"], ["coach@example.com"])
+        self.assertEqual(result["message_id"], "message-2")
+        self.assertNotIn("private-key", json.dumps(result))
+
 
 if __name__ == "__main__":
     unittest.main()

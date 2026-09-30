@@ -54,6 +54,7 @@ from packages.accounts import (
     SupabaseAuth,
     SupabaseConfig,
     attach_verified_learning_context,
+    create_account_runtime,
 )
 from packages.course_import import (
     CourseImportError,
@@ -64,27 +65,15 @@ from packages.course_import import (
 from scripts.import_mapped_course import install_package, validate_package
 
 AI_SERVICE = create_ai_service()
-PLAYER_DB_PATH = Path(os.getenv("GOLFGAME_PLAYER_DB", ROOT / "data" / "player_accounts.sqlite3"))
-PLAYER_STORE = PlayerStore(PLAYER_DB_PATH)
-LICENSE_SERVICE = LicenseService(
-    PLAYER_DB_PATH,
-    enforcement=os.getenv("GOLFGAME_LICENSE_ENFORCEMENT", "shadow"),
-    coach_seat_capacity=int(os.getenv("GOLFGAME_COACH_SEAT_CAPACITY", "10")),
-    coach_grace_days=int(os.getenv("GOLFGAME_COACH_GRACE_DAYS", "30")),
-)
-ADMIN_OPERATIONS = AdminOperationsService(PLAYER_DB_PATH, LICENSE_SERVICE)
+ACCOUNT_RUNTIME = create_account_runtime(ROOT)
+PLAYER_DB_PATH = ACCOUNT_RUNTIME.player_db_path
+PLAYER_STORE = ACCOUNT_RUNTIME.player_store
+LICENSE_SERVICE = ACCOUNT_RUNTIME.license_service
+ADMIN_OPERATIONS = ACCOUNT_RUNTIME.admin_operations
 SUPABASE_CONFIG = SupabaseConfig.from_values(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_ANON_KEY"))
 SUPABASE_AUTH = SupabaseAuth(SUPABASE_CONFIG) if SUPABASE_CONFIG else None
-SMTP2GO_CONFIG = SMTP2GOConfig.from_values(
-    os.getenv("SMTP2GO_API_KEY"),
-    os.getenv("SMTP2GO_SENDER"),
-    os.getenv("GOLFGAME_PUBLIC_URL"),
-    os.getenv("SMTP2GO_REPLY_TO"),
-)
-EMAIL_DELIVERY_ENABLED = os.getenv("GOLFGAME_EMAIL_DELIVERY", "disabled").strip().casefold() == "enabled"
-SMTP2GO_MAILER = (
-    SMTP2GOMailer(SMTP2GO_CONFIG) if SMTP2GO_CONFIG and EMAIL_DELIVERY_ENABLED else None
-)
+EMAIL_DELIVERY_ENABLED = ACCOUNT_RUNTIME.email_delivery_enabled
+SMTP2GO_MAILER = ACCOUNT_RUNTIME.smtp2go_mailer
 SERVER_ROLE = os.getenv("GOLFGAME_SERVER_ROLE", "app").strip().casefold() or "app"
 MAPPER_PORT = int(os.getenv("GOLFGAME_MAPPER_PORT", "8081"))
 GOLF_INTELLIGENCE_CONFIG = GolfIntelligenceConfig.from_env()
@@ -780,6 +769,23 @@ class AppHandler(SimpleHTTPRequestHandler):
                 )
                 self._json_response(HTTPStatus.OK, result)
                 return
+            if path == "/api/admin/licensing/grace-summary":
+                self._json_response(HTTPStatus.OK, ADMIN_OPERATIONS.grace_summary())
+                return
+            if path == "/api/admin/licensing/notifications":
+                self._json_response(HTTPStatus.OK, ADMIN_OPERATIONS.notifications(
+                    subscription_id=self._query_value(query, "subscription_id"),
+                    status=self._query_value(query, "status"),
+                    limit=self._query_value(query, "limit", "50"),
+                ))
+                return
+            if path == "/api/admin/licensing/continuation-eligibilities":
+                self._json_response(HTTPStatus.OK, ADMIN_OPERATIONS.continuation_eligibilities(
+                    self._query_value(query, "query", ""),
+                    status=self._query_value(query, "status"),
+                    limit=self._query_value(query, "limit", "50"),
+                ))
+                return
             coach_match = re.fullmatch(r"/api/admin/coaches/(\d+)", path)
             if coach_match:
                 self._json_response(
@@ -824,6 +830,13 @@ class AppHandler(SimpleHTTPRequestHandler):
                     admin["id"], str(payload.get("code_id") or "")
                 )
                 self._json_response(HTTPStatus.OK, {"revoked": True})
+                return
+            if parsed.path == "/api/admin/licensing/continuation-eligibilities/correct":
+                result = LICENSE_SERVICE.correct_continuation_eligibility(
+                    admin["id"], payload.get("player_id"), payload.get("status"),
+                    payload.get("reason"),
+                )
+                self._json_response(HTTPStatus.OK, {"eligibility": result})
                 return
         except (LicenseError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
             self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})

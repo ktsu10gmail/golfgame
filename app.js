@@ -12654,6 +12654,14 @@ function renderPlayerAccess(access = null) {
   title.textContent = presentation.title;
   $("#account-access-detail").textContent = presentation.detail;
   $("#account-access-guidance").textContent = presentation.guidance;
+  const sponsorshipNotice = $("#account-sponsorship-notice");
+  sponsorshipNotice.hidden = !presentation.showSponsorshipNotice;
+  sponsorshipNotice.querySelector("strong").textContent = presentation.sponsorshipTitle || "";
+  sponsorshipNotice.querySelector("p").textContent = presentation.sponsorshipDetail || "";
+  const continuationNotice = $("#account-continuation-notice");
+  continuationNotice.hidden = !presentation.showContinuation;
+  continuationNotice.querySelector("strong").textContent = presentation.continuationTitle || "";
+  continuationNotice.querySelector("p").textContent = presentation.continuationDetail || "";
   $("#account-access-code-label").textContent = presentation.codeLabel;
   $("#account-access-code-help").textContent = presentation.codeHelp;
   const invitations = Array.isArray(access?.pending_invitations) ? access.pending_invitations : [];
@@ -12758,6 +12766,13 @@ function renderCoachDashboard(dashboard) {
       ? `<br><span>The Coach subscription has expired. Coaching relationships and round history remain available; sponsored seats must be reassigned after access is restored.</span>`
       : "";
   $("#coach-seat-summary").innerHTML = `<strong>Sponsored Students: ${dashboard.sponsored_students} / ${dashboard.seat_capacity}</strong><br><span>${dashboard.seats_available} sponsored ${dashboard.seats_available === 1 ? "seat" : "seats"} available · ${dashboard.students.length} active coaching ${dashboard.students.length === 1 ? "relationship" : "relationships"}</span>${subscriptionNotice}`;
+  const graceNotice = $("#coach-grace-notice");
+  graceNotice.hidden = !dashboard.grace;
+  graceNotice.querySelector("strong").textContent = dashboard.grace
+    ? `${dashboard.grace.days_remaining} days remain` : "";
+  graceNotice.querySelector("p").textContent = dashboard.grace
+    ? `Existing access continues until ${new Date(dashboard.grace.ends_at).toLocaleString([], { timeZoneName: "short" })}. New invitations and sponsorship assignments are paused. ${dashboard.restoration?.label || "Contact Jetta support to restore access."}`
+    : "";
   $("#coach-invite-email").disabled = !subscriptionActive;
   $("#coach-invite-button").disabled = !subscriptionActive;
   $("#coach-roster").innerHTML = dashboard.students.length

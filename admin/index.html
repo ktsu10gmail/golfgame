@@ -18,6 +18,7 @@
         <button type="button" data-section="home" aria-current="page">Overview</button>
         <button type="button" data-section="users">Users</button>
         <button type="button" data-section="licensing">Access &amp; Licensing</button>
+        <button type="button" data-section="grace">Grace &amp; Continuation</button>
         <button type="button" data-section="coaches">Coaches</button>
         <button type="button" data-section="audit">Audit</button>
       </nav>
@@ -49,9 +50,26 @@
           <div class="section-grid">
             <button class="section-card" data-open-section="users"><span>Identity</span><strong>Users</strong><p>Find an account and inspect the evidence behind its current access.</p></button>
             <button class="section-card" data-open-section="licensing"><span>Entitlement</span><strong>Access &amp; Licensing</strong><p>Generate Jetta Access Codes and inspect redemption history.</p></button>
+            <button class="section-card" data-open-section="grace"><span>Continuity</span><strong>Grace &amp; Continuation</strong><p>Trace Coach deadlines, delivery evidence, and earned student eligibility.</p></button>
             <button class="section-card" data-open-section="coaches"><span>Relationships</span><strong>Coaches</strong><p>Review subscriptions, grace state, sponsored seats, and students.</p></button>
             <button class="section-card" data-open-section="audit"><span>Evidence</span><strong>Audit</strong><p>Read append-oriented licensing and administrative events.</p></button>
           </div>
+        </section>
+
+        <section class="panel" data-panel="grace" hidden>
+          <header class="panel-heading"><div><span class="kicker">Access continuity ledger</span><h2>Grace &amp; Continuation</h2></div><p>One timeline joins the Coach deadline, intended notices, and the student eligibility earned through sponsorship.</p></header>
+          <div id="grace-summary" class="continuity-summary"></div>
+          <div class="continuity-columns">
+            <section><div class="list-heading"><h3>Notification evidence</h3><button id="refresh-grace" class="quiet-button" type="button">Refresh</button></div><div id="grace-notifications" class="record-list"></div></section>
+            <section><div class="list-heading"><h3>Continuation eligibility</h3></div><form id="eligibility-search-form" class="search-line"><label><span>Player search</span><input id="eligibility-search" placeholder="Name, email, or player ID" /></label><button>Search</button></form><div id="continuation-list" class="record-list"></div></section>
+          </div>
+          <form id="eligibility-correction-form" class="correction-card">
+            <div><span class="kicker">Audited correction</span><h3>Correct continuation eligibility</h3><p>This changes loyalty eligibility only. It cannot create access, a seat, or a subscription.</p></div>
+            <label><span>Player ID</span><input id="eligibility-player-id" inputmode="numeric" required /></label>
+            <label><span>Status</span><select id="eligibility-status"><option value="ELIGIBLE">Eligible</option><option value="REVOKED">Revoked</option></select></label>
+            <label><span>Reason</span><input id="eligibility-reason" minlength="10" maxlength="500" required /></label>
+            <button>Save correction</button><output id="eligibility-correction-status" role="status"></output>
+          </form>
         </section>
 
         <section class="panel" data-panel="users" hidden>

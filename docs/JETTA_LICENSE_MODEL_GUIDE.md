@@ -392,3 +392,42 @@ the actual delivery state; it does not claim that an email was sent.
 These limitations do not change player identity or historical ownership. The
 same provider-neutral subscription and entitlement resolver will remain in use
 when Stripe is added.
+
+## 14. Coach grace and Student Continuation eligibility
+
+`grace_ends_at` is the exact UTC entitlement deadline. A 30-day Coach grace
+cycle creates exactly 30 intended Coach email windows: Day 1 is immediate and
+Day 30 is final. Each notice has at most three total provider attempts,
+including the initial attempt. Old windows become `MISSED`; the worker never
+sends a backlog burst.
+
+Students receive one notice when a new grace cycle starts and one notice if
+their sponsored access later ends. Migration of a Coach who was already
+`PAST_DUE` never sends a misleading retroactive grace-start email. Player
+Profile still shows the current deadline.
+
+A player earns durable Student Continuation eligibility when Jetta first
+creates an authoritative `COACH_SPONSORED` grant. Invitation or relationship
+records alone do not qualify. Phase A records and displays the eligibility and
+the planned `$9/month` or `$49/year` offer, but it deliberately provides no
+purchase button, checkout, payment route, or `SELF_PAID` activation.
+
+Back Office → **Grace & Continuation** shows current grace cycles, at-risk
+students, bounded notification evidence, and eligibility provenance. ADMIN may
+make an audited eligibility correction with a required reason; that operation
+cannot create access, a subscription, a seat, or payment state.
+
+Install and inspect the worker:
+
+```bash
+cp deploy/systemd/golfgame-license-lifecycle.{service,timer} "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
+systemctl --user enable --now golfgame-license-lifecycle.timer
+systemctl --user status golfgame-license-lifecycle.timer
+journalctl --user -u golfgame-license-lifecycle.service
+```
+
+Before the first production restart, back up `data/player_accounts.sqlite3`
+and run `PRAGMA integrity_check` against the backup. Phase A schema migration 2
+is additive and preserves all existing identity, subscription, grant, seat,
+relationship, activity, and audit rows.

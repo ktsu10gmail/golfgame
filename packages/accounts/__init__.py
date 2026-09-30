@@ -6,10 +6,14 @@ from .learning import attach_verified_learning_context
 from .licensing import LicenseError, LicenseService, PlayAccessDenied
 from .admin_operations import AdminOperationsService
 from .smtp2go import EmailDeliveryError, SMTP2GOConfig, SMTP2GOMailer
+from .license_notifications import LicenseNotificationService
+from .runtime import AccountRuntime, create_account_runtime, load_local_environment
 
 __all__ = [
     "AccountError", "PlayerStore", "SupabaseAuth", "SupabaseConfig",
     "attach_verified_learning_context", "LicenseError", "LicenseService", "PlayAccessDenied",
     "AdminOperationsService",
     "EmailDeliveryError", "SMTP2GOConfig", "SMTP2GOMailer",
+    "LicenseNotificationService", "AccountRuntime", "create_account_runtime",
+    "load_local_environment",
 ]

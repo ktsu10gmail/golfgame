@@ -133,6 +133,35 @@ class AdminHttpTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("error", json.loads(body))
 
+    def test_phase_a_admin_routes_are_centrally_authorized_and_actor_is_verified(self):
+        paths = (
+            "/api/admin/licensing/grace-summary",
+            "/api/admin/licensing/notifications?limit=10",
+            "/api/admin/licensing/continuation-eligibilities?limit=10",
+        )
+        for path in paths:
+            self.assertEqual(self.request("GET", path)[0], 401)
+            self.assertEqual(self.request("GET", path, role="player")[0], 403)
+            self.assertEqual(self.request("GET", path, role="admin")[0], 200)
+
+        status, _, body = self.request(
+            "POST", "/api/admin/licensing/continuation-eligibilities/correct",
+            role="admin", payload={
+                "player_id": self.player["id"], "status": "ELIGIBLE",
+                "reason": "Verified historical sponsorship correction",
+                "actor_player_id": self.player["id"],
+            },
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["eligibility"]["status"], "ELIGIBLE")
+        with sqlite3.connect(self.path) as database:
+            actor = database.execute("""
+                SELECT actor_player_id FROM license_audit_events
+                WHERE event_type = 'CONTINUATION_ELIGIBILITY_GRANTED'
+                ORDER BY created_at DESC LIMIT 1
+            """).fetchone()[0]
+        self.assertEqual(actor, self.admin["id"])
+
 
 if __name__ == "__main__":
     unittest.main()

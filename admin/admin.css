@@ -101,6 +101,17 @@ button[disabled] { opacity: .45; cursor: not-allowed; }
 .detail-card span { color: var(--sage-300); font: 700 .57rem var(--mono); text-transform: uppercase; }
 .detail-card strong { display: block; margin-top: 7px; font-size: .78rem; overflow-wrap: anywhere; }
 .audit-detail { margin-top: 6px; color: var(--muted); font: .62rem/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.continuity-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 24px 0; border: 1px solid var(--line); background: var(--white); }
+.continuity-summary > div { padding: 18px; border-right: 1px solid var(--line); }
+.continuity-summary > div:last-child { border-right: 0; }
+.continuity-summary strong { display: block; color: var(--pine-800); font: 500 1.8rem Georgia, serif; }
+.continuity-summary span { display: block; margin-top: 6px; color: var(--muted); font: 700 .56rem var(--mono); text-transform: uppercase; }
+.continuity-columns { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 26px; align-items: start; }
+.correction-card { display: grid; grid-template-columns: 1.2fr .55fr .7fr 1.5fr auto; gap: 12px; align-items: end; margin-top: 34px; padding: 22px; color: #fff; background: var(--pine-900); }
+.correction-card h3 { margin: 7px 0 0; font: 500 1.2rem Georgia, serif; }
+.correction-card p { margin: 6px 0 0; color: var(--sage-300); font-size: .65rem; }
+.correction-card label span { color: var(--sage-300); }
+.correction-card output { grid-column: 1 / -1; color: var(--sage-300); font-size: .68rem; }
 @media (max-width: 850px) {
   .admin-frame { grid-template-columns: 1fr; }
   .admin-rail { position: static; height: auto; }
@@ -109,6 +120,9 @@ button[disabled] { opacity: .45; cursor: not-allowed; }
   .site-map { display: none; }
   .hero-ledger, .section-grid { grid-template-columns: 1fr; }
   .audit-filters, .code-forge { grid-template-columns: 1fr 1fr; }
+  .continuity-summary { grid-template-columns: repeat(2, 1fr); }
+  .continuity-summary > div { border-bottom: 1px solid var(--line); }
+  .continuity-columns, .correction-card { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
   .topbar, .panel-heading { align-items: start; flex-direction: column; }
