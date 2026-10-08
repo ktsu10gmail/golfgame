@@ -34,6 +34,11 @@ import {
   gpsReplayShotEvidence,
   gpsReplaySteps
 } from "../packages/gps/browser_gps_replay.mjs";
+import {
+  buildWgs84GpsCalibration,
+  createMapperProject,
+  offsetGpsPoint
+} from "../packages/editor/course_mapper.mjs";
 
 const calibration = {
   origin: { lat: 40.3, lng: -74.6 },
@@ -52,6 +57,19 @@ test("GPS calibration round-trips a course point", () => {
   assert.ok(Math.abs(restored[0] - point[0]) < .03);
   assert.ok(Math.abs(restored[1] - point[1]) < .03);
   assert.ok(gpsDistanceYards(calibration.origin, gps) > 300);
+});
+
+test("GPS mode consumes the deterministic WGS84 Mapper transform", () => {
+  const project = createMapperProject();
+  const hole = project.holes["1"];
+  hole.geometry_reference = { coordinate_system: "WGS84", georeferenced: true, source: "openstreetmap" };
+  hole.markers.white_tee = calibration.origin;
+  hole.markers.pin = offsetGpsPoint(calibration.origin, 28, 365);
+  const derived = buildWgs84GpsCalibration(hole);
+  const actualGps = offsetGpsPoint(calibration.origin, -19, 212);
+  const coursePoint = gpsToCoursePoint(derived, actualGps);
+  const restoredGps = coursePointToGps(derived, coursePoint);
+  assert.ok(gpsDistanceYards(actualGps, restoredGps) < .06);
 });
 
 test("GPS round scoring separates completed shots, putts, and final stroke", () => {

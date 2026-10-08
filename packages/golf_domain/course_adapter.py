@@ -23,6 +23,7 @@ SURFACE_PRIORITIES: dict[SurfaceType, int] = {
     SurfaceType.TEE: 60,
     SurfaceType.NATIVE: 50,
     SurfaceType.FAIRWAY: 40,
+    SurfaceType.FIRST_CUT: 30,
     SurfaceType.ROUGH: 20,
 }
 
@@ -151,7 +152,7 @@ def _native_regions(payload: dict[str, Any], source: str) -> tuple[list[SurfaceR
     for index, rough in enumerate(geometry.get("rough_zones", [])):
         regions.append(
             _region(
-                SurfaceType.ROUGH,
+                SurfaceType.FIRST_CUT if rough.get("lie_catalog_id") == "lie_rough_light" else SurfaceType.ROUGH,
                 rough.get("polygon"),
                 rough.get("id") or rough.get("zone_id"),
                 source,
@@ -299,7 +300,9 @@ def adapt_hole_payload(
     if len(region_ids) != len(set(region_ids)):
         raise _fail(source, "surface region ids must be unique within a hole")
     available = {region.surface for region in regions}
-    for required in (SurfaceType.TEE, SurfaceType.ROUGH, SurfaceType.GREEN):
+    # Unmapped ground resolves to the model's default ROUGH surface.
+    # Rough polygons are optional; explicit tee/green boundaries remain required.
+    for required in (SurfaceType.TEE, SurfaceType.GREEN):
         if required not in available:
             raise _fail(source, f"required {required.value} surface is missing")
     tee = centerline[0]

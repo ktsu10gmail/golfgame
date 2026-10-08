@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -36,12 +38,47 @@ class SupabaseConfig:
 
 
 class SupabaseAuth:
-    def __init__(self, config: SupabaseConfig):
+    def __init__(self, config: SupabaseConfig, *, cache_seconds: float = 30.0):
         self.config = config
+        self.cache_seconds = max(0.0, float(cache_seconds))
+        self._identity_cache: dict[bytes, tuple[float, dict[str, Any]]] = {}
+        self._identity_inflight: dict[bytes, threading.Event] = {}
+        self._identity_lock = threading.Lock()
 
     def get_user(self, access_token: str | None) -> dict[str, Any] | None:
         if not access_token:
             return None
+        cache_key = hashlib.sha256(access_token.encode("utf-8")).digest()
+        while True:
+            with self._identity_lock:
+                cached = self._identity_cache.get(cache_key)
+                if cached is not None and cached[0] > time.monotonic():
+                    return dict(cached[1])
+                event = self._identity_inflight.get(cache_key)
+                if event is None:
+                    event = threading.Event()
+                    self._identity_inflight[cache_key] = event
+                    break
+            # Concurrent API requests carrying the same token share one remote
+            # Supabase validation instead of creating a validation burst.
+            event.wait(timeout=21)
+
+        identity = None
+        try:
+            identity = self._get_user_remote(access_token)
+            if identity is not None and self.cache_seconds:
+                with self._identity_lock:
+                    self._identity_cache[cache_key] = (
+                        time.monotonic() + self.cache_seconds,
+                        dict(identity),
+                    )
+            return identity
+        finally:
+            with self._identity_lock:
+                self._identity_inflight.pop(cache_key, None)
+                event.set()
+
+    def _get_user_remote(self, access_token: str) -> dict[str, Any] | None:
         request = Request(
             f"{self.config.url}/auth/v1/user",
             headers={

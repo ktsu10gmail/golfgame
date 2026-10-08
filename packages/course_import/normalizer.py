@@ -218,6 +218,11 @@ def _empty_hole(hole_number: int) -> dict[str, Any]:
         "markers": {"blue_tee": None, "white_tee": None, "forward_tee": None, "pin": None},
         "route_points": [],
         "features": [],
+        "geometry_reference": {
+            "coordinate_system": "WGS84",
+            "georeferenced": True,
+            "source": PROVIDER_NAME,
+        },
         "import_status": "NEEDS_REVIEW",
         "import_warnings": ["No provider hole data was mapped."],
     }
@@ -465,6 +470,11 @@ def _mapped_hole(
         "markers": markers,
         "route_points": route_points,
         "features": features,
+        "geometry_reference": {
+            "coordinate_system": "WGS84",
+            "georeferenced": True,
+            "source": PROVIDER_NAME,
+        },
         "import_status": "NEEDS_REVIEW" if warnings else "IMPORTED",
         "import_warnings": sorted(set(warnings)),
         "tee_mapping": tee_metadata,

@@ -8,6 +8,7 @@ from .admin_operations import AdminOperationsService
 from .smtp2go import EmailDeliveryError, SMTP2GOConfig, SMTP2GOMailer
 from .license_notifications import LicenseNotificationService
 from .runtime import AccountRuntime, create_account_runtime, load_local_environment
+from .course_preferences import CoursePreferenceError, CoursePreferenceService
 
 __all__ = [
     "AccountError", "PlayerStore", "SupabaseAuth", "SupabaseConfig",
@@ -16,4 +17,5 @@ __all__ = [
     "EmailDeliveryError", "SMTP2GOConfig", "SMTP2GOMailer",
     "LicenseNotificationService", "AccountRuntime", "create_account_runtime",
     "load_local_environment",
+    "CoursePreferenceError", "CoursePreferenceService",
 ]

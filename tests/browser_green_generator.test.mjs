@@ -5,6 +5,7 @@ import {
   ensureHazardFreePinZones,
   generateBunkerAwareGreen,
   generatedGreenHole,
+  mappedGreenHole,
   isHazardFreePinPoint
 } from "../packages/simulation/browser_green_generator.mjs";
 
@@ -110,4 +111,23 @@ test("pin zones are moved out of overlapping sand and water", () => {
   assert.ok(adjusted.geometries.green_complex.pin_zones.every(zone =>
     Math.abs(zone.center_point[0]) < 2
   ));
+});
+
+
+test("mapped green sizing leaves imported outlines unchanged", () => {
+  const hole = { geometries: { green_complex: { polygon: rectangle(0, 0, 10, 12) } } };
+  assert.equal(mappedGreenHole(hole), hole);
+  assert.deepEqual(mappedGreenHole(hole).geometries.green_complex.polygon, rectangle(0, 0, 10, 12));
+});
+
+test("mapped green sizing restores source geometry from an older enlarged package", () => {
+  const mapped = rectangle(0, 0, 10, 12);
+  const hole = { geometries: { green_complex: {
+    polygon: rectangle(-10, -10, 30, 30), mapped_polygon: mapped,
+    generated: { version: "bunker-aware-green-v1" }, pin_zones: []
+  } } };
+  const restored = mappedGreenHole(hole);
+  assert.deepEqual(restored.geometries.green_complex.polygon, mapped);
+  assert.equal(restored.geometries.green_complex.generated, undefined);
+  assert.deepEqual(hole.geometries.green_complex.polygon, rectangle(-10, -10, 30, 30));
 });

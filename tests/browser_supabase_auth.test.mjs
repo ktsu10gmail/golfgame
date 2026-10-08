@@ -58,6 +58,34 @@ test("expired sessions refresh once and rotate the refresh token", async () => {
   assert.equal(JSON.parse(storage.getItem(SESSION_KEY)).refresh_token, "new-refresh");
 });
 
+test("401 recovery reuses a token already refreshed by another request", async () => {
+  const storage = memoryStorage();
+  storage.setItem(SESSION_KEY, JSON.stringify({
+    access_token: "rejected", refresh_token: "old-refresh", expires_at: 9_999_999
+  }));
+  let calls = 0;
+  const auth = createSupabaseAuth(
+    { url: "https://project.supabase.co", anon_key: "public-key" },
+    {
+      storage,
+      now: () => 2_000_000,
+      fetchImpl: async () => {
+        calls += 1;
+        return response({ access_token: "recovered", refresh_token: "new-refresh", expires_in: 3600 });
+      }
+    }
+  );
+
+  const recovered = await Promise.all([
+    auth.recoverAccessToken("rejected"),
+    auth.recoverAccessToken("rejected"),
+    auth.recoverAccessToken("rejected")
+  ]);
+  assert.deepEqual(recovered, ["recovered", "recovered", "recovered"]);
+  assert.equal(await auth.recoverAccessToken("rejected"), "recovered");
+  assert.equal(calls, 1);
+});
+
 test("a transient refresh failure keeps the local session for a later retry", async () => {
   const storage = memoryStorage();
   storage.setItem(SESSION_KEY, JSON.stringify({ access_token: "old", refresh_token: "keep-refresh", expires_at: 1 }));

@@ -1,15 +1,24 @@
+import { renderIllustratedHolePrototype } from "./packages/editor/illustrated_hole_prototype.mjs?v=20261008-alta-hole3";
 import {
   buildGameCoursePackages,
   buildGameHoleJson,
+  buildGameHolePreview,
+  prepareHoleForPreview,
+  mapperStartTeePoint,
+  prepareCourseTeeBoxes,
+  placeStartTeeBox,
+  selectStartTee,
+  applyOsmStartTeeDefault,
   buildHoleGpsCalibration,
   buildAutoDraft,
-  alignSecondaryTeesFromWhite,
+  alignSecondaryTees,
   buildTreeBrushPolygon,
   createUprightGpsViewTransform,
   createMapperProject,
   configureMapperCourseStructure,
   distanceMeters,
   gpsDeltaMeters,
+  hasDeterministicWgs84Geometry,
   holeMappingStatus,
   offsetGpsPoint,
   parseGpsCoordinatePair,
@@ -29,13 +38,12 @@ import {
   scaleGpsPointAround,
   uprightHoleViewTarget,
   validateMapperProject
-} from "./packages/editor/course_mapper.mjs?v=20260829-1";
+} from "./packages/editor/course_mapper.mjs?v=20261008-start-route1";
 import { createUndoHistory } from "./packages/editor/undo_history.mjs?v=20260801-1";
 import { unionSimplePolygons } from "./packages/editor/polygon_union.mjs?v=20260812-1";
-import { renderGameMapPreview } from "./packages/editor/game_map_preview.mjs?v=20260828-2";
-import { ensureHazardFreePinZones, generatedGreenHole } from "./packages/simulation/browser_green_generator.mjs?v=20260810-2";
+import { renderGameMapPreview } from "./packages/editor/game_map_preview.mjs?v=20261008-prototype1";
+import { ensureHazardFreePinZones, mappedGreenHole } from "./packages/simulation/browser_green_generator.mjs?v=20261007-mapped-green1";
 import { buildCorridorMask, buildPolygonMask, detectTreeRegions } from "./packages/editor/hazard_detection.mjs?v=20260815-17";
-import { createSupabaseAuth } from "./packages/accounts/browser_supabase_auth.mjs?v=20260804-1";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -85,7 +93,7 @@ const FEATURE_COLORS = {
 
 const TOOL_LABELS = {
   ...Object.fromEntries(Object.entries(FEATURE_STYLE).map(([tool, style]) => [tool, `Place ${style.name.toLowerCase()}`])),
-  marker_blue_tee: "Mark blue tee",
+  marker_blue_tee: "Mark blue tee / starting ball",
   marker_white_tee: "Mark white tee / starting ball",
   marker_forward_tee: "Mark forward tee",
   marker_pin: "Mark pin",
@@ -105,6 +113,7 @@ let localImageLayer = null;
 let imageryRenderToken = 0;
 const rotatedArtworkCache = new Map();
 let activeTool = null;
+let previewPrototypeHole = null;
 let autoDraftSetupPending = false;
 let selectedFeatureId = null;
 let selectedFeatureIds = new Set();
@@ -128,34 +137,35 @@ const undoHistory = createUndoHistory({ limit: 50 });
 let referencePanelOpen = Boolean(REQUESTED_PRESET_ID);
 let uprightViewCache = null;
 let mapResizeFrame = null;
-let editorSupabaseAuth = null;
+let mapperSignedIn = false;
 let courseImportServerStatus = null;
 let selectedExternalCourse = null;
 let externalImportJobId = null;
+let selectedOsmCourse = null;
+let osmImportJobId = null;
+let osmRequestBusy = false;
+let osmSearchReady = false;
+let osmRetryAt = 0;
+let osmReferenceOverlays = [];
+let currentProductionItem = null;
 
 async function initializeEditorAuth() {
   try {
-    const response = await fetch("/api/auth/config", { cache: "no-store" });
+    const response = await fetch("/api/mapper/session", { cache: "no-store" });
     const config = response.ok ? await response.json() : {};
-    editorSupabaseAuth = config.provider === "supabase" ? createSupabaseAuth(config) : null;
+    mapperSignedIn = Boolean(config.authenticated);
   } catch {
-    editorSupabaseAuth = null;
+    mapperSignedIn = false;
   }
+  $("#mapper-login-toggle").textContent = mapperSignedIn ? "Sign out" : "Mapper sign in";
 }
 
 async function editorApiFetch(url, options = {}) {
-  const requestOptions = { ...options, headers: { ...(options.headers || {}) } };
-  if (editorSupabaseAuth) {
-    const token = await editorSupabaseAuth.getAccessToken();
-    if (token) requestOptions.headers.Authorization = `Bearer ${token}`;
-  }
-  let response = await fetch(url, requestOptions);
-  if (response.status === 401 && editorSupabaseAuth?.loadSession()?.refresh_token) {
-    const refreshed = await editorSupabaseAuth.refreshSession().catch(() => null);
-    if (refreshed?.access_token) {
-      requestOptions.headers.Authorization = `Bearer ${refreshed.access_token}`;
-      response = await fetch(url, requestOptions);
-    }
+  const response = await fetch(url, { ...options, credentials: "same-origin" });
+  if (response.status === 401) {
+    mapperSignedIn = false;
+    $("#mapper-login-toggle").textContent = "Mapper sign in";
+    if (!$("#mapper-login-dialog").open) $("#mapper-login-dialog").showModal();
   }
   return response;
 }
@@ -168,8 +178,322 @@ async function courseImportRequest(path, payload) {
     cache: "no-store"
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || `Course import server returned ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(result.error || (response.status >= 500
+      ? "The course-data service is unavailable or timed out. No credit was used. Try again later or reduce the search radius."
+      : `Course import server returned ${response.status}`));
+    error.status = response.status;
+    throw error;
+  }
   return result;
+}
+
+function setQueueStatus(message, tone = "error") {
+  const status = $("#course-queue-status");
+  status.textContent = message;
+  status.dataset.tone = tone;
+}
+
+function productionContext() {
+  return project.production_context?.production_item_id && project.production_context?.directory_course_id
+    ? project.production_context
+    : currentProductionItem
+      ? {
+          production_item_id: currentProductionItem.production_item_id,
+          directory_course_id: currentProductionItem.directory_course_id
+        }
+      : null;
+}
+
+function renderCourseQueue(items) {
+  const list = $("#course-queue-list");
+  list.innerHTML = items.length ? items.map((item, index) => `
+    <article class="course-queue-row" data-status="${escapeHtml(item.status)}">
+      <span class="course-queue-position">${String(index + 1).padStart(2, "0")}</span>
+      <div class="course-queue-identity">
+        <strong>${escapeHtml(item.course_name)}</strong>
+        <small>${escapeHtml([item.city, item.state_code, item.country_code].filter(Boolean).join(", "))} · requested ${escapeHtml(new Date(item.first_requested_at).toLocaleDateString())}</small>
+      </div>
+      <div class="course-queue-demand">
+        <strong>${item.total_request_count}</strong>
+        <small>${item.player_request_count} Player · ${item.coach_request_count} Coach</small>
+      </div>
+      <div class="course-queue-actions">
+        ${item.status === "REQUESTED" ? `<button class="claim-course" type="button" data-claim-production="${escapeHtml(item.production_item_id)}">Claim</button>` : ""}
+        ${item.status === "IN_PROGRESS" ? `<button type="button" data-continue-production="${escapeHtml(item.production_item_id)}">Continue</button><button type="button" data-release-production="${escapeHtml(item.production_item_id)}">Release</button>` : ""}
+        ${item.status === "READY" ? `<span class="free-call-stamp">READY</span>` : ""}
+      </div>
+    </article>
+  `).join("") : `<p class="empty-copy">No active course requests are waiting.</p>`;
+  $$('[data-claim-production]').forEach(button => button.addEventListener("click", () => void claimCourseProduction(button.dataset.claimProduction, items)));
+  $$('[data-continue-production]').forEach(button => button.addEventListener("click", () => continueCourseProduction(button.dataset.continueProduction, items)));
+  $$('[data-release-production]').forEach(button => button.addEventListener("click", () => void releaseCourseProduction(button.dataset.releaseProduction)));
+}
+
+async function loadCourseQueue() {
+  setQueueStatus("Loading production demand…", "success");
+  try {
+    const result = await courseImportRequest("/api/v1/course-production/queue?limit=100");
+    renderCourseQueue(result.requests || []);
+    setQueueStatus(`${result.requests?.length || 0} course production item${result.requests?.length === 1 ? "" : "s"}, oldest request first.`, "success");
+  } catch (error) {
+    renderCourseQueue([]);
+    setQueueStatus(error.message);
+  }
+}
+
+function beginProductionWorkspace(item) {
+  currentProductionItem = item;
+  const context = {
+    production_item_id: item.production_item_id,
+    directory_course_id: item.directory_course_id
+  };
+  const existing = project.production_context?.production_item_id === item.production_item_id;
+  if (!existing) {
+    project = createMapperProject({
+      courseName: item.course_name,
+      courseId: item.course_name,
+      address: [item.city, item.state_code, item.country_code].filter(Boolean).join(", ")
+    });
+    project.production_context = context;
+    currentHoleNumber = 1;
+    $("#course-name").value = project.course_name;
+    $("#course-structure").value = project.course_structure;
+    renderHoleSwitcherOptions();
+    syncNineLoopNameFields();
+    persistProject("Production request opened");
+    renderHoleForm();
+    void applyImagerySource({ fit: true });
+  }
+  $("#course-queue-dialog").close();
+  openOsmImporter();
+  setStatus(`${item.course_name} is IN PROGRESS. Import an OSM draft or map it manually.`, "success");
+}
+
+async function claimCourseProduction(productionItemId, items) {
+  try {
+    const result = await courseImportRequest(`/api/v1/course-production/${productionItemId}/claim`, {
+      production_item_id: productionItemId
+    });
+    beginProductionWorkspace(result.production_item || items.find(item => item.production_item_id === productionItemId));
+  } catch (error) {
+    setQueueStatus(error.message);
+    await loadCourseQueue();
+  }
+}
+
+function continueCourseProduction(productionItemId, items) {
+  const item = items.find(candidate => candidate.production_item_id === productionItemId);
+  if (item) beginProductionWorkspace(item);
+}
+
+async function releaseCourseProduction(productionItemId) {
+  try {
+    await courseImportRequest(`/api/v1/course-production/${productionItemId}/release`, {
+      production_item_id: productionItemId
+    });
+    if (project.production_context?.production_item_id === productionItemId) {
+      delete project.production_context;
+      currentProductionItem = null;
+      persistProject("Production request released");
+    }
+    await loadCourseQueue();
+  } catch (error) {
+    setQueueStatus(error.message);
+  }
+}
+
+function setOsmStatus(message, tone = "error") {
+  const status = $("#osm-import-status");
+  status.textContent = message;
+  status.dataset.tone = tone;
+}
+
+function updateOsmRequestControls() {
+  const waiting = !osmSearchReady || osmRequestBusy || Date.now() < osmRetryAt;
+  $("#search-osm-course").disabled = waiting;
+  $("#refresh-osm-preview").disabled = waiting;
+  $$('[data-osm-course-index]').forEach(button => { button.disabled = waiting; });
+}
+
+function handleOsmError(error) {
+  setOsmStatus(error.message);
+  if ([429, 502, 503, 504].includes(error.status)) {
+    osmRetryAt = Date.now() + 60000;
+    setOsmStatus(`${error.message} Search and preview will be available again in 60 seconds.`);
+    window.setTimeout(updateOsmRequestControls, 60050);
+  }
+}
+
+function openOsmImporter() {
+  selectedOsmCourse = null;
+  osmImportJobId = null;
+  $("#osm-import-results").innerHTML = "";
+  $("#osm-import-preview").hidden = true;
+  $("#osm-import-dialog").showModal();
+  const center = project.map_view?.center || (map ? gpsLiteral(map.getCenter()) : null);
+  if (center) {
+    $("#osm-import-latitude").value = Number(center.lat).toFixed(7);
+    $("#osm-import-longitude").value = Number(center.lng).toFixed(7);
+  }
+  void loadOsmStatus();
+}
+
+async function loadOsmStatus() {
+  try {
+    const status = await courseImportRequest("/api/v1/course-import/openstreetmap/status");
+    osmSearchReady = Boolean(status.ready_for_search);
+    updateOsmRequestControls();
+    setOsmStatus(status.ready_for_search
+      ? "OpenStreetMap import is ready. Search and draft import use zero provider credits."
+      : "OpenStreetMap import is installed but its endpoint is not configured.", status.ready_for_search ? "success" : "error");
+  } catch (error) {
+    osmSearchReady = false;
+    $("#search-osm-course").disabled = true;
+    setOsmStatus(error.message);
+  }
+}
+
+function osmSearchCoordinates() {
+  const latitude = Number($("#osm-import-latitude").value);
+  const longitude = Number($("#osm-import-longitude").value);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) throw new Error("Enter a valid latitude and longitude.");
+  return { latitude, longitude, radius_meters: Number($("#osm-import-radius").value) };
+}
+
+function importCourseFlagIdentity(course, provider) {
+  const id = course.external_id || course.provider_id || course.id;
+  return `${provider}:${id || JSON.stringify([course.name, course.city, course.region || course.state, course.country])}`;
+}
+
+async function attachCourseFlags(courses, selector, provider) {
+  const buttons = $$(selector);
+  try {
+    const result = await libraryRequest("flags");
+    const flags = new Set(result.flags);
+    buttons.forEach((button, index) => {
+      if (!button.isConnected || !courses[index]) return;
+      const identity = importCourseFlagIdentity(courses[index], provider);
+      const wrapper = document.createElement("div");
+      wrapper.className = "course-import-flag-row";
+      button.before(wrapper); wrapper.append(button);
+      const flagButton = document.createElement("button");
+      flagButton.type = "button";
+      const badge = document.createElement("small");
+      badge.className = "course-rejected-label";
+      const update = () => {
+        const flagged = flags.has(identity);
+        flagButton.textContent = flagged ? "Clear no-good flag" : "Flag no good";
+        flagButton.setAttribute("aria-label", `${flagButton.textContent}: ${courses[index].name}`);
+        badge.textContent = flagged ? "⚑ No good — previously checked" : "";
+        badge.hidden = !flagged;
+        wrapper.classList.toggle("course-flagged", flagged);
+      };
+      wrapper.append(badge, flagButton); update();
+      flagButton.addEventListener("click", async () => {
+        flagButton.disabled = true;
+        try {
+          const saved = await libraryRequest("flag", { identity, flagged: !flags.has(identity) });
+          flags.clear(); saved.flags.forEach(value => flags.add(value)); update();
+        } catch (error) { setStatus(`Could not save course flag: ${error.message}`, "error"); }
+        finally { flagButton.disabled = false; }
+      });
+    });
+  } catch (error) { setStatus(`Could not load course flags: ${error.message}`, "error"); }
+}
+
+async function searchOsmCourses() {
+  if (osmRequestBusy || Date.now() < osmRetryAt) return;
+  osmRequestBusy = true;
+  updateOsmRequestControls();
+  const button = $("#search-osm-course");
+  button.disabled = true;
+  button.textContent = "Searching…";
+  $("#osm-import-results").innerHTML = "";
+  $("#osm-import-preview").hidden = true;
+  try {
+    const result = await courseImportRequest("/api/v1/course-import/openstreetmap/search", osmSearchCoordinates());
+    const courses = result.results || [];
+    $("#osm-import-results").innerHTML = courses.length ? courses.map((course, index) => `
+      <button class="course-import-result" type="button" data-osm-course-index="${index}">
+        <span><strong>${escapeHtml(course.name)}</strong><span>${escapeHtml(externalCourseLocation(course))}</span></span>
+        <small>${course.cache?.available ? "Cached draft" : "OSM facility"}</small>
+      </button>
+    `).join("") : `<p class="empty-copy">No mapped golf facility was found in this radius. Move the map or expand the radius.</p>`;
+    $$('[data-osm-course-index]').forEach(resultButton => resultButton.addEventListener("click", () => void previewOsmCourse(courses[Number(resultButton.dataset.osmCourseIndex)])));
+    void attachCourseFlags(courses, "[data-osm-course-index]", "openstreetmap");
+    setOsmStatus(`${courses.length} nearby facilit${courses.length === 1 ? "y" : "ies"}. Select one to build a bounded preview.`, "success");
+  } catch (error) {
+    handleOsmError(error);
+  } finally {
+    osmRequestBusy = false;
+    updateOsmRequestControls();
+    button.textContent = "Search nearby";
+  }
+}
+
+async function previewOsmCourse(course = selectedOsmCourse, refresh = false) {
+  if (!course || osmRequestBusy || Date.now() < osmRetryAt) return;
+  osmRequestBusy = true;
+  updateOsmRequestControls();
+  $("#osm-import-preview").hidden = true;
+  selectedOsmCourse = course;
+  osmImportJobId = null;
+  setOsmStatus("Reading numbered hole routes and mapped surfaces…", "success");
+  try {
+    const result = await courseImportRequest("/api/v1/course-import/openstreetmap/preview", {
+      external_id: course.external_id,
+      radius_meters: Number($("#osm-import-radius").value),
+      refresh,
+      course_name: currentProductionItem?.course_name || course.name,
+      city: currentProductionItem?.city || course.city || "",
+      state_code: currentProductionItem?.state_code || course.region || "",
+      production_context: productionContext()
+    });
+    osmImportJobId = result.job_id;
+    const preview = result.preview || {};
+    $("#osm-import-preview-title").textContent = preview.course || course.name;
+    $("#osm-import-readiness").textContent = preview.partial_draft ? "Partial draft · manual mapping needed" : "Draft ready for review";
+    $("#commit-osm-import").textContent = preview.partial_draft ? "Open partial draft" : "Open draft";
+    const countLabels = { hole_routes: "Numbered holes", greens: "Assigned greens", fairways: "Assigned fairways", bunkers: "Assigned bunkers", water: "Assigned water", rough: "Assigned rough", tee_polygons: "Unassigned tees", reference_shapes: "Reference shapes" };
+    $("#osm-import-counts").innerHTML = Object.entries(countLabels).map(([key, label]) => `<div><dt>${label}</dt><dd data-present="${Boolean(preview.counts?.[key])}">${Number(preview.counts?.[key] || 0)}</dd></div>`).join("");
+    const notes = [...(preview.needs_work || []), ...(preview.warnings || []), ...(preview.skipped || []).map(item => `${item.type}: ${item.reason} (${item.id})`)];
+    $("#osm-import-warnings").querySelector("ul").innerHTML = notes.slice(0, 120).map(note => `<li>${escapeHtml(note)}</li>`).join("");
+    $("#osm-import-preview").hidden = false;
+    setOsmStatus(result.cache_hit ? "Loaded a cached OSM draft. Refresh if the map has changed." : "OSM draft built. Review all warnings before opening it.", "success");
+  } catch (error) {
+    handleOsmError(error);
+  } finally {
+    osmRequestBusy = false;
+    updateOsmRequestControls();
+  }
+}
+
+async function commitOsmImport() {
+  if (!osmImportJobId) return;
+  if (!window.confirm("Open this OpenStreetMap draft? Your current geometry will be replaced; save it first if needed.")) return;
+  const button = $("#commit-osm-import");
+  button.disabled = true;
+  try {
+    const result = await courseImportRequest("/api/v1/course-import/openstreetmap/import", { job_id: osmImportJobId });
+    project = validateMapperProject(result.project);
+    currentHoleNumber = 1;
+    selectedFeatureId = null;
+    selectedFeatureIds.clear();
+    $("#course-name").value = project.course_name;
+    $("#course-structure").value = project.course_structure;
+    renderHoleSwitcherOptions();
+    syncNineLoopNameFields();
+    persistProject("OSM draft opened");
+    renderHoleForm();
+    await applyImagerySource({ fit: true });
+    $("#osm-import-dialog").close();
+    setStatus(`Opened ${project.course_name}. Dashed OSM shapes are references: select the correct hole, then click a shape to assign it. Complete routes, tees, and yardages before installation.`, "success");
+  } catch (error) {
+    setOsmStatus(error.message);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function setCourseImportStatus(message, tone = "error") {
@@ -206,7 +530,7 @@ function renderCourseImportServerStatus(status) {
       ? "Waiting for server credentials"
       : paid ? "Connected · paid calls allowed" : "Connected · paid calls OFF";
   $("#course-import-provider-note").textContent = status?.authorization_required
-    ? "Sign in through the game with an authorized developer account."
+    ? "Use Mapper sign in to import courses."
     : !ready
     ? "Add the Client ID and Active Token to .env, then restart the server."
     : "Import Mode only · published rounds make zero provider calls.";
@@ -220,7 +544,7 @@ async function loadCourseImportServerStatus() {
       ? "Ready. Search does not use credits."
       : "The importer is installed. Add credentials later to enable live search.", "success");
   } catch (error) {
-    const authorizationRequired = error.message.includes("developer") || error.message.includes("login");
+    const authorizationRequired = /sign in|developer|login/i.test(error.message);
     renderCourseImportServerStatus({
       enabled: !authorizationRequired,
       authorization_required: authorizationRequired,
@@ -228,7 +552,7 @@ async function loadCourseImportServerStatus() {
       paid_calls_allowed: false
     });
     setCourseImportStatus(authorizationRequired
-      ? "Sign in with an authorized developer account to import courses."
+      ? "Use Mapper sign in to import courses."
       : error.message);
   }
 }
@@ -256,6 +580,7 @@ function renderExternalCourseResults(results) {
   $$('[data-external-course-index]').forEach(button => {
     button.addEventListener("click", () => selectExternalCourse(results[Number(button.dataset.externalCourseIndex)]));
   });
+  void attachCourseFlags(results, "[data-external-course-index]", "golf_intelligence");
 }
 
 function selectExternalCourse(course) {
@@ -513,7 +838,7 @@ function currentHole() {
 
 function editorViewTransform() {
   const hole = currentHole();
-  const tee = hole?.markers?.white_tee;
+  const tee = mapperStartTeePoint(hole);
   const target = uprightHoleViewTarget(hole);
   if (!tee || !target) return null;
   const targetKind = hole.route_points?.[0] ? "route-1" : "pin";
@@ -651,7 +976,7 @@ function saveHoleForm(recordChange = false, autosaveLabel = "Autosaved") {
     hole.elevation_change_meters !== next.elevation_change_meters || hole.layout_type !== next.layout_type;
   if (recordChange && changed) recordUndo(`Hole ${currentHoleNumber} card change`, `hole-card-${currentHoleNumber}`);
   Object.assign(hole, next);
-  const teeAlignment = changed ? alignSecondaryTeesFromWhite(hole) : { aligned: [] };
+  const teeAlignment = changed ? alignSecondaryTees(hole) : { aligned: [] };
   const fairwayTool = $('[data-tool="fairway"]');
   if (fairwayTool) {
     fairwayTool.disabled = hole.par === 3;
@@ -668,11 +993,14 @@ function saveHoleForm(recordChange = false, autosaveLabel = "Autosaved") {
     }
   }
   if (teeAlignment.aligned.length) renderMappedHole();
+  if (changed) renderMeasurements();
   return persistProject(autosaveLabel);
 }
 
 function renderHoleForm() {
+  applyOsmStartTeeDefault(project);
   const hole = currentHole();
+  $("#start-tee").value = hole.tee_alignment_anchor || "white";
   const fairwayTool = $('[data-tool="fairway"]');
   if (fairwayTool) {
     fairwayTool.disabled = Number(hole.par) === 3;
@@ -704,6 +1032,7 @@ function gpsInputValue(point) {
 
 function renderGpsCalibration() {
   const hole = currentHole();
+  const automatic = hasDeterministicWgs84Geometry(hole, project);
   const controls = hole.gps_control_points || {};
   const bunkers = hole.features.filter(feature => feature.type === "bunker");
   const bunkerSelect = $("#gps-bunker-feature");
@@ -716,19 +1045,29 @@ function renderGpsCalibration() {
   $("#gps-white-tee").value = gpsInputValue(controls.white_tee);
   $("#gps-green-center").value = gpsInputValue(controls.green_center);
   $("#gps-bunker-center").value = gpsInputValue(controls.bunker_center);
+  $("#gps-calibration-title").textContent = automatic ? "Automatic GPS alignment" : "Three-point calibration";
+  $("#gps-calibration-intro").textContent = automatic
+    ? "This hole came from georeferenced WGS84 geometry. Jetta derives the equivalent GPS transform automatically; no pasted control points are needed."
+    : "For local or legacy artwork, paste three Google Earth coordinates. The bunker supplies the sideways reference needed to align phone GPS.";
+  $("#gps-anchor-list").hidden = automatic;
+  $("#gps-calibration-actions").hidden = automatic;
   const mark = $("#gps-calibration-mark");
   const status = $("#gps-calibration-status");
   try {
-    const calibration = buildHoleGpsCalibration(hole);
+    const calibration = buildHoleGpsCalibration(hole, { project });
     mark.textContent = "GPS";
     mark.dataset.ready = "true";
     status.dataset.tone = "success";
-    status.textContent = `Calibrated · tee to green ${Math.round(calibration.check.tee_to_green_meters * YARDS_PER_METER)} yd · saved with this hole.`;
+    status.textContent = automatic
+      ? `Automatic · WGS84 source transform · tee to pin ${Math.round(calibration.check.tee_to_pin_meters * YARDS_PER_METER)} yd.`
+      : `Calibrated · tee to green ${Math.round(calibration.check.tee_to_green_meters * YARDS_PER_METER)} yd · saved with this hole.`;
   } catch (error) {
     mark.textContent = "—";
     mark.dataset.ready = "false";
     status.dataset.tone = controls.white_tee || controls.green_center || controls.bunker_center ? "error" : "neutral";
-    status.textContent = controls.white_tee || controls.green_center || controls.bunker_center
+    status.textContent = automatic
+      ? `Automatic alignment will be available after the WGS84 tee and pin are complete: ${error.message}.`
+      : controls.white_tee || controls.green_center || controls.bunker_center
       ? error.message
       : "Optional. This does not move your artwork or calculation shapes.";
   }
@@ -777,6 +1116,15 @@ function saveGpsCalibration({ quiet = false } = {}) {
 }
 
 function prepareGpsCalibrationForHandoff() {
+  if (hasDeterministicWgs84Geometry(currentHole(), project)) {
+    try {
+      buildHoleGpsCalibration(currentHole(), { project });
+      return true;
+    } catch (error) {
+      setStatus(`Automatic GPS alignment is unavailable: ${error.message}. Complete the tee and pin geometry first.`, "error");
+      return false;
+    }
+  }
   const form = gpsCalibrationFormState();
   if (!form.any) return true;
   if (!form.complete) {
@@ -830,13 +1178,17 @@ function renderImageryControls() {
   $("#map").setAttribute("aria-label", "Local hole artwork editor");
   const upright = Boolean(editorViewTransform());
   const orientationLabel = currentHole().route_points?.[0] ? "first leg" : "tee-to-pin line";
-  $("#map-source-note").textContent = upright
+  const sourceAttribution = project.external_course_source?.attribution;
+  const orientationNote = upright
     ? hasLocalImage
       ? `Tee-down view · ${orientationLabel} points north · artwork and calculation layer stay aligned.`
       : `Tee-down view · ${orientationLabel} points north · GPS geometry is unchanged.`
     : hasLocalImage
       ? "Set the White tee and pin to turn this hole upright automatically."
       : "Choose a hole image, then set the White tee and pin to turn the hole upright.";
+  $("#map-source-note").textContent = sourceAttribution
+    ? `${orientationNote} · ${sourceAttribution}`
+    : orientationNote;
   $(".map-stage").classList.toggle("no-hole-artwork", !hasLocalImage);
   renderMeasurements();
 }
@@ -1317,14 +1669,22 @@ function addFeature(tool, center) {
     points: templatePoints(center, style)
   };
   recordUndo(`add ${style.name.toLowerCase()}`);
-  currentHole().features.push(feature);
-  if (type === "tee_white") alignSecondaryTeesFromWhite(currentHole());
+  let teeAlignment = { aligned: [] };
+  if (["tee_blue", "tee_white", "tee_forward"].includes(type)) {
+    teeAlignment = placeStartTeeBox(currentHole(), feature, center);
+  } else {
+    currentHole().features.push(feature);
+  }
   selectedFeatureId = feature.id;
   selectedFeatureIds = new Set([feature.id]);
   selectedFeatureMode = "points";
+  $("#start-tee").value = currentHole().tee_alignment_anchor || "white";
   persistProject();
   renderMappedHole();
   setActiveTool(null);
+  if (teeAlignment.aligned.length) {
+    setStatus(`Created ${style.name} and aligned ${teeAlignment.aligned.join(" and ")} tees from the scorecard. Preview game map is available now.`, "success");
+  }
 }
 
 function markerKeyForTool(tool) {
@@ -1352,19 +1712,23 @@ async function placeSurveyPoint(tool, position) {
     : `place route point ${routeIndex + 1}`);
   if (markerKey) {
     currentHole().markers[markerKey] = position;
-    if (markerKey === "white_tee" || markerKey === "pin") alignSecondaryTeesFromWhite(currentHole());
+    if (markerKey.endsWith("_tee")) {
+      currentHole().tee_alignment_anchor = markerKey.replace("_tee", "");
+      $("#start-tee").value = currentHole().tee_alignment_anchor;
+    }
+    alignSecondaryTees(currentHole());
   } else if (Number.isInteger(routeIndex)) {
     currentHole().route_points[routeIndex] = position;
   }
   persistProject();
-  const orientationChanged = markerKey === "white_tee"
+  const orientationChanged = markerKey === "blue_tee" || markerKey === "white_tee"
     || routeIndex === 0
     || (markerKey === "pin" && !currentHole().route_points[0]);
   if (orientationChanged && currentHole().markers.white_tee && uprightHoleViewTarget(currentHole())) {
     renderMappedHole();
     await applyImagerySource({ fit: true });
   } else {
-    renderPointMarkers();
+    renderMappedHole();
   }
   if (autoDraftSetupPending && currentHole().markers.white_tee && currentHole().markers.pin) {
     autoDraftSetupPending = false;
@@ -1420,8 +1784,8 @@ function syncFeatureFromOverlay(feature, overlay, { record = true } = {}) {
   if (record) recordUndo(`reshape ${featureName(feature).toLowerCase()}`, `reshape-${feature.id}`);
   markFeatureManual(feature);
   feature.points = overlay.getLatLngs()[0].map(gpsLiteral);
-  const teeAlignment = feature.type === "tee_white"
-    ? alignSecondaryTeesFromWhite(currentHole())
+  const teeAlignment = feature.type === `tee_${currentHole().tee_alignment_anchor || "white"}`
+    ? alignSecondaryTees(currentHole())
     : { aligned: [] };
   window.clearTimeout(featureCommitTimer);
   featureCommitTimer = window.setTimeout(() => {
@@ -1591,6 +1955,36 @@ function clearFeatureOverlays() {
 
 function renderMappedHole() {
   clearFeatureOverlays();
+  osmReferenceOverlays.forEach(layer => layer.remove());
+  osmReferenceOverlays = [];
+  const assignedIds = new Set(Object.values(project.holes).flatMap(hole => hole.features.map(feature => feature.id)));
+  for (const reference of project.external_course_source?.reference_features || []) {
+    if (assignedIds.has(reference.id) || !Array.isArray(reference.points) || reference.points.length < 3) continue;
+    const overlay = L.polygon(reference.points.map(displayGps), {
+      color: "#816343", weight: 2, dashArray: "5 5", fillOpacity: .08,
+      pmIgnore: true, interactive: reference.type !== "facility_boundary"
+    }).addTo(map);
+    overlay.bindTooltip(`${reference.label} · ${reference.type === "facility_boundary" ? "reference only" : "click to assign to this hole"}`);
+    overlay.on("click", event => {
+      if (activeTool) return;
+      L.DomEvent.stopPropagation(event);
+      if (reference.type === "facility_boundary") {
+        setStatus("This dashed outline is the course boundary, not a hole boundary. Map each hole separately.");
+        return;
+      }
+      let type = reference.type;
+      if (type === "tee") {
+        const role = window.prompt("Choose this tee's role: blue, white, or forward");
+        if (!["blue", "white", "forward"].includes(role?.trim().toLowerCase())) return;
+        type = `tee_${role.trim().toLowerCase()}`;
+      }
+      if (!window.confirm(`Assign this OSM ${type.replaceAll("_", " ")} to Hole ${currentHoleNumber}?`)) return;
+      currentHole().features.push({ ...structuredClone(reference), type, source: "openstreetmap", manual_override: true });
+      persistProject("OSM reference assigned to hole");
+      renderMappedHole();
+    });
+    osmReferenceOverlays.push(overlay);
+  }
   currentHole().features.forEach(createFeatureOverlay);
   renderPointMarkers();
   renderFeatureList();
@@ -1651,9 +2045,9 @@ function renderPointMarkers() {
   pointMarkers.forEach(marker => marker.remove());
   pointMarkers = [];
   const markerDefinitions = [
-    ["blue_tee", "Blue tee", "B", "tee"],
-    ["white_tee", "White tee / starting ball", "W", "tee"],
-    ["forward_tee", "Forward tee", "F", "tee"],
+    ["blue_tee", "Blue tee", "B", "tee blue"],
+    ["white_tee", "White tee", "W", "tee white"],
+    ["forward_tee", "Forward tee", "F", "tee forward"],
     ["pin", "Pin", "P", "pin"]
   ];
   markerDefinitions.forEach(([key, title, label, kind]) => {
@@ -1666,8 +2060,8 @@ function renderPointMarkers() {
       pointId: `marker:${key}`,
       onMove: next => {
         currentHole().markers[key] = next;
-        if (key === "white_tee" || key === "pin") {
-          alignSecondaryTeesFromWhite(currentHole());
+        if (key === `${currentHole().tee_alignment_anchor || "white"}_tee` || key === "pin") {
+          alignSecondaryTees(currentHole());
           return true;
         }
         return false;
@@ -1716,8 +2110,9 @@ function renderRouteLine() {
   if (routeLine) routeLine.remove();
   routeLine = null;
   const hole = currentHole();
-  if (!hole.markers.white_tee || !hole.markers.pin) return;
-  routeLine = L.polyline([hole.markers.white_tee, ...hole.route_points, hole.markers.pin].map(displayGps), {
+  const startTee = mapperStartTeePoint(hole);
+  if (!startTee || !hole.markers.pin) return;
+  routeLine = L.polyline([startTee, ...hole.route_points, hole.markers.pin].map(displayGps), {
     pane: "surveyPane",
     color: "#f3f0e5",
     opacity: .92,
@@ -2005,20 +2400,20 @@ function escapeHtml(value) {
 
 function renderMeasurements() {
   const localCalibrationAvailable = currentImageryMode() === "local";
-  const knownWhiteYards = Number(currentHole().yardages.white) || "";
+  const knownBlueYards = Number(currentHole().yardages.blue) || "";
   $("#measurement-list").innerHTML = measurements.length
     ? measurements.map((measurement, index) => `
       <article class="measurement-item">
         <div class="measurement-summary"><span>Tape ${index + 1}</span><strong>${Math.round(measurement.meters * YARDS_PER_METER)} yd · ${Math.round(measurement.meters)} m</strong></div>
         ${localCalibrationAvailable ? `<form class="measurement-calibration" data-calibrate-measurement="${measurement.id}">
-          <label>White tee → pin yardage<input name="known-yards" type="number" min="30" max="800" step="1" value="${knownWhiteYards}" required /></label>
+          <label>Blue tee → Green Center yardage<input name="known-yards" type="number" min="30" max="800" step="1" value="${knownBlueYards}" required /></label>
           <button type="submit">Set scale</button>
           <small>Rescales this local image and places Blue and Forward from the scorecard.</small>
         </form>` : ""}
       </article>
     `).join("")
     : `<p class="empty-copy">${localCalibrationAvailable
-      ? "Measure the white tee to the pin, then enter its scorecard yardage to set the image scale."
+      ? "Measure the blue tee to the green center, then enter its scorecard yardage to set the image scale."
       : "Choose “Measure two points,” then click both ends on the map."}</p>`;
 }
 
@@ -2050,22 +2445,22 @@ async function calibrateLocalImage(measurementId, knownYards) {
     return;
   }
   if (!Number.isFinite(targetYards) || targetYards < 30 || targetYards > 800) {
-    setStatus("Enter a white tee-to-pin yardage from 30 to 800 yards.", "error");
+    setStatus("Enter a blue tee-to-green-center yardage from 30 to 800 yards.", "error");
     return;
   }
   const measuredYards = measurement.meters * YARDS_PER_METER;
   const scale = targetYards / measuredYards;
   if (scale < .2 || scale > 5) {
-    setStatus("That calibration changes the image scale too much. Remeasure the white tee and pin more precisely.", "error");
+    setStatus("That calibration changes the image scale too much. Remeasure the blue tee and green center more precisely.", "error");
     return;
   }
   recordUndo(`calibrate Hole ${currentHoleNumber} image scale`);
   scaleCurrentHoleGeometry(measurement.start, scale);
   const hole = currentHole();
-  hole.yardages.white = Math.round(targetYards);
-  const teeAlignment = alignSecondaryTeesFromWhite(hole);
+  hole.yardages.blue = Math.round(targetYards);
+  const teeAlignment = alignSecondaryTees(hole);
   hole.local_image_calibration = {
-    white_tee_to_pin_yards: hole.yardages.white,
+    blue_tee_to_green_center_yards: hole.yardages.blue,
     measured_before_yards: Math.round(measuredYards * 10) / 10,
     scale_factor: Math.round(scale * 10000) / 10000,
     calibrated_at: new Date().toISOString()
@@ -2190,7 +2585,7 @@ function featureCenter(feature) {
 function treeDetectionRoute(hole) {
   const green = hole.features.find(feature => feature.type === "green");
   const greenCenter = featureCenter(green) || hole.markers.pin;
-  return [hole.markers.white_tee, ...hole.route_points, greenCenter].filter(Boolean);
+  return [mapperStartTeePoint(hole), ...hole.route_points, greenCenter].filter(Boolean);
 }
 
 function corridorRadiusPixels(frame, route, corridorYards) {
@@ -2485,12 +2880,350 @@ function updateScorecardImportChoice() {
   $("#scorecard-import-status").textContent = "";
 }
 
+let libraryOffset = 0;
+let libraryTotal = 0;
+let libraryRequestSequence = 0;
+let libraryLastFingerprint = "";
+
+async function libraryRequest(action, payload) {
+  const response = await editorApiFetch(`/api/v1/course-library/${action}`, payload ? {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+  } : {});
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || `Course library returned ${response.status}`);
+  return result;
+}
+
+function libraryCourseDisplayName(course) {
+  const name = String(course.name || "").trim();
+  const state = String(course.state || "").trim().toUpperCase();
+  return state && !name.toUpperCase().endsWith(` ${state}`) ? `${name} ${state}` : name;
+}
+
+async function refreshCourseLibrary() {
+  const sequence = ++libraryRequestSequence;
+  const query = new URLSearchParams({ q: $("#library-search").value, state: $("#library-state").value,
+    status: $("#library-filter").value, offset: String(libraryOffset) });
+  const result = await libraryRequest(`courses?${query}`);
+  if (sequence !== libraryRequestSequence) return;
+  const fingerprint = JSON.stringify(result);
+  if (fingerprint === libraryLastFingerprint) {
+    for (const label of $("#library-rows").querySelectorAll("[data-retry-at]")) {
+      label.textContent = `Retry eligible in ~${Math.max(0, Math.ceil(Number(label.dataset.retryAt) - Date.now()/1000))} sec`;
+    }
+    return;
+  }
+  libraryLastFingerprint = fingerprint;
+  libraryTotal = result.total;
+  $("#library-summary").textContent = `${result.total} matching courses · Import queue ${result.running ? "running" : "paused"} · Source checks ${result.source_running ? "running" : "paused"} · ${Object.entries(result.counts).map(([key, count]) => `${key}: ${count}`).join(" · ")}`;
+  const checkedIds = new Set($$('#library-rows input:checked').map(input => input.value));
+  $("#library-rows").replaceChildren();
+  for (const course of result.courses) {
+    const row = document.createElement("div"); row.className = "library-row";
+    const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.value = course.id;
+    checkbox.setAttribute("aria-label", `Select ${libraryCourseDisplayName(course)}`);
+    checkbox.disabled = course.no_good || !["New", "Failed", "Needs review"].includes(course.status) || Boolean(course.revision || course.proposed || course.duplicate_of);
+    checkbox.checked = !checkbox.disabled && checkedIds.has(course.id);
+    const title = document.createElement("div");
+    const name = document.createElement("strong"); name.textContent = libraryCourseDisplayName(course);
+    const location = document.createElement("small"); location.textContent = `${course.city}, ${course.state} · Revision ${course.revision}`;
+    const updated = document.createElement("small"); updated.textContent = `Updated ${new Date(course.updated * 1000).toLocaleString()}`;
+    const notes = document.createElement("small"); notes.textContent = course.notes;
+    title.append(name, location, updated, notes);
+    const mapping = document.createElement("div"); mapping.className = "library-stage";
+    mapping.textContent = `DRAFT: ${course.mapping}`;
+    const status = document.createElement("small"); status.textContent = course.status; mapping.append(status);
+    if (course.attempts) {
+      const attempts = document.createElement("small"); attempts.textContent = `Attempt ${course.attempts}/3`;
+      mapping.append(attempts);
+    }
+    if (course.status === "Retry pending") {
+      const retry = document.createElement("small"); retry.textContent = `Retry eligible in ~${Math.max(0, Math.ceil(course.next_retry - Date.now()/1000))} sec`;
+      retry.dataset.retryAt = String(course.next_retry);
+      mapping.append(retry);
+    }
+    const installation = document.createElement("div"); installation.className = "library-stage"; installation.textContent = `GAME: ${course.installation}`;
+    const open = document.createElement("button"); open.type = "button"; open.textContent = "Open draft"; open.disabled = !course.revision;
+    open.addEventListener("click", async () => {
+      try {
+        if (!window.confirm("Open this saved course? Save any unsaved work first.")) return;
+        const result = await libraryRequest(`project?id=${encodeURIComponent(course.id)}`);
+        const loadedProject = parseMapperProject(JSON.stringify(result.project));
+        recordUndo("open library project"); project = loadedProject; currentHoleNumber = 1;
+        autoDraftSetupPending = false; referencePanelOpen = Boolean(project.reference_images);
+        $("#course-name").value = project.course_name; $("#course-structure").value = project.course_structure;
+        syncNineLoopNameFields(); renderHoleSwitcherOptions(); persistProject(); renderHoleForm();
+        if (map && project.map_view?.center) map.setView(displayGps(project.map_view.center), Math.min(project.map_view.zoom || 17, EDITOR_MAX_ZOOM), { animate: false });
+        void applyImagerySource({ fit: true });
+        $("#install-game").textContent = course.installation.startsWith("Installed") || course.installation.startsWith("Update")
+          ? "Update installed course" : "Install in game";
+        $("#course-library-dialog").close(); setStatus(`Opened ${project.course_name} · saved revision ${project.library_context.revision}.`, "success");
+      } catch (error) { $("#library-message").textContent = error.message; }
+    });
+    const actions = document.createElement("div"); actions.append(open);
+    if (course.source_update) {
+      const source = document.createElement("small"); source.textContent = `OSM check: ${course.source_update.status}${course.source_update.notes ? " · " + course.source_update.notes : ""}`;
+      title.append(source);
+      if (["Queued","Retry pending","Review ready","Failed"].includes(course.source_update.status)) {
+        const discard = document.createElement("button"); discard.type = "button"; discard.textContent = "Discard OSM check";
+        discard.addEventListener("click", async () => {
+          try {
+            if (!window.confirm("Discard this pending OSM check? Your saved draft and installed game remain unchanged.")) return;
+            await libraryRequest("discard-source", { id: course.source_update.id }); await refreshCourseLibrary();
+          } catch (error) { $("#library-message").textContent = error.message; }
+        });
+        actions.append(discard);
+      }
+    }
+    if (course.revision) {
+      const scorecard = document.createElement("button"); scorecard.type = "button"; scorecard.textContent = "Import scorecard";
+      scorecard.addEventListener("click", async () => {
+        try {
+          if (!window.confirm("Match this course to OpenGolfAPI and save official scorecard facts as a new draft revision? The installed game will not change.")) return;
+          const saved = await libraryRequest("scorecard", { id: course.id });
+          $("#library-message").textContent = saved.unchanged
+            ? "OpenGolfAPI scorecard is already current."
+            : `OpenGolfAPI scorecard saved as revision ${saved.revision}. Review missing tee sets before installation.`;
+          await refreshCourseLibrary();
+        } catch (error) { $("#library-message").textContent = error.message; }
+      });
+      actions.append(scorecard);
+      const history = document.createElement("button"); history.type = "button"; history.textContent = "Revision history";
+      history.addEventListener("click", () => { void openLibraryHistory(course).catch(error => { $("#library-message").textContent = error.message; }); });
+      actions.append(history);
+      if (course.provider_id) {
+        const check = document.createElement("button"); check.type = "button";
+        const pending = course.source_update?.status === "Review ready";
+        check.textContent = pending ? "Review OSM update" : "Check OSM updates";
+        check.disabled = Boolean(course.proposed) || ["Queued", "Importing", "Retry pending"].includes(course.source_update?.status);
+        check.addEventListener("click", async () => {
+          try {
+            if (pending) await openSourceReview(course);
+            else {
+              if (!window.confirm("Fetch current OSM data for review? Your saved draft and installed game will not change.")) return;
+              await libraryRequest("check-source", { id: course.id });
+              $("#library-message").textContent = "OSM source check queued. No saved draft will be overwritten.";
+              await refreshCourseLibrary();
+            }
+          } catch (error) { $("#library-message").textContent = error.message; }
+        });
+        actions.append(check);
+      }
+    }
+    if (!course.original_course_id && !course.revision && result.game_courses?.length) {
+      const link = document.createElement("button"); link.type = "button"; link.textContent = "Link game course";
+      link.addEventListener("click", async () => {
+        try {
+          const id = window.prompt(`Only link if this is the same facility. Future installations will update this game identity.\n${result.game_courses.map(r => `${r.id}: ${r.name}`).join("\n")}\nEnter the existing game course ID:`);
+          if (!id?.trim()) return;
+          await libraryRequest("resolve", { id: course.id, installed_id: id.trim() });
+          await refreshCourseLibrary();
+        } catch (error) { $("#library-message").textContent = error.message; }
+      });
+      actions.append(link);
+    }
+    if (course.status === "Needs review" || course.proposed) {
+      const review = document.createElement("button"); review.type = "button"; review.textContent = "Review match";
+      review.addEventListener("click", async () => {
+        try {
+          if (!window.confirm(`${course.name}: ${course.notes}\n${course.proposed ? `Proposed input: ${course.proposed}\n` : ""}Confirm reviewing this as a separate course. Existing saved edits will be retained.`)) return;
+          const externalId = window.prompt("Optional: verified OSM facility ID from Import course (for example way/123). Leave blank to retry name matching.", course.provider_id || "");
+          if (externalId === null) return;
+          await libraryRequest("resolve", { id: course.id, accept_input: Boolean(course.proposed), external_id: externalId.trim() || null, separate: true });
+          await refreshCourseLibrary();
+        } catch (error) { $("#library-message").textContent = error.message; }
+      });
+      actions.append(review);
+    }
+    const flag = document.createElement("button"); flag.type = "button";
+    flag.textContent = course.no_good ? "Clear no-good flag" : "Flag no good";
+    if (course.no_good) {
+      const badge = document.createElement("small"); badge.textContent = "⚑ No good — previously checked";
+      badge.className = "course-rejected-label"; title.append(badge);
+    }
+    flag.addEventListener("click", () => { void runLibraryFlag(); });
+    async function runLibraryFlag() {
+      flag.disabled = true;
+      try {
+        await libraryRequest("flag", { identity: course.flag_identity, flagged: !course.no_good });
+        await refreshCourseLibrary();
+      } catch (error) { $("#library-message").textContent = error.message; flag.disabled = false; }
+    }
+    actions.append(flag);
+    row.append(checkbox, title, mapping, installation, actions); $("#library-rows").append(row);
+  }
+  $("#library-page").textContent = libraryTotal ? `Courses ${libraryOffset + 1}–${Math.min(libraryOffset + 25, libraryTotal)} of ${libraryTotal}` : "No matching courses";
+  $("#library-prev").disabled = libraryOffset === 0;
+  $("#library-next").disabled = libraryOffset + 25 >= libraryTotal;
+}
+
+async function saveLibraryProject() {
+  if (!project.library_context) throw new Error("Open a Course Library project first; other projects still use Save project downloads.");
+  saveHoleForm(); validateMapperProject(project);
+  const result = await libraryRequest("save", { id: project.library_context.id,
+    revision: project.library_context.revision, project });
+  project = result.project; persistProject();
+  return result;
+}
+
+let sourceReviewSnapshot = null;
+
+async function openSourceReview(course) {
+  if (project.library_context?.id === course.id) {
+    if (!window.confirm("Save your current draft edits before comparing the new source data?")) return;
+    await saveLibraryProject();
+  }
+  const review = await libraryRequest(`source-review?id=${encodeURIComponent(course.source_update.id)}`);
+  sourceReviewSnapshot = review;
+  $("#library-source-title").textContent = `Review OSM changes · ${libraryCourseDisplayName(course)}`;
+  $("#library-source-message").textContent = review.blocked || `${review.changes.length} changes against saved revision ${review.revision}. Conflicts and removals require your explicit choice.`;
+  $("#library-source-apply").disabled = Boolean(review.blocked) || review.status !== "Review ready";
+  $("#library-source-changes").replaceChildren();
+  for (const change of review.changes) {
+    const item = document.createElement("section"); item.className = "source-change"; item.dataset.kind = change.kind;
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.value = change.id; checkbox.dataset.kind = change.kind;
+    label.append(checkbox, document.createTextNode(`${change.label} · ${change.kind}`));
+    const details = document.createElement("details"); const summary = document.createElement("summary"); summary.textContent = "Compare geometry";
+    const grid = document.createElement("div"); grid.className = "source-compare";
+    for (const [key,title] of [["baseline","Previous source"],["current","Your saved draft"],["incoming","New OSM source"]]) {
+      const column = document.createElement("div"); const heading = document.createElement("strong"); heading.textContent = title;
+      const pre = document.createElement("pre"); pre.textContent = JSON.stringify(change[key],null,2) ?? "Absent";
+      column.append(heading, pre); grid.append(column);
+    }
+    details.append(summary, grid); item.append(label, details); $("#library-source-changes").append(item);
+  }
+  $("#library-source-dialog").showModal();
+}
+
+async function openLibraryHistory(course) {
+  const history = await libraryRequest(`history?id=${encodeURIComponent(course.id)}`);
+  $("#library-history-title").textContent = `Revision history · ${libraryCourseDisplayName(course)}`;
+  $("#library-history-message").textContent = "Restoring a project does not change the installed game.";
+  $("#library-history-rows").replaceChildren();
+  for (const entry of history.revisions) {
+    const row = document.createElement("div"); row.className = "library-history-row";
+    const label = document.createElement("span"); label.textContent = `Revision ${entry.revision} · ${new Date(entry.created * 1000).toLocaleString()} · ${entry.ready ? "Ready" : "Incomplete"}`;
+    const download = document.createElement("button"); download.type = "button"; download.textContent = `Download revision ${entry.revision}`;
+    download.addEventListener("click", async () => {
+      try {
+        const result = await libraryRequest(`project?id=${encodeURIComponent(course.id)}&revision=${entry.revision}`);
+        downloadText(JSON.stringify(result.project,null,2), `${result.project.course_id}-revision-${entry.revision}.golfmap`);
+      } catch (error) { $("#library-history-message").textContent = error.message; }
+    });
+    const restore = document.createElement("button"); restore.type = "button"; restore.textContent = `Restore revision ${entry.revision}`;
+    restore.disabled = entry.revision === course.revision;
+    restore.addEventListener("click", async () => {
+      try {
+        if (!window.confirm(`Restore saved revision ${entry.revision} as a new draft revision? Unsaved editor work will not be copied. The installed game will not change.`)) return;
+        const result = await libraryRequest("restore-revision", { id: course.id, source_revision: entry.revision, revision: course.revision });
+        $("#library-history-dialog").close(); $("#library-message").textContent = `Restored as revision ${result.revision}. Reopen the draft before editing.`;
+        await refreshCourseLibrary();
+      } catch (error) { $("#library-history-message").textContent = error.message; }
+    });
+    row.append(label,download,restore); $("#library-history-rows").append(row);
+  }
+  $("#library-history-dialog").showModal();
+}
+
+function bindCourseLibrary() {
+  const run = async task => { try { await task(); } catch (error) {
+    const target = $("#library-source-dialog").open ? "#library-source-message"
+      : $("#library-history-dialog").open ? "#library-history-message" : "#library-message";
+    $(target).textContent = error.message;
+  } };
+  $("#open-course-library").addEventListener("click", () => {
+    $("#course-library-dialog").showModal(); void run(refreshCourseLibrary);
+  });
+  $("#close-course-library").addEventListener("click", () => $("#course-library-dialog").close());
+  $("#library-source-close").addEventListener("click", () => $("#library-source-dialog").close());
+  $("#library-history-close").addEventListener("click", () => $("#library-history-dialog").close());
+  $("#library-source-select-safe").addEventListener("click", () => {
+    for (const checkbox of $("#library-source-changes").querySelectorAll("input[data-kind='source change']")) checkbox.checked = true;
+  });
+  $("#library-source-download").addEventListener("click", () => { void run(async () => {
+    const result = await libraryRequest(`source-project?id=${encodeURIComponent(sourceReviewSnapshot.id)}`);
+    downloadText(JSON.stringify(result.project,null,2), `${result.project.course_id}-source-draft.golfmap`);
+  }); });
+  $("#library-source-apply").addEventListener("click", async event => {
+    const button = event.currentTarget; button.disabled = true;
+    try {
+      const accepted = [...$("#library-source-changes").querySelectorAll("input:checked")].map(input => input.value);
+      if (!window.confirm(`Use ${accepted.length} selected changes and keep all other saved geometry? Nothing will be installed.`)) return;
+      const result = await libraryRequest("apply-source", { id: sourceReviewSnapshot.id, revision: sourceReviewSnapshot.revision, accepted });
+      $("#library-source-dialog").close(); $("#library-message").textContent = `Source review saved at revision ${result.revision}. Reopen the draft before editing.`;
+      await refreshCourseLibrary();
+    } catch (error) { $("#library-source-message").textContent = error.message; }
+    finally { button.disabled = Boolean(sourceReviewSnapshot?.blocked); }
+  });
+  $("#library-source-discard").addEventListener("click", () => { void run(async () => {
+    if (!window.confirm("Discard this source update and retain the saved draft unchanged?")) return;
+    await libraryRequest("discard-source", { id: sourceReviewSnapshot.id });
+    $("#library-source-dialog").close(); await refreshCourseLibrary();
+  }); });
+  $("#library-search-button").addEventListener("click", () => { libraryOffset = 0; void run(refreshCourseLibrary); });
+  $("#library-prev").addEventListener("click", () => { libraryOffset = Math.max(0, libraryOffset - 25); void run(refreshCourseLibrary); });
+  $("#library-next").addEventListener("click", () => { libraryOffset += 25; void run(refreshCourseLibrary); });
+  $("#library-upload").addEventListener("click", () => $("#library-csv").click());
+  $("#library-csv").addEventListener("change", event => { void run(async () => {
+    const [file] = event.target.files; event.target.value = "";
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) throw new Error("CSV must be no larger than 10 MB");
+    const result = await libraryRequest("intake", { csv: await file.text() });
+    $("#library-message").textContent = `${result.new} new · ${result.unchanged} unchanged · ${result.review} need review · ${result.errors.length} invalid rows. ${result.errors.slice(0,3).map(r => `Row ${r.row}: ${r.error}`).join("; ")}`;
+    await refreshCourseLibrary();
+  }); });
+  $("#library-select-all").addEventListener("click", () => {
+    $$('#library-rows input[type="checkbox"]:not(:disabled)').forEach(input => { input.checked = true; });
+  });
+  $("#library-select-none").addEventListener("click", () => {
+    $$('#library-rows input[type="checkbox"]').forEach(input => { input.checked = false; });
+  });
+  $("#library-queue").addEventListener("click", () => { void run(async () => {
+    const ids = [...$("#library-rows").querySelectorAll("input:checked")].map(input => input.value);
+    const result = await libraryRequest("queue", { ids, retry: true });
+    $("#library-message").textContent = `${result.queued} courses queued. No course will be published automatically.`;
+    await refreshCourseLibrary();
+  }); });
+  $("#library-pause").addEventListener("click", () => { void run(async () => {
+    await libraryRequest("pause", {}); $("#library-message").textContent = "Queue paused; current request will finish."; await refreshCourseLibrary();
+  }); });
+  $("#library-resume").addEventListener("click", () => { void run(async () => {
+    await libraryRequest("resume", {}); $("#library-message").textContent = "Import and source-check queues resumed."; await refreshCourseLibrary();
+  }); });
+  $("#library-save").addEventListener("click", () => { void run(async () => {
+    const result = await saveLibraryProject(); $("#library-message").textContent = `Saved revision ${result.revision}: ${result.status}.`; await refreshCourseLibrary();
+  }); });
+  $("#library-report").addEventListener("click", () => { void run(async () => {
+    const result = await libraryRequest("report"); downloadText(result.csv, "course-import-results.csv");
+  }); });
+  setInterval(() => { if ($("#course-library-dialog").open && mapperSignedIn && !$("#library-rows").querySelector("input:checked")) void run(refreshCourseLibrary); }, 10000);
+}
+
 function bindEvents() {
+  bindCourseLibrary();
   renderHoleSwitcherOptions();
   syncNineLoopNameFields();
   $("#course-name").value = project.course_name;
   $("#course-structure").value = project.course_structure;
-  $("#open-course-import").addEventListener("click", () => {
+  $("#open-course-queue").addEventListener("click", () => {
+    $("#course-queue-dialog").showModal();
+    void loadCourseQueue();
+  });
+  $("#refresh-course-queue").addEventListener("click", () => void loadCourseQueue());
+  $("#open-course-import").addEventListener("click", openOsmImporter);
+  $("#osm-use-map-center").addEventListener("click", () => {
+    const center = map ? gpsLiteral(map.getCenter()) : project.map_view?.center;
+    if (!center) return;
+    $("#osm-import-latitude").value = Number(center.lat).toFixed(7);
+    $("#osm-import-longitude").value = Number(center.lng).toFixed(7);
+    setOsmStatus("Using the current map center. Search nearby when ready.", "success");
+  });
+  $("#search-osm-course").addEventListener("click", () => void searchOsmCourses());
+  $("#refresh-osm-preview").addEventListener("click", () => void previewOsmCourse(selectedOsmCourse, true));
+  $("#commit-osm-import").addEventListener("click", () => void commitOsmImport());
+  $("#open-golf-intelligence-import").addEventListener("click", () => {
+    $("#osm-import-dialog").close();
     resetCourseImportSelection();
     $("#course-import-results").innerHTML = "";
     $("#course-import-dialog").showModal();
@@ -2620,7 +3353,7 @@ function bindEvents() {
     const nextName = event.target.value.trim() || "New golf course";
     if (nextName !== project.course_name) recordUndo("course name change");
     project.course_name = nextName;
-    project.course_id = slug(project.course_name);
+    if (!project.library_context) project.course_id = slug(project.course_name);
     persistProject();
   });
   $("#course-structure").addEventListener("change", event => {
@@ -2678,7 +3411,7 @@ function bindEvents() {
         hole.par = row.par;
         hole.handicap = row.handicap;
         hole.yardages = { blue: row.blue, white: row.white, forward: row.forward };
-        alignSecondaryTeesFromWhite(hole);
+        alignSecondaryTees(hole);
         if (row.par === 3) hole.features = hole.features.filter(feature => feature.type !== "fairway");
       });
       persistProject();
@@ -2696,6 +3429,15 @@ function bindEvents() {
   });
   $("#hole-number").addEventListener("change", event => {
     switchHole(Number(event.target.value));
+  });
+  $("#start-tee").addEventListener("change", event => {
+    recordUndo("choose start tee");
+    const result = selectStartTee(currentHole(), event.target.value);
+    persistProject();
+    renderMappedHole();
+    setStatus(result.aligned.length
+      ? `Using ${event.target.value} as the imported start tee. Generated ${result.aligned.join(" and ")} tee boxes from the scorecard.`
+      : `Using ${event.target.value} as the start tee. Add its box, pin, and scorecard yardages to generate the other tees.`, "success");
   });
   ["#hole-par", "#hole-handicap", "#yards-blue", "#yards-white", "#yards-forward", "#elevation-change", "#layout-type"]
     .forEach(selector => $(selector).addEventListener("change", () => saveHoleForm(true)));
@@ -2845,14 +3587,21 @@ function bindEvents() {
     void applyImagerySource();
     setStatus("New mapping project started.", "success");
   });
-  $("#save-project").addEventListener("click", () => {
-    saveHoleForm();
-    validateMapperProject(project);
-    downloadText(
-      `${JSON.stringify(project, null, 2)}\n`,
-      `${project.course_id || "course"}.golfmap`
-    );
-    setStatus("Mapping project saved.", "success");
+  $("#save-project").addEventListener("click", async () => {
+    try {
+      saveHoleForm();
+      validateMapperProject(project);
+      // Start the browser download while this button click is still a trusted
+      // user gesture. Waiting for the Course Library network save first can
+      // make Chromium silently block the download/save dialog.
+      const localCopy = `${JSON.stringify(project, null, 2)}\n`;
+      const localFilename = `${slug(project.course_name || project.course_id || "course")}.golfmap`;
+      downloadText(localCopy, localFilename);
+      if (project.library_context) await saveLibraryProject();
+      setStatus(project.library_context ? `Library revision ${project.library_context.revision} saved; local copy downloaded.` : "Mapping project saved.", "success");
+    } catch (error) {
+      setStatus(`Could not save project: ${error.message}. Your local copy was still downloaded.`, "error");
+    }
   });
   $("#load-project").addEventListener("click", () => $("#project-file").click());
   $("#project-file").addEventListener("change", async event => {
@@ -2894,22 +3643,61 @@ function bindEvents() {
       setStatus(error.message, "error");
     }
   });
-  $("#preview-game-map").addEventListener("click", () => {
+  $$("[data-game-preview]").forEach(button => button.addEventListener("click", () => {
     saveHoleForm();
     try {
-      const gameHole = ensureHazardFreePinZones(generatedGreenHole(buildGameHoleJson(project, currentHoleNumber), {
-        courseId: project.course_id,
-        holeNumber: currentHoleNumber,
-        targetWidthYards: 40,
-        courseUnitsPerYard: 1 / YARDS_PER_METER
-      }));
+      const hole = currentHole();
+      const prepared = prepareHoleForPreview(hole);
+      if (JSON.stringify(prepared) !== JSON.stringify(hole)) {
+        recordUndo("generate scorecard tees for preview");
+        hole.markers = prepared.markers;
+        hole.features = prepared.features;
+        persistProject();
+        renderMappedHole();
+      }
+      const gameHole = ensureHazardFreePinZones(mappedGreenHole(buildGameHolePreview(project, currentHoleNumber)));
       $("#game-preview-title").textContent = `Hole ${currentHoleNumber} game map`;
-      $("#game-preview-canvas").innerHTML = renderGameMapPreview(gameHole);
+      previewPrototypeHole = gameHole;
+      $("#illustrated-preview-toggle").checked = true;
+      $("#game-preview-hole").innerHTML = Array.from({ length: mapperHoleCount(project) }, (_, index) => `<option value="${index + 1}">${escapeHtml(editorHoleLabel(index + 1))}</option>`).join("");
+      $("#game-preview-hole").value = String(currentHoleNumber);
+      $("#illustrated-preview-note").hidden = false;
+      $("#game-preview-canvas").innerHTML = renderIllustratedHolePrototype(gameHole);
+      const remaining = gameHole.hole_metadata.mapper_preview.remaining_items;
+      $("#game-preview-notes").textContent = remaining.length
+        ? `Draft preview · still needed before export: ${remaining.join("; ")}.`
+        : "This hole passes the mapping checks. Trees are optional.";
       $("#game-preview-dialog").showModal();
       setStatus(`Previewing Hole ${currentHoleNumber} at the game’s full-hole scale.`, "success");
     } catch (error) {
       setStatus(`Game preview is not ready: ${error.message}.`, "error");
     }
+  }));
+  $("#game-preview-hole").addEventListener("change", event => {
+    const number = Number(event.target.value);
+    $("#game-preview-title").textContent = `${editorHoleLabel(number)} game map`;
+    try {
+      const gameHole = ensureHazardFreePinZones(mappedGreenHole(buildGameHolePreview(project, number)));
+      previewPrototypeHole = gameHole;
+      $("#game-preview-canvas").innerHTML = $("#illustrated-preview-toggle").checked
+        ? renderIllustratedHolePrototype(gameHole)
+        : renderGameMapPreview(gameHole);
+      const remaining = gameHole.hole_metadata.mapper_preview.remaining_items;
+      $("#game-preview-notes").textContent = remaining.length
+        ? `Draft preview · still needed before export: ${remaining.join("; ")}.`
+        : "This hole passes the mapping checks. Trees are optional.";
+    } catch (error) {
+      previewPrototypeHole = null;
+      $("#game-preview-canvas").replaceChildren();
+      $("#game-preview-notes").textContent = `This hole needs mapping before preview: ${error.message}.`;
+    }
+  });
+  $("#illustrated-preview-toggle").addEventListener("change", event => {
+    if (!previewPrototypeHole) return;
+    $("#game-preview-canvas").innerHTML = event.target.checked
+      ? renderIllustratedHolePrototype(previewPrototypeHole)
+      : renderGameMapPreview(previewPrototypeHole);
+    $("#illustrated-preview-note").hidden = !event.target.checked;
   });
   $("#export-package").addEventListener("click", async () => {
     if (!prepareGpsCalibrationForHandoff()) return;
@@ -2929,8 +3717,25 @@ function bindEvents() {
     }
   });
   $("#install-game").addEventListener("click", async event => {
-    if (!prepareGpsCalibrationForHandoff()) return;
     saveHoleForm();
+    const preparedProject = structuredClone(project);
+    prepareCourseTeeBoxes(preparedProject);
+    if (JSON.stringify(preparedProject.holes) !== JSON.stringify(project.holes)) {
+      recordUndo("prepare scorecard tees for installation");
+      project.holes = preparedProject.holes;
+      persistProject();
+      renderMappedHole();
+    }
+    const unfinished = Array.from({ length: mapperHoleCount(project) }, (_, index) => index + 1)
+      .map(number => ({ number, status: holeMappingStatus(project, number) }))
+      .filter(item => !item.status.ready);
+    if (unfinished.length) {
+      const details = unfinished.map(item => `${editorHoleLabel(item.number)}: ${item.status.problems.join(", ")}`).join("\n");
+      setStatus(`Installation needs ${unfinished.length} hole${unfinished.length === 1 ? "" : "s"} completed. ${details}`, "error");
+      window.alert(`The course was not installed. Missing tee boxes were generated where scorecard data allowed.\n\n${details}`);
+      return;
+    }
+    if (!prepareGpsCalibrationForHandoff()) return;
     const button = event.currentTarget;
     const originalLabel = button.textContent;
     button.disabled = true;
@@ -2971,12 +3776,13 @@ function bindEvents() {
       : `Validating 27 holes and installing six ordered 18-hole routes…`);
     try {
       const results = [];
+      if (project.library_context) await saveLibraryProject();
       for (const payload of payloads) {
         button.textContent = payloads.length === 1 ? "Installing…" : `Installing ${results.length + 1}/${payloads.length}…`;
-        const response = await fetch("/api/course-mapper/install", {
+        const response = await editorApiFetch("/api/course-mapper/install", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ ...payload, ...(project.library_context ? { library_context: project.library_context } : {}) })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(`${payload.course_name}: ${result.error || `server returned ${response.status}`}`);
@@ -2988,9 +3794,22 @@ function bindEvents() {
         course.id === result.course_id && course.dataVersion === result.map_updated_at
       ));
       if (!installed) throw new Error("the server did not confirm the installed map");
+      if (project.library_context) {
+        await libraryRequest("installed", { id: project.library_context.id, revision: project.library_context.revision, results });
+      }
+      const context = productionContext();
+      if (context) {
+        await courseImportRequest(`/api/v1/course-production/${context.production_item_id}/complete`, {
+          ...context,
+          installed_courses: results.map(result => ({
+            course_id: result.course_id,
+            installed_version: result.map_updated_at
+          }))
+        });
+      }
       setStatus(results.length === 1
-        ? `Installed all 18 ${results[0].course_name} holes in the game. Reload the game page to use them.`
-        : `Installed all six ordered ${project.course_name} 18-hole routes. Reload the game page to choose one.`, "success");
+        ? `Installed all 18 ${results[0].course_name} holes in the game${context ? " and marked the request READY" : ""}. Reload the game page to use them.`
+        : `Installed all six ordered ${project.course_name} 18-hole routes${context ? " and marked the request READY" : ""}. Reload the game page to choose one.`, "success");
       window.alert(results.length === 1
         ? `${results[0].course_name} was installed and verified. Reload the game to use it.`
         : `${project.course_name} was installed in both directions for every pair of nines. Reload the game and choose the route from the course menu.`);
@@ -3013,6 +3832,35 @@ async function initializeEditor() {
     presetError = error;
   }
   bindEvents();
+  $("#mapper-login-toggle").addEventListener("click", async () => {
+    if (mapperSignedIn) {
+      await fetch("/api/mapper/logout", { method: "POST" });
+      await initializeEditorAuth();
+    } else $("#mapper-login-dialog").showModal();
+  });
+  $("#mapper-login-cancel").addEventListener("click", () => $("#mapper-login-dialog").close());
+  $("#mapper-login-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = $("#mapper-login-submit");
+    button.disabled = true;
+    try {
+      const response = await fetch("/api/mapper/login", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: $("#mapper-password").value })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Sign in failed");
+      $("#mapper-password").value = "";
+      $("#mapper-login-error").textContent = "";
+      $("#mapper-login-dialog").close();
+      await initializeEditorAuth();
+      if ($("#osm-import-dialog").open) await loadOsmStatus();
+      if ($("#course-queue-dialog").open) await loadCourseQueue();
+      if ($("#course-import-dialog").open) await loadCourseImportServerStatus();
+    } catch (error) {
+      $("#mapper-login-error").textContent = error.message;
+    } finally { button.disabled = false; }
+  });
   initializeMap();
   renderHoleForm();
   await applyImagerySource({ fit: true });

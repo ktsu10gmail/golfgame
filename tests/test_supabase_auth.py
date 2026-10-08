@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 import unittest
 from urllib.error import HTTPError, URLError
 from unittest.mock import patch
@@ -51,6 +53,36 @@ class SupabaseAuthTests(unittest.TestCase):
         })
         sent = request.call_args.args[0]
         self.assertEqual(sent.headers["Authorization"], "Bearer access-token")
+
+    @patch("packages.accounts.supabase.urlopen")
+    def test_concurrent_requests_share_cached_token_validation(self, request):
+        class SlowResponse(FakeResponse):
+            def __enter__(self):
+                time.sleep(0.05)
+                return self
+
+        request.return_value = SlowResponse({
+            "id": "user-123",
+            "email": "golfer@example.com",
+            "user_metadata": {"display_name": "Kay Smith"},
+        })
+        auth = SupabaseAuth(
+            SupabaseConfig("https://project.supabase.co", "anon-key"),
+            cache_seconds=30,
+        )
+        results = []
+        threads = [
+            threading.Thread(target=lambda: results.append(auth.get_user("shared-token")))
+            for _ in range(6)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        self.assertEqual(len(results), 6)
+        self.assertTrue(all(item["external_id"] == "user-123" for item in results))
+        self.assertEqual(request.call_count, 1)
 
     @patch("packages.accounts.supabase.time.sleep")
     @patch("packages.accounts.supabase.urlopen")

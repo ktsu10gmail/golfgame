@@ -1,3 +1,4 @@
+import { withFairwayFirstCut } from "../simulation/fairway_first_cut.mjs?v=20261007-1";
 export const MAPPER_PROJECT_VERSION = "golf-course-map-v1";
 export const GAME_PACKAGE_VERSION = "golf-game-course-package-v1";
 export const EARTH_RADIUS_METERS = 6371008.8;
@@ -218,10 +219,63 @@ function solveGpsAffineTransform(coursePoints, gpsPoints) {
   };
 }
 
-export function buildHoleGpsCalibration(hole) {
+export function hasDeterministicWgs84Geometry(hole, project = null) {
+  const reference = hole?.geometry_reference;
+  if (reference?.coordinate_system === "WGS84" && reference?.georeferenced === true) return true;
+  const provider = String(project?.external_course_source?.provider_name || "").toLowerCase();
+  return ["openstreetmap", "golf_intelligence"].includes(provider)
+    && /gps geometry|openstreetmap geometry/i.test(String(project?.imagery_source || ""));
+}
+
+/** WGS84 source geometry already defines translation, orientation, scale and handedness. */
+export function buildWgs84GpsCalibration(hole, { project = null } = {}) {
+  const whiteTee = finiteCoordinate(hole?.markers?.white_tee || mapperStartTeePoint(hole), "start tee marker");
+  const pin = finiteCoordinate(hole?.markers?.pin, "pin marker");
+  const forwardDelta = gpsDeltaMeters(whiteTee, pin);
+  const teeToPinMeters = Math.hypot(forwardDelta.east, forwardDelta.north);
+  if (teeToPinMeters < 1) throw new Error("white tee and pin must be at least one meter apart");
+  const forward = {
+    east: forwardDelta.east / teeToPinMeters,
+    north: forwardDelta.north / teeToPinMeters
+  };
+  const right = { east: forward.north, north: -forward.east };
+  const green = (hole.features || []).find(feature => feature.type === "green");
+  const transformToGame = createEngineTransform(whiteTee, pin);
+  const greenCenter = green ? polygonCenter(green.points) : pin;
+  return {
+    version: "gps-wgs84-derived-v1",
+    method: "Deterministic inverse of the WGS84-to-game transform",
+    coordinate_system: "WGS84",
+    manual_control_points_required: false,
+    source: hole.geometry_reference?.source
+      || project?.external_course_source?.provider_name
+      || "georeferenced_source_geometry",
+    origin: { ...whiteTee },
+    matrix: {
+      east_meters_per_course_x: round(right.east, 8),
+      east_meters_per_course_y: round(forward.east, 8),
+      north_meters_per_course_x: round(right.north, 8),
+      north_meters_per_course_y: round(forward.north, 8)
+    },
+    anchors: {
+      white_tee: { course_point: [0, 0], gps: { ...whiteTee } },
+      green_center: { course_point: transformToGame(greenCenter), gps: { ...greenCenter } },
+      pin: { course_point: transformToGame(pin), gps: { ...pin } }
+    },
+    check: {
+      tee_to_green_meters: round(distanceMeters(whiteTee, greenCenter), 1),
+      tee_to_pin_meters: round(teeToPinMeters, 1),
+      scale_ratio: 1,
+      georeferenced: true
+    }
+  };
+}
+
+export function buildHoleGpsCalibration(hole, { project = null } = {}) {
+  if (hasDeterministicWgs84Geometry(hole, project)) return buildWgs84GpsCalibration(hole, { project });
   const controls = hole?.gps_control_points;
   if (!controls) throw new Error("enter all three Google Earth coordinates");
-  const whiteTee = finiteCoordinate(hole?.markers?.white_tee, "white tee marker");
+  const whiteTee = finiteCoordinate(hole?.markers?.white_tee || mapperStartTeePoint(hole), "start tee marker");
   const green = (hole.features || []).find(feature => feature.type === "green");
   if (!green) throw new Error("add a green shape before GPS calibration");
   const bunker = (hole.features || []).find(feature =>
@@ -326,7 +380,7 @@ export function restoreMappedHoleFromGame(gameHole, scorecard = {}, origin = { l
   const features = [
     ...teeFeatures,
     ...(geometries.fairway_segments || []).map((source, index) => feature("fairway", source, index, `Fairway ${index + 1}`)),
-    ...(geometries.rough_zones || []).map((source, index) => feature("rough", source, index, `Rough ${index + 1}`)),
+    ...(geometries.rough_zones || []).filter(source => source.source !== "fairway_first_cut_5yd").map((source, index) => feature("rough", source, index, `Rough ${index + 1}`)),
     ...(geometries.tree_zones || []).map((source, index) => feature("trees", source, index, `Trees ${index + 1}`)),
     ...(geometries.cart_paths || []).map((source, index) => feature("cart_path", source, index, `Cart path ${index + 1}`)),
     ...hazards,
@@ -371,6 +425,7 @@ export function restoreMappedHoleFromGame(gameHole, scorecard = {}, origin = { l
       par: Number(scorecard.par || metadata.par) || 4,
       handicap: Number(scorecard.handicap || metadata.handicap_rating) || holeNumber,
       layout_type: metadata.layout_type || "Mapped from local hole image",
+      tee_alignment_anchor: ["blue", "white", "forward"].includes(metadata.default_start_tee) ? metadata.default_start_tee : "white",
       elevation_change_meters: Number(gameHole.elevation_profile?.points?.at(-1)?.elevation_m) || 0,
       yardages: {
         blue: Number(scorecard.blue) || 0,
@@ -381,7 +436,7 @@ export function restoreMappedHoleFromGame(gameHole, scorecard = {}, origin = { l
       route_points: centerline.slice(1, -1),
       features,
       local_image_calibration: metadata.geometry_calibration?.local_image_calibration || null,
-      gps_control_points: metadata.gps_calibration?.anchors ? {
+      gps_control_points: metadata.gps_calibration?.anchors?.bunker_center ? {
         white_tee: metadata.gps_calibration.anchors.white_tee?.gps || null,
         green_center: metadata.gps_calibration.anchors.green_center?.gps || null,
         bunker_center: metadata.gps_calibration.anchors.bunker_center?.gps || null,
@@ -634,32 +689,43 @@ function orientedBox(center, direction, lengthMeters, widthMeters) {
   ];
 }
 
-export function alignSecondaryTeesFromWhite(hole) {
+export function alignSecondaryTees(hole) {
+  const anchor = ["blue", "white", "forward"].includes(hole?.tee_alignment_anchor) ? hole.tee_alignment_anchor : "white";
   const markers = hole?.markers;
   const features = hole?.features;
   const yardages = hole?.yardages;
-  const whiteTee = markers?.white_tee;
+  const anchorTee = markers?.[`${anchor}_tee`];
   const pin = markers?.pin;
-  const whiteBox = Array.isArray(features)
-    ? features.filter(feature => feature.type === "tee_white" && Array.isArray(feature.points) && feature.points.length >= 3).at(-1)
+  let anchorBox = Array.isArray(features)
+    ? features.filter(feature => feature.type === `tee_${anchor}` && Array.isArray(feature.points) && feature.points.length >= 3).at(-1)
     : null;
-  if (!whiteTee || !pin || !whiteBox) return { aligned: [], reason: "white tee box, white tee marker, and pin are required" };
+  const anchorYards = Number(yardages?.[anchor]);
+  if (!Number.isFinite(anchorYards) || anchorYards <= 0) return { aligned: [], reason: `${anchor} yardage is required` };
+  if (!Array.isArray(features)) return { aligned: [], reason: "tee features are required" };
+  // Blue imports may have only a start marker, with no tee surface yet.
+  if (anchor !== "white" && anchorTee && pin && !anchorBox && distanceMeters(anchorTee, pin) >= 1) {
+    anchorBox = {
+      id: `aligned-tee_${anchor}-${Date.now()}`,
+      type: `tee_${anchor}`, label: `${anchor} tee box`, source: "scorecard_tee_alignment",
+      points: orientedBox(anchorTee, routeDirection(anchorTee, pin), 14, 8)
+    };
+    hole.features.push(anchorBox);
+  }
+  if (!anchorTee || !pin || !anchorBox) return { aligned: [], reason: `${anchor} tee box, ${anchor} tee marker, and pin are required` };
 
-  if (distanceMeters(whiteTee, pin) < 1) return { aligned: [], reason: "white tee and pin must be distinct" };
-  const direction = routeDirection(whiteTee, pin);
-  const whiteYards = Number(yardages?.white);
-  if (!Number.isFinite(whiteYards) || whiteYards <= 0) return { aligned: [], reason: "white yardage is required" };
-
-  const definitions = [
-    { key: "blue_tee", type: "tee_blue", name: "Blue", yards: Number(yardages?.blue), offset: yards => -(yards - whiteYards) * .9144, valid: yards => yards > whiteYards },
-    { key: "forward_tee", type: "tee_forward", name: "Forward", yards: Number(yardages?.forward), offset: yards => (whiteYards - yards) * .9144, valid: yards => yards > 0 && yards < whiteYards }
-  ];
+  if (distanceMeters(anchorTee, pin) < 1) return { aligned: [], reason: `${anchor} tee and pin must be distinct` };
+  const direction = routeDirection(anchorTee, pin);
+  const definitions = ["blue", "white", "forward"].filter(tee => tee !== anchor).map(tee => ({
+    key: `${tee}_tee`, type: `tee_${tee}`, name: tee[0].toUpperCase() + tee.slice(1),
+    yards: Number(yardages?.[tee]), offset: yards => (anchorYards - yards) * .9144,
+    valid: yards => yards > 0 && (["blue", "white", "forward"].indexOf(tee) < ["blue", "white", "forward"].indexOf(anchor) ? yards >= anchorYards : yards <= anchorYards)
+  }));
   const aligned = [];
   definitions.forEach(definition => {
     if (!Number.isFinite(definition.yards) || !definition.valid(definition.yards)) return;
-    const target = moveAlong(whiteTee, direction, definition.offset(definition.yards));
-    const latDelta = target.lat - whiteTee.lat;
-    const lngDelta = target.lng - whiteTee.lng;
+    const target = moveAlong(anchorTee, direction, definition.offset(definition.yards));
+    const latDelta = target.lat - anchorTee.lat;
+    const lngDelta = target.lng - anchorTee.lng;
     const existing = features.find(feature => feature.type === definition.type);
     const alignedFeature = {
       ...(existing || {}),
@@ -667,7 +733,7 @@ export function alignSecondaryTeesFromWhite(hole) {
       type: definition.type,
       label: existing?.label || `${definition.name} tee box`,
       source: existing?.source || "scorecard_tee_alignment",
-      points: whiteBox.points.map(point => ({ lat: point.lat + latDelta, lng: point.lng + lngDelta }))
+      points: anchorBox.points.map(point => ({ lat: point.lat + latDelta, lng: point.lng + lngDelta }))
     };
     hole.features = hole.features.filter(feature => feature.type !== definition.type);
     hole.features.push(alignedFeature);
@@ -675,6 +741,47 @@ export function alignSecondaryTeesFromWhite(hole) {
     aligned.push(definition.name.toLowerCase());
   });
   return { aligned };
+}
+
+export function applyOsmStartTeeDefault(project) {
+  if (project?.external_course_source?.provider_name !== "openstreetmap") return;
+  for (const hole of Object.values(project.holes || {})) {
+    // Upgrade only legacy unassigned OSM starts; preserve explicit operator choices.
+    if (hole.tee_alignment_anchor || hole.markers?.blue_tee || !hole.markers?.white_tee) continue;
+    selectStartTee(hole, "blue");
+    if (!Number(hole.yardages?.white)) hole.markers.white_tee = null;
+  }
+}
+
+// The operator assigns the imported start geometry to its scorecard tee color.
+export function selectStartTee(hole, anchor) {
+  if (!["blue", "white", "forward"].includes(anchor)) throw new Error("invalid start tee");
+  const previous = hole.tee_alignment_anchor || "white";
+  const start = hole.markers[`${previous}_tee`];
+  const box = hole.features.filter(feature => feature.type === `tee_${previous}`).at(-1);
+  hole.tee_alignment_anchor = anchor;
+  if (previous !== anchor && start) hole.markers[`${anchor}_tee`] = { ...start };
+  if (previous !== anchor && box) {
+    hole.features = hole.features.filter(feature => feature.type !== `tee_${anchor}`);
+    box.type = `tee_${anchor}`;
+    box.label = `${anchor[0].toUpperCase() + anchor.slice(1)} tee box`;
+  }
+  return alignSecondaryTees(hole);
+}
+
+// A newly placed start box supplies both the scorecard anchor and start marker.
+export function placeStartTeeBox(hole, feature, center) {
+  const anchor = ["blue", "white", "forward"].find(tee => feature?.type === `tee_${tee}`);
+  if (!anchor) throw new Error("start tee box must be blue, white, or forward");
+  hole.tee_alignment_anchor = anchor;
+  hole.markers[`${anchor}_tee`] = finiteCoordinate(center, `${anchor} tee center`);
+  hole.features.push(feature);
+  return alignSecondaryTees(hole);
+}
+
+// Keep the existing public entry point compatible with older callers.
+export function alignSecondaryTeesFromWhite(hole) {
+  return alignSecondaryTees(hole);
 }
 
 export function buildTreeBrushPolygon(inputPoints, radiusMeters, maxPoints = 48) {
@@ -758,6 +865,8 @@ function sliceRoute(points, startMeters, endMeters) {
 }
 
 export function buildAutoDraft(hole) {
+  hole = { ...hole, markers: { ...hole.markers }, features: [...(hole.features || [])] };
+  if (hole.tee_alignment_anchor && hole.tee_alignment_anchor !== "white") alignSecondaryTees(hole);
   const whiteTee = finiteCoordinate(hole?.markers?.white_tee, "white tee");
   const pin = finiteCoordinate(hole?.markers?.pin, "pin");
   const route = [whiteTee, ...(hole.route_points || []), pin].filter(
@@ -965,27 +1074,38 @@ export function polygonsOverlap(first, second) {
   });
 }
 
+function availableTees(hole) {
+  return ["blue", "white", "forward"].filter(tee => Number.isFinite(Number(hole?.yardages?.[tee])) && Number(hole.yardages[tee]) > 0);
+}
+
+export function mapperStartTeePoint(hole) {
+  const tees = [hole?.tee_alignment_anchor, "blue", "white", "forward"];
+  return tees.map(tee => hole?.markers?.[`${tee}_tee`]).find(Boolean) || null;
+}
+
+function originTee(hole) {
+  // Preserve existing white-origin maps, otherwise use an available scorecard tee.
+  const tees = availableTees(hole);
+  return ["white", hole.tee_alignment_anchor, ...tees].find(tee => tees.includes(tee) && hole.markers?.[`${tee}_tee`]);
+}
+
 function mappedHoleValidation(project, holeNumber) {
   const hole = project.holes[String(holeNumber)];
   const problems = [];
-  if (!hole.markers.blue_tee) problems.push("mark the blue tee");
-  if (!hole.markers.white_tee) problems.push("mark the white tee");
-  if (!hole.markers.forward_tee) problems.push("mark the forward tee");
+  const tees = availableTees(hole);
+  if (!tees.length) problems.push("enter at least one tee yardage");
+  for (const tee of tees) {
+    if (!hole.markers[`${tee}_tee`]) problems.push(`mark the ${tee} tee`);
+    if (!featuresOf(hole, `tee_${tee}`).length) problems.push(`add a ${tee} tee box`);
+  }
   if (!hole.markers.pin) problems.push("mark the pin");
-  if (!featuresOf(hole, "tee_blue").length) problems.push("add a blue tee box");
-  if (!featuresOf(hole, "tee_white").length) problems.push("add a white tee box");
-  if (!featuresOf(hole, "tee_forward").length) problems.push("add a forward tee box");
-  if (!featuresOf(hole, "rough").length) problems.push("add rough");
   if (!featuresOf(hole, "green").length) problems.push("add a green");
   if (!featuresOf(hole, "fairway").length && Number(hole.par) > 3) problems.push("add a fairway");
-  if (!Number(hole.yardages.blue)) problems.push("enter blue tee yardage");
-  if (!Number(hole.yardages.white)) problems.push("enter white tee yardage");
-  if (!Number(hole.yardages.forward)) problems.push("enter forward tee yardage");
   if (featuresOf(hole, "penalty_area_unknown").length) {
     problems.push("classify each imported penalty area as water or remove it");
   }
 
-  for (const tee of ["blue", "white", "forward"]) {
+  for (const tee of tees) {
     const marker = hole.markers[`${tee}_tee`];
     const teeBoxes = featuresOf(hole, `tee_${tee}`);
     if (marker && teeBoxes.length && !teeBoxes.some(feature => pointInPolygon(marker, feature.points))) {
@@ -1002,10 +1122,51 @@ function mappedHoleValidation(project, holeNumber) {
 export function holeMappingStatus(project, holeNumber) {
   validateMapperProject(project);
   const problems = mappedHoleValidation(project, holeNumber);
+  const layout = project.external_course_source?.layout_assessment;
+  if (layout?.unsupported || layout?.ambiguous) problems.push(layout.reason || "resolve the imported layout grouping");
   return { ready: problems.length === 0, problems };
 }
 
 export function buildGameHoleJson(project, holeNumber) {
+  return withFairwayFirstCut(buildMappedGameHole(project, holeNumber, false));
+}
+
+export function prepareHoleForPreview(hole) {
+  const prepared = structuredClone(hole);
+  let anchor = prepared.tee_alignment_anchor || "white";
+  if (!availableTees(prepared).includes(anchor)) {
+    anchor = originTee(prepared) || availableTees(prepared)[0] || anchor;
+    prepared.tee_alignment_anchor = anchor;
+  }
+  const missing = ["blue", "white", "forward"].filter(tee => tee !== anchor).some(tee =>
+    !prepared.markers?.[`${tee}_tee`] || !prepared.features?.some(feature => feature.type === `tee_${tee}`)
+  );
+  if (missing) alignSecondaryTees(prepared);
+  return prepared;
+}
+
+export function prepareCourseTeeBoxes(project) {
+  applyOsmStartTeeDefault(project);
+  const changed = [];
+  for (const [number, hole] of Object.entries(project.holes || {})) {
+    const prepared = prepareHoleForPreview(hole);
+    if (JSON.stringify(prepared) === JSON.stringify(hole)) continue;
+    hole.tee_alignment_anchor = prepared.tee_alignment_anchor;
+    hole.markers = prepared.markers;
+    hole.features = prepared.features;
+    changed.push(Number(number));
+  }
+  return changed;
+}
+
+export function buildGameHolePreview(project, holeNumber) {
+  const hole = project?.holes?.[String(holeNumber)];
+  if (!hole) return buildMappedGameHole(project, holeNumber, true);
+  const prepared = prepareHoleForPreview(hole);
+  return withFairwayFirstCut(buildMappedGameHole({ ...project, holes: { ...project.holes, [String(holeNumber)]: prepared } }, holeNumber, true));
+}
+
+function buildMappedGameHole(project, holeNumber, preview) {
   validateMapperProject(project);
   const holeCount = mapperHoleCount(project);
   if (!Number.isInteger(holeNumber) || holeNumber < 1 || holeNumber > holeCount) {
@@ -1013,10 +1174,19 @@ export function buildGameHoleJson(project, holeNumber) {
   }
   const hole = project.holes[String(holeNumber)];
   const problems = mappedHoleValidation(project, holeNumber);
-  if (problems.length) throw new Error(`Hole ${holeNumber}: ${problems.join(", ")}`);
+  const origin = originTee(hole);
+  const start = hole.markers[`${origin}_tee`];
+  const defaultTee = availableTees(hole).includes(hole.tee_alignment_anchor) && hole.markers[`${hole.tee_alignment_anchor}_tee`] ? hole.tee_alignment_anchor : origin;
+  if (preview) {
+    const essentials = [];
+    if (!start) essentials.push("place a start tee with scorecard yardage");
+    if (!hole.markers.pin) essentials.push("mark the pin");
+    if (!featuresOf(hole, "green").length) essentials.push("add a green");
+    if (essentials.length) throw new Error(`Hole ${holeNumber}: ${essentials.join(", ")}`);
+  } else if (problems.length) throw new Error(`Hole ${holeNumber}: ${problems.join(", ")}`);
 
-  const transform = createEngineTransform(hole.markers.white_tee, hole.markers.pin);
-  const routeGps = [hole.markers.white_tee, ...hole.route_points, hole.markers.pin];
+  const transform = createEngineTransform(start, hole.markers.pin);
+  const routeGps = [start, ...hole.route_points, hole.markers.pin];
   const route = routeGps.map(transform).filter(
     (point, index, points) => index === 0 || Math.hypot(
       point[0] - points[index - 1][0],
@@ -1028,7 +1198,7 @@ export function buildGameHoleJson(project, holeNumber) {
     ...featuresOf(hole, "tee_blue"),
     ...featuresOf(hole, "tee_white"),
     ...featuresOf(hole, "tee_forward")
-  ];
+  ].filter(feature => availableTees(hole).includes(feature.type.slice(4)));
   const teeNames = { tee_blue: "blue", tee_white: "white", tee_forward: "red" };
   const fairways = Number(hole.par) === 3 ? [] : featuresOf(hole, "fairway");
   const rough = featuresOf(hole, "rough");
@@ -1048,10 +1218,12 @@ export function buildGameHoleJson(project, holeNumber) {
       hole_number: holeNumber,
       par: Number(hole.par),
       handicap_rating: Number(hole.handicap),
+      default_start_tee: defaultTee,
+      default_start_point: transform(hole.markers[`${defaultTee}_tee`] || start),
       total_distance_meters: round(totalMeters),
       layout_type: hole.layout_type || "Mapped from local hole image",
       coordinate_system: {
-        origin: "White tee marker (0, 0)",
+        origin: `${origin[0].toUpperCase() + origin.slice(1)} tee marker (0, 0)`,
         unit: "meters",
         axes: {
           y: "Forward progress toward mapped pin",
@@ -1073,13 +1245,16 @@ export function buildGameHoleJson(project, holeNumber) {
         white_tee: hole.markers.white_tee,
         pin: hole.markers.pin
       },
-      gps_calibration: hole.gps_control_points ? buildHoleGpsCalibration(hole) : null
+      ...(preview ? { mapper_preview: { draft: problems.length > 0, remaining_items: problems } } : {}),
+      gps_calibration: !preview && (hasDeterministicWgs84Geometry(hole, project) || hole.gps_control_points)
+        ? buildHoleGpsCalibration(hole, { project })
+        : null
     },
     centerline_waypoints: route.map((point, index) => ({
       index,
       point,
       description: index === 0
-        ? "White tee marker"
+        ? `${origin[0].toUpperCase() + origin.slice(1)} tee marker`
         : index === route.length - 1
           ? "Mapped pin"
           : `Route control ${index}`
@@ -1241,10 +1416,12 @@ function validateScorecardRows(rows, holeCount = 18) {
     if (!Number.isInteger(par) || par < 3 || par > 6) throw new Error(`Hole ${hole} has invalid par`);
     if (!Number.isInteger(handicap) || handicap < 1 || handicap > 18) throw new Error(`Hole ${hole} has invalid handicap`);
     for (const tee of ["blue", "white", "forward"]) {
+      if (row[tee] == null || row[tee] === "" || Number(row[tee]) === 0) continue;
       const yards = Number(row[tee]);
       if (!Number.isFinite(yards) || yards < 50 || yards > 800) throw new Error(`Hole ${hole} has invalid ${tee} yardage`);
     }
-    byHole.set(hole, { hole, par, handicap, blue: Number(row.blue), white: Number(row.white), forward: Number(row.forward) });
+    if (![row.blue, row.white, row.forward].some(value => Number(value) > 0)) throw new Error(`Hole ${hole} needs at least one tee yardage`);
+    byHole.set(hole, { hole, par, handicap, blue: Number(row.blue) || 0, white: Number(row.white) || 0, forward: Number(row.forward) || 0 });
   });
   for (let hole = 1; hole <= holeCount; hole += 1) {
     if (!byHole.has(hole)) throw new Error(`hole ${hole} is missing`);
@@ -1255,7 +1432,7 @@ function validateScorecardRows(rows, holeCount = 18) {
 function parseScorecardColumns(lines, holeCount) {
   const headerIndex = lines.findIndex(line => {
     const kinds = new Set(scorecardCells(line).map(columnKind).filter(Boolean));
-    return ["hole", "par", "handicap", "blue", "white", "forward"].every(kind => kinds.has(kind));
+    return ["hole", "par", "handicap"].every(kind => kinds.has(kind)) && ["blue", "white", "forward"].some(kind => kinds.has(kind));
   });
   if (headerIndex < 0) return null;
   const headers = scorecardCells(lines[headerIndex]).map(columnKind);
@@ -1267,7 +1444,7 @@ function parseScorecardColumns(lines, holeCount) {
     const hole = scorecardNumber(cells[indexes.hole]);
     if (!Number.isInteger(hole) || hole < 1 || hole > holeCount) continue;
     rows.push(Object.fromEntries(
-      ["hole", "par", "handicap", "blue", "white", "forward"].map(kind => [kind, scorecardNumber(cells[indexes[kind]])])
+      ["hole", "par", "handicap", "blue", "white", "forward"].map(kind => [kind, indexes[kind] == null ? 0 : scorecardNumber(cells[indexes[kind]])])
     ));
   }
   return validateScorecardRows(rows, holeCount);
@@ -1297,10 +1474,11 @@ function parseScorecardMatrix(lines, holeCount) {
   const matrixRows = Object.fromEntries(
     ["par", "handicap", "blue", "white", "forward"].map(kind => [kind, findScorecardMatrixRow(lines, kind)])
   );
-  if (Object.values(matrixRows).some(row => !row)) return null;
+  if (!matrixRows.par || !matrixRows.handicap || ![matrixRows.blue, matrixRows.white, matrixRows.forward].some(Boolean)) return null;
   const rows = positions.map(({ hole, index }) => {
     const result = { hole };
     for (const [kind, row] of Object.entries(matrixRows)) {
+      if (!row) { result[kind] = 0; continue; }
       const adjustedIndex = index - holeRow.kindIndex + row.kindIndex;
       result[kind] = scorecardNumber(row.cells[adjustedIndex]);
     }
@@ -1322,7 +1500,7 @@ export function parseScorecardText(text, { holeCount = 18 } = {}) {
   }
   const matrix = parseScorecardMatrix(lines, expectedHoleCount);
   if (matrix) return matrix;
-  throw new Error("could not identify Hole, Par, Handicap, Blue, White, and Red/Gold/Forward values");
+  throw new Error("could not identify Hole, Par, Handicap, and at least one Blue, White, or Red/Gold/Forward tee");
 }
 
 export function buildGameCoursePackage(project) {
@@ -1369,7 +1547,9 @@ function buildRoutedGameCoursePackage(project, { courseId, courseName, sourceHol
       errors[String(gameHoleNumber)] = error.message;
     }
   });
-  if (!Object.keys(holes).length) throw new Error("No holes are ready to export");
+  if (!Object.keys(holes).length) {
+    throw new Error(`No holes are ready to export.\n${Object.values(errors).join("\n")}`);
+  }
   return {
     version: GAME_PACKAGE_VERSION,
     course_id: cleanId(courseId),
@@ -1380,7 +1560,9 @@ function buildRoutedGameCoursePackage(project, { courseId, courseName, sourceHol
     holes,
     gps_calibrated_holes: Object.values(holes).filter(hole => hole.hole_metadata?.gps_calibration).length,
     incomplete_holes: errors,
-    source_holes: [...sourceHoles]
+    source_holes: [...sourceHoles],
+    production_context: project.production_context && typeof project.production_context === "object" && !Array.isArray(project.production_context) && Object.keys(project.production_context).length === 0 ? null : project.production_context || null,
+    external_course_source: project.external_course_source || null
   };
 }
 
@@ -1391,6 +1573,8 @@ function routedCourseId(baseId, firstId, secondId) {
 }
 
 export function buildGameCoursePackages(project) {
+  const layout = project.external_course_source?.layout_assessment;
+  if (layout?.unsupported || layout?.ambiguous) throw new Error(layout.reason || "Resolve imported layout grouping before installation");
   validateMapperProject(project);
   if (project.course_structure !== MAPPER_COURSE_STRUCTURES.THREE_NINES) {
     return [buildGameCoursePackage(project)];

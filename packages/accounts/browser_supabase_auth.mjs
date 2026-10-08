@@ -83,6 +83,16 @@ export function createSupabaseAuth(config, options = {}) {
   return {
     loadSession,
     refreshSession,
+    async recoverAccessToken(rejectedAccessToken) {
+      const latest = loadSession();
+      if (!latest?.refresh_token) return null;
+      // Another request or browser tab may already have replaced the rejected
+      // token. Reuse that session instead of rotating its refresh token again.
+      if (latest.access_token && latest.access_token !== rejectedAccessToken) {
+        return latest.access_token;
+      }
+      return (await refreshSession())?.access_token || null;
+    },
     async getAccessToken() {
       return (await getSession())?.access_token || null;
     },

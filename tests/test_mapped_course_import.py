@@ -63,6 +63,18 @@ def package() -> dict:
 
 
 class MappedCourseImporterTests(unittest.TestCase):
+    def test_default_rough_allows_install_without_rough_polygons(self):
+        payload = package()
+        for hole in payload["holes"].values():
+            hole["geometries"]["rough_zones"] = []
+        self.assertEqual(IMPORTER.validate_package(payload), payload)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(IMPORTER, "DATA_DIR", root), patch.object(IMPORTER, "CATALOG_PATH", root / "mapped_courses.json"):
+                destination = IMPORTER.install_package(payload, force=False)
+                self.assertTrue((destination / "hole18.json").is_file())
+
+
     def test_validate_package_accepts_an_in_memory_editor_export(self) -> None:
         payload = package()
         self.assertIs(IMPORTER.validate_package(payload), payload)
@@ -104,6 +116,42 @@ class MappedCourseImporterTests(unittest.TestCase):
             self.assertEqual(installed_catalog[0]["mapUpdatedAt"], "2026-07-30T12:00:00Z")
             self.assertEqual(installed_catalog[0]["teeLabels"]["Red"], "Forward")
 
+    def test_production_identity_and_osm_attribution_survive_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data_dir = Path(directory) / "data"
+            catalog = data_dir / "mapped_courses.json"
+            data_dir.mkdir()
+            catalog.write_text("[]\n", encoding="utf-8")
+            payload = package()
+            payload["production_context"] = {
+                "production_item_id": "production_0123456789abcdef01234567",
+                "directory_course_id": "course_0123456789abcdef01234567",
+            }
+            payload["external_course_source"] = {
+                "provider_name": "openstreetmap",
+                "attribution": "© OpenStreetMap contributors · ODbL",
+            }
+
+            with (
+                patch.object(IMPORTER, "DATA_DIR", data_dir),
+                patch.object(IMPORTER, "CATALOG_PATH", catalog),
+            ):
+                IMPORTER.install_package(IMPORTER.validate_package(payload), force=False)
+
+            installed = json.loads(catalog.read_text(encoding="utf-8"))[0]
+            self.assertEqual(installed["directoryCourseId"], payload["production_context"]["directory_course_id"])
+            self.assertEqual(installed["productionItemId"], payload["production_context"]["production_item_id"])
+            self.assertEqual(installed["sourceAttribution"], "© OpenStreetMap contributors · ODbL")
+
+    def test_invalid_production_identity_is_rejected(self) -> None:
+        payload = package()
+        payload["production_context"] = {
+            "production_item_id": "production_wrong",
+            "directory_course_id": "course_wrong",
+        }
+        with self.assertRaisesRegex(ValueError, "production item identity"):
+            IMPORTER.validate_package(payload)
+
     def test_install_writes_editor_artwork_and_catalog_registration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             data_dir = Path(directory) / "data"
@@ -138,10 +186,10 @@ class MappedCourseImporterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "course.json"
             payload = package()
-            payload["holes"]["4"]["geometries"]["rough_zones"] = []
+            payload["holes"]["4"]["geometries"]["tee_boxes"] = []
             path.write_text(json.dumps(payload), encoding="utf-8")
 
-            with self.assertRaisesRegex(ValueError, "required rough surface is missing"):
+            with self.assertRaisesRegex(ValueError, "required tee surface is missing"):
                 IMPORTER.load_package(path)
 
 

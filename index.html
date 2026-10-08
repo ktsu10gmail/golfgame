@@ -8,7 +8,7 @@
       content="A strategic golf game featuring four complete 18-hole courses."
     />
     <title>Jetta Golf — The Strategy Round</title>
-  <link rel="stylesheet" href="styles.css?v=20260930-1" />
+  <link rel="stylesheet" href="styles.css?v=20261007-first-cut1" />
   </head>
   <body>
     <div id="loading" class="loading-screen">
@@ -34,6 +34,7 @@
               <option value="gallopinghills">Galloping Hill Golf Course</option>
             </select>
             <span id="map-version-status" class="map-version-status" aria-live="polite">Built-in map</span>
+            <small id="course-source-attribution" class="course-source-attribution" hidden></small>
           </div>
           <div class="game-mode-picker">
             <label for="game-mode-select">Game mode</label>
@@ -1038,6 +1039,19 @@
           </div>
           <button id="account-edit-profile" class="secondary-action" type="button">Edit statistics</button>
         </section>
+        <section class="preferred-courses-card" data-course-preferences="profile" aria-labelledby="profile-preferred-courses-title">
+          <header>
+            <div><span class="eyebrow">Your golf map</span><strong id="profile-preferred-courses-title">Your courses</strong></div>
+            <small>Add the courses you play most often. Adding one also tells Jetta you would like it available for play.</small>
+          </header>
+          <div class="preferred-course-search" data-course-search-form>
+            <label><span>Search U.S. courses</span><input data-course-search-input autocomplete="off" minlength="2" maxlength="100" placeholder="Course name or city" /></label>
+            <button type="button" data-course-search-button>Find course</button>
+          </div>
+          <p class="preferred-course-status" data-course-search-status role="status" aria-live="polite"></p>
+          <div class="preferred-course-results" data-course-search-results hidden></div>
+          <div class="preferred-course-list" data-preferred-course-list></div>
+        </section>
         <button id="round-history-button" class="account-history-button" type="button">
           <span class="account-history-mark" aria-hidden="true">18</span>
           <span><strong>Round history</strong><small>Completed rounds and course-management scores</small></span>
@@ -1078,6 +1092,19 @@
         <section id="coach-seat-summary" class="license-summary-card">Loading sponsored seats…</section>
         <section id="coach-grace-notice" class="coach-grace-notice" hidden>
           <span class="eyebrow">Access timeline</span><strong></strong><p></p>
+        </section>
+        <section class="preferred-courses-card coach-preferred-courses" data-course-preferences="coach" aria-labelledby="coach-preferred-courses-title">
+          <header>
+            <div><span class="eyebrow">Coach Beta course demand</span><strong id="coach-preferred-courses-title">Your preferred courses</strong></div>
+            <small>Add the courses you and your students use most. Adding one also tells Jetta you would like it available for play.</small>
+          </header>
+          <div class="preferred-course-search" data-course-search-form>
+            <label><span>Search U.S. courses</span><input data-course-search-input autocomplete="off" minlength="2" maxlength="100" placeholder="Course name or city" /></label>
+            <button type="button" data-course-search-button>Find course</button>
+          </div>
+          <p class="preferred-course-status" data-course-search-status role="status" aria-live="polite"></p>
+          <div class="preferred-course-results" data-course-search-results hidden></div>
+          <div class="preferred-course-list" data-preferred-course-list></div>
         </section>
         <section class="coach-start-route" aria-labelledby="coach-start-route-title">
           <div>
@@ -1636,6 +1663,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="app.js?v=20260930-1"></script>
+    <script type="module" src="app.js?v=20261008-game-style1"></script>
   </body>
 </html>

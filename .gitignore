@@ -13,3 +13,20 @@ output/
 *.iso
 apikey.md
 .env
+.mapper-password
+data/course_library.sqlite3*
+Courses/
+
+# Private runtime state and local credentials
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+.env.*
+!.env.example
+*.pem
+*.key
+# Imported playable courses are transferred in migration backups.
+data/alta-sierra-country-club-a080da119f/
+data/osm-relation-3568943/
+data/osm-way-31387250/

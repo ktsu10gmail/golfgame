@@ -24,6 +24,8 @@ CATALOG_PATH = DATA_DIR / "mapped_courses.json"
 PACKAGE_VERSION = "golf-game-course-package-v1"
 SAFE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 IMAGE_DATA = re.compile(r"^data:image/(jpeg|png|webp);base64,([A-Za-z0-9+/=\s]+)$")
+DIRECTORY_ID = re.compile(r"^course_[a-f0-9]{24}$")
+PRODUCTION_ID = re.compile(r"^production_[a-f0-9]{24}$")
 
 
 def decoded_hole_images(payload: dict) -> dict[int, tuple[str, bytes]]:
@@ -97,6 +99,14 @@ def validate_package(payload: dict) -> dict:
         )
     if not isinstance(payload.get("scorecard_csv"), str):
         raise ValueError("Package scorecard_csv is missing")
+    production_context = payload.get("production_context")
+    if production_context is not None:
+        if not isinstance(production_context, dict):
+            raise ValueError("Package production_context must contain an object")
+        if not PRODUCTION_ID.fullmatch(str(production_context.get("production_item_id") or "")):
+            raise ValueError("Package production item identity is invalid")
+        if not DIRECTORY_ID.fullmatch(str(production_context.get("directory_course_id") or "")):
+            raise ValueError("Package directory course identity is invalid")
     decoded_hole_images(payload)
     validate_course_holes(payload)
     return payload
@@ -151,6 +161,13 @@ def install_package(payload: dict, *, force: bool) -> Path:
         "illustrationExtension": next(iter(hole_images.values()))[0] if hole_images else "jpg",
         "teeLabels": {"Blue": "Blue", "White": "White", "Red": "Forward"},
     }
+    production_context = payload.get("production_context")
+    if isinstance(production_context, dict):
+        entry["directoryCourseId"] = production_context["directory_course_id"]
+        entry["productionItemId"] = production_context["production_item_id"]
+    source = payload.get("external_course_source")
+    if isinstance(source, dict) and isinstance(source.get("attribution"), str):
+        entry["sourceAttribution"] = source["attribution"][:200]
     catalog = [item for item in load_catalog() if item.get("id") != course_id]
     catalog.append(entry)
     catalog.sort(key=lambda item: item.get("name", ""))

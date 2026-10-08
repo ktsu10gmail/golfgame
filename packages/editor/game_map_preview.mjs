@@ -129,7 +129,7 @@ function treeCanopyMarkup(items, project) {
   return { definitions: definitions.join(""), artwork: artwork.join("") };
 }
 
-export function renderGameMapPreview(hole) {
+export function renderGameMapPreview(hole, { showTrees = true } = {}) {
   const bounds = gamePreviewBounds(hole);
   const project = gamePreviewProjector(bounds);
   const geometries = hole.geometries;
@@ -141,11 +141,11 @@ export function renderGameMapPreview(hole) {
   const streams = water.filter(item => /stream|ditch/i.test(String(item.description || "")));
   const openWater = water.filter(item => !streams.includes(item));
   const sand = (geometries.hazards || []).filter(item => !item.lie_catalog_id?.includes("water"));
-  const trees = treeCanopyMarkup(geometries.tree_zones, project);
+  const trees = showTrees ? treeCanopyMarkup(geometries.tree_zones, project) : { definitions: "", artwork: "" };
   const greenPoints = (geometries.green_complex?.polygon || []).map(project);
   const route = (hole.centerline_waypoints || []).map(item => project(item.point));
   const pinSource = geometries.green_complex?.pin_zones?.find(zone => Array.isArray(zone.center_point))?.center_point;
-  const teeSource = hole.centerline_waypoints?.[0]?.point;
+  const teeSource = hole.hole_metadata?.default_start_point || hole.centerline_waypoints?.[0]?.point;
   const pin = pinSource ? project(pinSource) : null;
   const tee = teeSource ? project(teeSource) : null;
   const routePoints = route.map(point => point.join(",")).join(" ");
@@ -170,6 +170,7 @@ export function renderGameMapPreview(hole) {
     <rect width="1000" height="1000" fill="url(#preview-ground)"/><rect width="1000" height="1000" fill="url(#preview-native)"/>
     ${paths(geometries.out_of_bounds, "preview-oob")}
     ${paths(geometries.rough_zones, "preview-rough")}
+    ${paths((geometries.rough_zones || []).filter(zone => zone.lie_catalog_id === "lie_rough_light"), "preview-first-cut")}
     ${paths(geometries.fairway_segments, "preview-fairway")}
     ${paths(geometries.fairway_segments, "preview-fairway-mow")}
     ${paths(geometries.cart_paths, "preview-cart-path", true)}

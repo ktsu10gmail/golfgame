@@ -275,6 +275,17 @@ export function generatedGreenHole(hole, options = {}) {
   };
 }
 
+// Preserve surveyed/mapped geometry; restore the source outline in older generated packages.
+export function mappedGreenHole(hole) {
+  const green = hole?.geometries?.green_complex;
+  if (!green?.mapped_polygon || !green.generated) return hole;
+  const { generated, mapped_polygon, ...mappedGreen } = green;
+  return {
+    ...hole,
+    geometries: { ...hole.geometries, green_complex: { ...mappedGreen, polygon: safePolygon(mapped_polygon) } }
+  };
+}
+
 export function isHazardFreePinPoint(hole, point) {
   if (!finitePoint(point)) return false;
   const green = hole?.geometries?.green_complex?.polygon;

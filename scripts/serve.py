@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+import subprocess
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -55,14 +56,23 @@ from packages.accounts import (
     SupabaseConfig,
     attach_verified_learning_context,
     create_account_runtime,
+    CoursePreferenceError,
+    CoursePreferenceService,
 )
 from packages.course_import import (
     CourseImportError,
     CourseImportService,
     CourseImportStore,
     GolfIntelligenceConfig,
+    OpenStreetMapConfig,
+    OpenStreetMapImportService,
+    OpenGolfApiClient,
+    OpenGolfApiConfig,
 )
-from scripts.import_mapped_course import install_package, validate_package
+from scripts.import_mapped_course import install_package, load_catalog, validate_package
+from scripts.public_files import public_file
+from scripts.mapper_access import MapperAccess, COOKIE as MAPPER_COOKIE, course_route, same_origin
+from packages.course_import.library import CourseLibrary
 
 AI_SERVICE = create_ai_service()
 ACCOUNT_RUNTIME = create_account_runtime(ROOT)
@@ -74,13 +84,36 @@ SUPABASE_CONFIG = SupabaseConfig.from_values(os.getenv("SUPABASE_URL"), os.geten
 SUPABASE_AUTH = SupabaseAuth(SUPABASE_CONFIG) if SUPABASE_CONFIG else None
 EMAIL_DELIVERY_ENABLED = ACCOUNT_RUNTIME.email_delivery_enabled
 SMTP2GO_MAILER = ACCOUNT_RUNTIME.smtp2go_mailer
+COURSE_PREFERENCE_SERVICE = CoursePreferenceService(
+    PLAYER_DB_PATH,
+    Path(os.getenv(
+        "GOLFGAME_COURSE_DIRECTORY_CSV",
+        ROOT / "improvement" / "Implemented" / "jetta_us_course_directory_clean.csv",
+    )),
+)
 SERVER_ROLE = os.getenv("GOLFGAME_SERVER_ROLE", "app").strip().casefold() or "app"
+MAPPER_ACCESS = MapperAccess(os.getenv("GOLFGAME_MAPPER_PASSWORD_HASH", ""), os.getenv("GOLFGAME_MAPPER_SERVICE_TOKEN", ""))
 MAPPER_PORT = int(os.getenv("GOLFGAME_MAPPER_PORT", "8081"))
 GOLF_INTELLIGENCE_CONFIG = GolfIntelligenceConfig.from_env()
 COURSE_IMPORT_STORE = CourseImportStore(
     os.getenv("GOLFGAME_COURSE_IMPORT_DB", ROOT / "data" / "course_imports.sqlite3")
 )
 COURSE_IMPORT_SERVICE = CourseImportService(GOLF_INTELLIGENCE_CONFIG, COURSE_IMPORT_STORE)
+OPENSTREETMAP_CONFIG = OpenStreetMapConfig.from_env()
+OPENSTREETMAP_IMPORT_SERVICE = OpenStreetMapImportService(
+    OPENSTREETMAP_CONFIG, COURSE_IMPORT_STORE
+)
+OPENGOLFAPI_CONFIG = OpenGolfApiConfig.from_env()
+OPENGOLFAPI_CLIENT = OpenGolfApiClient(OPENGOLFAPI_CONFIG)
+COURSE_LIBRARY = None
+
+
+def course_library():
+    global COURSE_LIBRARY
+    # Initialized by main before requests; lazy initialization supports unit tests.
+    if COURSE_LIBRARY is None:
+        COURSE_LIBRARY = CourseLibrary(ROOT, OPENSTREETMAP_IMPORT_SERVICE, scorecards=OPENGOLFAPI_CLIENT)
+    return COURSE_LIBRARY
 GPS_RECOVERY_SCORECARDS = {
     "53FZ3QDT": ROOT / "data" / "the-warrenbrook-golf-course" / "scorecard.csv",
 }
@@ -104,10 +137,21 @@ class AppHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
+    def send_head(self):
+        """Apply the same static allowlist to GET and HEAD on both services."""
+        if public_file(ROOT, self.path) is None:
+            self.send_error(HTTPStatus.NOT_FOUND, "File not found")
+            return None
+        return super().send_head()
+
+    def list_directory(self, path):
+        self.send_error(HTTPStatus.NOT_FOUND, "File not found")
+        return None
+
     def end_headers(self) -> None:
         """Keep the game shell fresh while allowing conditional asset requests."""
-        path = urlparse(self.path).path
-        if path in {"/", "/index.html", "/admin", "/admin/", "/admin/index.html"}:
+        path = urlparse(getattr(self, "path", "")).path
+        if path in {"/", "/index.html", "/editor.html", "/admin", "/admin/", "/admin/index.html"}:
             self.send_header("Cache-Control", "no-store, max-age=0")
         elif Path(path).suffix.lower() in {".js", ".mjs", ".css"}:
             self.send_header("Cache-Control", "no-cache")
@@ -115,6 +159,8 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if self._dispatch_mapper(parsed, "GET"):
+            return
         if parsed.path == "/admin":
             self.send_response(HTTPStatus.PERMANENT_REDIRECT)
             self.send_header("Location", "/admin/")
@@ -123,6 +169,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path.startswith("/api/admin/"):
             self._handle_admin_get(parsed)
+            return
+        if parsed.path.startswith("/api/v1/course-library/"):
+            self._handle_course_library(parsed, "GET")
             return
         if SERVER_ROLE == "app" and parsed.path == "/editor.html":
             host = urlparse(f"//{self.headers.get('Host', '')}").hostname or "localhost"
@@ -148,6 +197,11 @@ class AppHandler(SimpleHTTPRequestHandler):
                 status["gps_only_recovery_public_ids"] = sorted(GPS_RECOVERY_SCORECARDS)
                 self._json_response(HTTPStatus.OK, status)
             return
+        if parsed.path == "/api/v1/course-import/openstreetmap/status":
+            player = self._require_developer()
+            if player is not None:
+                self._json_response(HTTPStatus.OK, OPENSTREETMAP_IMPORT_SERVICE.status())
+            return
         if parsed.path.startswith("/api/v1/course-import/jobs/"):
             player = self._require_developer()
             if player is None:
@@ -159,6 +213,18 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self._json_response(HTTPStatus(error.status), {"error": str(error)})
                 return
             self._json_response(HTTPStatus.OK, result)
+            return
+        if parsed.path == "/api/v1/course-production/queue":
+            player = self._require_developer()
+            if player is None:
+                return
+            try:
+                limit = parse_qs(parsed.query).get("limit", ["100"])[0]
+                items = COURSE_PREFERENCE_SERVICE.production_queue(limit)
+            except CoursePreferenceError as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, {"requests": items})
             return
         if parsed.path == "/api/geocode":
             self._handle_geocode(parsed.query)
@@ -231,6 +297,29 @@ class AppHandler(SimpleHTTPRequestHandler):
             player = self._require_player()
             if player is not None:
                 self._json_response(HTTPStatus.OK, {"profile": PLAYER_STORE.player_profile(player["id"])})
+            return
+        if parsed.path == "/api/player/course-directory/search":
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                query = parse_qs(parsed.query)
+                result = COURSE_PREFERENCE_SERVICE.search(
+                    query.get("query", [""])[0],
+                    state=query.get("state", [None])[0],
+                    limit=query.get("limit", ["12"])[0],
+                )
+            except CoursePreferenceError as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, result)
+            return
+        if parsed.path == "/api/player/preferred-courses":
+            player = self._require_player()
+            if player is not None:
+                self._json_response(HTTPStatus.OK, {
+                    "items": COURSE_PREFERENCE_SERVICE.preferred_courses(player["id"]),
+                })
             return
         if parsed.path == "/api/player/round-history":
             player = self._require_player()
@@ -409,8 +498,13 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        if self._dispatch_mapper(parsed, "POST"):
+            return
         if parsed.path.startswith("/api/admin/"):
             self._handle_admin_post(parsed)
+            return
+        if parsed.path.startswith("/api/v1/course-library/"):
+            self._handle_course_library(parsed, "POST")
             return
         if parsed.path == "/api/ai/shot":
             self._handle_json_route(AI_SERVICE.narrate_shot)
@@ -431,7 +525,15 @@ class AppHandler(SimpleHTTPRequestHandler):
             self._handle_json_route(AI_SERVICE.explain_competition_decision)
             return
         if parsed.path == "/api/course-mapper/install":
-            self._handle_course_install()
+            player = self._require_developer()
+            if player is not None:
+                self._handle_course_install(player)
+            return
+        if parsed.path.startswith("/api/v1/course-production/"):
+            self._handle_course_production(parsed.path)
+            return
+        if parsed.path.startswith("/api/v1/course-import/openstreetmap/"):
+            self._handle_openstreetmap_import(parsed.path)
             return
         if parsed.path.startswith("/api/v1/course-import/golf-intelligence/"):
             self._handle_golf_intelligence_import(parsed.path)
@@ -466,6 +568,38 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
                 return
             self._json_response(HTTPStatus.OK, result)
+            return
+        if parsed.path in {
+            "/api/player/preferred-courses", "/api/player/preferred-courses/remove",
+        }:
+            player = self._require_player()
+            if player is None:
+                return
+            try:
+                payload = self._read_json_body()
+                requester_context = str(
+                    payload.get("requester_context") or "PLAYER"
+                ).upper()
+                if (
+                    not parsed.path.endswith("/remove")
+                    and requester_context == "COACH"
+                    and "COACH" not in player.get("roles", [])
+                ):
+                    raise CoursePreferenceError("Coach course requests require Coach access")
+                items = (
+                    COURSE_PREFERENCE_SERVICE.remove_preference(
+                        player["id"], payload.get("course_id"), requester_context
+                    )
+                    if parsed.path.endswith("/remove")
+                    else COURSE_PREFERENCE_SERVICE.add_preference(
+                        player["id"], payload.get("course_id"),
+                        requester_context,
+                    )
+                )
+            except (CoursePreferenceError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            self._json_response(HTTPStatus.OK, {"items": items})
             return
         if parsed.path == "/api/player/play-activities":
             player = self._require_player()
@@ -612,6 +746,9 @@ class AppHandler(SimpleHTTPRequestHandler):
         self._json_response(HTTPStatus.NOT_FOUND, {"error": "unknown api route"})
 
     def do_PUT(self) -> None:
+        if SERVER_ROLE == "mapper":
+            self._json_response(HTTPStatus.NOT_FOUND, {"error": "Unknown Mapper route"})
+            return
         parsed = urlparse(self.path)
         if parsed.path not in {
             "/api/player/active-round", "/api/player/profile", "/api/player/gps-round",
@@ -890,11 +1027,89 @@ class AppHandler(SimpleHTTPRequestHandler):
         return player
 
     def _require_developer(self) -> dict | None:
+        if course_route(urlparse(self.path).path):
+            token = self.headers.get("X-Jetta-Mapper-Service", "")
+            if SERVER_ROLE == "app" and MAPPER_ACCESS.service_authorized(token, self.client_address[0]):
+                return {"id": None, "actor_type": "MAPPER_SERVICE"}
+            if token:
+                self._json_response(HTTPStatus.FORBIDDEN, {"error": "Mapper service access denied"})
+                return None
         player = self._require_player()
         if player is not None and not player.get("is_developer"):
             self._json_response(HTTPStatus.FORBIDDEN, {"error": "developer access required"})
             return None
         return player
+
+    def _dispatch_mapper(self, parsed, method):
+        if SERVER_ROLE != "mapper":
+            return False
+        path = parsed.path
+        if path == "/api/mapper/session" and method == "GET":
+            self._json_response(HTTPStatus.OK, {
+                "authenticated": MAPPER_ACCESS.authenticated(self.headers.get("Cookie", "")),
+                "configured": bool(MAPPER_ACCESS.password_digest and MAPPER_ACCESS.service_token),
+            })
+            return True
+        if path in {"/api/mapper/login", "/api/mapper/logout"} and method == "POST":
+            if not same_origin(self.headers):
+                self._json_response(HTTPStatus.FORBIDDEN, {"error": "Cross-site request denied"})
+                return True
+            secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+            if path.endswith("logout"):
+                MAPPER_ACCESS.logout(self.headers.get("Cookie", ""))
+                self._json_response(HTTPStatus.OK, {"authenticated": False}, headers={"Set-Cookie": f"{MAPPER_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0{secure}"})
+                return True
+            if not MAPPER_ACCESS.password_digest or not MAPPER_ACCESS.service_token:
+                self._json_response(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "Mapper password has not been configured"})
+                return True
+            try:
+                password = self._read_json_body(max_bytes=2048).get("password")
+                if not isinstance(password, str) or len(password) > 512:
+                    raise ValueError("Enter the Mapper password")
+                token, status = MAPPER_ACCESS.login(password, self.client_address[0])
+            except (ValueError, UnicodeError, json.JSONDecodeError) as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return True
+            if not token:
+                self._json_response(HTTPStatus(status), {"error": "Too many attempts. Try again in 15 minutes." if status == 429 else "Mapper password is incorrect"})
+                return True
+            self._json_response(HTTPStatus.OK, {"authenticated": True}, headers={"Set-Cookie": f"{MAPPER_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=28800{secure}"})
+            return True
+        if not course_route(path):
+            # Mapper never exposes Player, Coach, Admin or AI operations.
+            if path.startswith("/api/") and path != "/api/geocode":
+                self._json_response(HTTPStatus.NOT_FOUND, {"error": "Unknown Mapper route"})
+                return True
+            return False
+        if not MAPPER_ACCESS.authenticated(self.headers.get("Cookie", "")):
+            self._json_response(HTTPStatus.UNAUTHORIZED, {"error": "Sign in to Mapper to import or install courses"})
+            return True
+        if method == "POST" and not same_origin(self.headers):
+            self._json_response(HTTPStatus.FORBIDDEN, {"error": "Cross-site request denied"})
+            return True
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if size < 0 or size > 25 * 1024 * 1024:
+                raise ValueError("Request is too large")
+            body = self.rfile.read(size) if method == "POST" else None
+            # Fixed loopback destination: browsers cannot select an upstream URL.
+            request = Request("http://127.0.0.1:8080" + self.path, data=body, method=method, headers={
+                "Content-Type": "application/json", "X-Jetta-Mapper-Service": MAPPER_ACCESS.service_token,
+            })
+            try:
+                upstream = urlopen(request, timeout=75)
+            except HTTPError as error:
+                upstream = error
+            with upstream:
+                status = upstream.code
+                result = json.loads(upstream.read(32 * 1024 * 1024))
+            self.log_message("Mapper service %s %s status=%s", method, path, status)
+            self._json_response(HTTPStatus(status), result)
+        except ValueError:
+            self._json_response(HTTPStatus.BAD_REQUEST, {"error": "Invalid Mapper request"})
+        except (OSError, URLError):
+            self._json_response(HTTPStatus.BAD_GATEWAY, {"error": "App server is unavailable. Try again shortly."})
+        return True
 
     def _require_admin(self) -> dict | None:
         player = self._require_player()
@@ -953,15 +1168,98 @@ class AppHandler(SimpleHTTPRequestHandler):
             headers={"Set-Cookie": self._session_cookie(token)},
         )
 
-    def _handle_course_install(self) -> None:
+    def _handle_course_library(self, parsed, method):
+        player = self._require_developer()
+        if player is None:
+            return
+        library = course_library()
+        try:
+            action = parsed.path.removeprefix("/api/v1/course-library/").strip("/")
+            query = parse_qs(parsed.query)
+            if method == "GET":
+                if action == "flags":
+                    result = library.course_flags()
+                elif action == "courses":
+                    result = library.listing(query.get('q',[''])[0], query.get('state',[''])[0],
+                        query.get('status',[''])[0], query.get('offset',[0])[0], limit=25)
+                elif action == "project":
+                    result = {"project": library.project(query.get('id',[''])[0],query.get('revision',[None])[0])}
+                elif action == 'history':
+                    result = library.history(query.get('id',[''])[0])
+                elif action == 'source-review':
+                    result = library.source_review(query.get('id',[''])[0])
+                elif action == 'source-project':
+                    result = library.source_project(query.get('id',[''])[0])
+                elif action == "report":
+                    result = {"csv": library.report()}
+                else:
+                    raise ValueError('Unknown Course Library action')
+            else:
+                payload = self._read_json_body(max_bytes=20 * 1024 * 1024)
+                if action == 'flag':
+                    result = library.flag_course(payload.get('identity'), payload.get('flagged'))
+                elif action == 'intake':
+                    result = library.intake(payload.get('csv'))
+                elif action == 'queue':
+                    result = library.queue(payload.get('ids'), retry=payload.get('retry') is True)
+                elif action == 'pause':
+                    result = library.pause()
+                elif action == 'resume':
+                    result = library.resume()
+                elif action == 'resolve':
+                    result = library.resolve(payload.get('id'), accept_input=payload.get('accept_input') is True,
+                        external_id=payload.get('external_id'), separate=payload.get('separate') is True,
+                        installed_id=payload.get('installed_id'))
+                elif action == 'save':
+                    result = library.save(payload.get('id'), payload.get('project'), payload.get('revision'))
+                elif action == 'check-source':
+                    result = library.request_source_update(payload.get('id'))
+                elif action == 'apply-source':
+                    result = library.apply_source_update(payload.get('id'),payload.get('revision'),payload.get('accepted'))
+                elif action == 'discard-source':
+                    result = library.discard_source_update(payload.get('id'))
+                elif action == 'restore-revision':
+                    result = library.restore_revision(payload.get('id'),payload.get('source_revision'),payload.get('revision'))
+                elif action == 'scorecard':
+                    result = library.enrich_scorecard(payload.get('id'))
+                elif action == 'installed':
+                    result = library.record_install(payload.get('id'), payload.get('revision'), payload.get('results',[]))
+                else:
+                    raise ValueError('Unknown Course Library action')
+        except (ValueError, TypeError, KeyError, UnicodeError) as error:
+            self._json_response(HTTPStatus.BAD_REQUEST, {'error': str(error)})
+            return
+        except (OSError, subprocess.TimeoutExpired) as error:
+            self._json_response(HTTPStatus.SERVICE_UNAVAILABLE, {'error': 'Course Library storage or validation unavailable'})
+            return
+        self._json_response(HTTPStatus.OK, result)
+
+    def _handle_course_install(self, player: dict) -> None:
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length <= 0 or content_length > 25 * 1024 * 1024:
                 raise ValueError("course package must be between 1 byte and 25 MB")
             payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
             payload = validate_package(payload)
+            library_context = payload.get('library_context')
+            if library_context:
+                saved_project = course_library().project(library_context['id'], int(library_context['revision']))
+                if payload['course_id'] not in course_library().expected_game_ids(saved_project):
+                    raise ValueError('Library package identity mismatch')
+                if not course_library().validator(saved_project).get('ready'):
+                    raise ValueError('Saved library project is not ready to install')
+            production_context = payload.get("production_context")
+            if production_context is not None:
+                COURSE_PREFERENCE_SERVICE.validate_install_context(
+                    production_context.get("production_item_id"),
+                    production_context.get("directory_course_id"),
+                    player["id"],
+                )
             destination = install_package(payload, force=True)
-        except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+            if library_context:
+                course_library().installed_package(library_context['id'], library_context['revision'], {
+                    'course_id': payload['course_id'], 'map_updated_at': payload.get('exported_at')})
+        except (CoursePreferenceError, ValueError, KeyError, TypeError, json.JSONDecodeError, UnicodeDecodeError) as error:
             self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
             return
         except OSError as error:
@@ -981,7 +1279,62 @@ class AppHandler(SimpleHTTPRequestHandler):
             ),
             "map_updated_at": payload.get("exported_at"),
             "destination": str(destination.relative_to(ROOT)),
+            "installed_by": player["id"],
         })
+
+    def _handle_course_production(self, path: str) -> None:
+        player = self._require_developer()
+        if player is None:
+            return
+        try:
+            payload = self._read_json_body(max_bytes=64 * 1024)
+            if path.endswith("/claim"):
+                result = COURSE_PREFERENCE_SERVICE.claim_production_item(
+                    payload.get("production_item_id"), player["id"]
+                )
+            elif path.endswith("/release"):
+                result = COURSE_PREFERENCE_SERVICE.release_production_item(
+                    payload.get("production_item_id"), player["id"]
+                )
+            elif path.endswith("/complete"):
+                supplied = payload.get("installed_courses")
+                if not isinstance(supplied, list) or not supplied:
+                    raise CoursePreferenceError("installed course verification is required")
+                catalog = {item.get("id"): item for item in load_catalog()}
+                verified = []
+                for item in supplied:
+                    if not isinstance(item, dict):
+                        raise CoursePreferenceError("installed course verification is invalid")
+                    installed = catalog.get(str(item.get("course_id") or ""))
+                    expected_version = str(item.get("installed_version") or "")
+                    if installed is None or installed.get("dataVersion") != expected_version:
+                        raise CoursePreferenceError(
+                            "the App Server could not verify every installed course version"
+                        )
+                    verified.append({
+                        "course_id": installed["id"],
+                        "installed_version": installed["dataVersion"],
+                    })
+                result = COURSE_PREFERENCE_SERVICE.complete_production_item(
+                    payload.get("production_item_id"),
+                    payload.get("directory_course_id"),
+                    verified,
+                    player["id"],
+                )
+            else:
+                self._json_response(HTTPStatus.NOT_FOUND, {"error": "unknown course production route"})
+                return
+        except CoursePreferenceError as error:
+            status = HTTPStatus.CONFLICT if any(
+                phrase in str(error).casefold()
+                for phrase in ("claim", "no longer", "not ready", "only the operator")
+            ) else HTTPStatus.BAD_REQUEST
+            self._json_response(status, {"error": str(error)})
+            return
+        except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+            self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            return
+        self._json_response(HTTPStatus.OK, {"production_item": result})
 
     def _handle_golf_intelligence_import(self, path: str) -> None:
         player = self._require_developer()
@@ -1034,6 +1387,42 @@ class AppHandler(SimpleHTTPRequestHandler):
                 {"error": "The course import failed safely. Paid calls are now OFF; check the server log before retrying."},
             )
             COURSE_IMPORT_SERVICE.set_paid_calls_allowed(False)
+            return
+        self._json_response(HTTPStatus.OK, result)
+
+    def _handle_openstreetmap_import(self, path: str) -> None:
+        player = self._require_developer()
+        if player is None:
+            return
+        try:
+            payload = self._read_json_body(max_bytes=128 * 1024)
+            requested_by = str(player["id"])
+            if path.endswith("/search"):
+                result = OPENSTREETMAP_IMPORT_SERVICE.search(payload)
+            elif path.endswith("/preview"):
+                production_context = payload.get("production_context")
+                if isinstance(production_context, dict):
+                    COURSE_PREFERENCE_SERVICE.validate_install_context(
+                        production_context.get("production_item_id"),
+                        production_context.get("directory_course_id"),
+                        player["id"],
+                    )
+                result = OPENSTREETMAP_IMPORT_SERVICE.preview(payload, requested_by)
+            elif path.endswith("/import"):
+                result = OPENSTREETMAP_IMPORT_SERVICE.commit(payload, requested_by)
+            else:
+                self._json_response(HTTPStatus.NOT_FOUND, {"error": "unknown OpenStreetMap import route"})
+                return
+        except (CourseImportError, CoursePreferenceError) as error:
+            raw_status = getattr(error, "status", None) or HTTPStatus.BAD_REQUEST
+            try:
+                status = HTTPStatus(raw_status)
+            except ValueError:
+                status = HTTPStatus.BAD_REQUEST
+            self._json_response(status, {"error": str(error)})
+            return
+        except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+            self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
             return
         self._json_response(HTTPStatus.OK, result)
 
@@ -1133,6 +1522,8 @@ def main(*, default_port: int = 8080, description: str | None = None) -> None:
     parser.add_argument("--port", type=int, default=default_port)
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), AppHandler)
+    if SERVER_ROLE == "app":
+        course_library().start_worker()
     print(f"Serving {ROOT} at http://{args.host}:{args.port}")
     server.serve_forever()
 

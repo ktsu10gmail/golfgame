@@ -10,7 +10,7 @@
     <title>Course Mapper — Jetta Golf</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.css" />
-    <link rel="stylesheet" href="editor.css?v=20260829-2" />
+    <link rel="stylesheet" href="editor.css?v=20261008-course-batch25" />
   </head>
   <body>
     <main class="mapper-shell">
@@ -35,10 +35,13 @@
           <select id="hole-number" aria-label="Hole number"></select>
         </label>
         <div class="header-actions">
+          <button id="mapper-login-toggle" class="quiet-button" type="button">Mapper sign in</button>
           <output id="autosave-status" class="autosave-indicator" data-state="ready" role="status" aria-live="polite">Autosave ready</output>
           <button id="undo-editor" class="undo-button" type="button" disabled title="Nothing to undo"><span aria-hidden="true">↶</span> Undo</button>
           <button id="new-project" class="quiet-button" type="button">New</button>
           <button id="load-project" class="quiet-button" type="button">Load project</button>
+          <button id="open-course-library" class="quiet-button" type="button">Course library</button>
+          <button id="open-course-queue" class="quiet-button course-queue-button" type="button">Course queue</button>
           <button id="open-course-import" class="course-import-button" type="button">Import course</button>
           <button id="open-scorecard-import" class="quiet-button" type="button">Import scorecard</button>
           <button id="save-project" class="accent-button" type="button">Save project</button>
@@ -88,6 +91,13 @@
               <label>Forward yd<input id="yards-forward" type="number" min="0" max="800" /></label>
               <label>Elevation m<input id="elevation-change" type="number" min="-100" max="100" step=".1" value="0" /></label>
             </div>
+            <label class="wide-field">Default ball start tee
+              <select id="start-tee">
+                <option value="blue">Blue</option>
+                <option value="white" selected>White</option>
+                <option value="forward">Forward / Red</option>
+              </select>
+            </label>
             <label class="wide-field">Layout
               <input id="layout-type" value="Mostly Straight" maxlength="80" />
             </label>
@@ -100,6 +110,8 @@
               <p>Choose a template and click the map. Select a shape to edit its points, or choose Move shape to reposition the whole shape.</p>
             </div>
             <div class="shape-palette" aria-label="Hole shape tools">
+              <button data-tool="tee_blue" type="button"><i class="swatch tee-blue"></i>Blue tee box</button>
+              <button data-tool="tee_forward" type="button"><i class="swatch tee-forward"></i>Forward tee box</button>
               <button data-tool="tee_white" type="button"><i class="swatch tee-white"></i>White tee box</button>
               <button data-tool="fairway" type="button"><i class="swatch fairway"></i>Fairway</button>
               <button data-tool="rough" type="button"><i class="swatch rough"></i>Rough</button>
@@ -123,13 +135,16 @@
               <button data-tool="out_of_bounds" type="button"><i class="swatch boundary"></i>Out of bounds</button>
               <button data-tool="box_select" class="box-select-tool" type="button"><i class="selection-box-icon"></i>Box select trees</button>
             </div>
+            <button data-game-preview class="preview-game-button" type="button">Preview game map</button>
             <small class="guided-scan-help">Drag a brush across the feature and release to create one editable shape. Stream / ditch stays 3 yards wide; Cart path stays 4 yards wide.</small>
           </section>
 
           <section class="panel-section marker-section">
             <span class="section-number">04</span>
-            <div><h2>Set play points</h2><p>Set the White tee and pin. Blue and Forward tees align automatically from the scorecard yardages.</p></div>
+            <div><h2>Set play points</h2><p>Set the Blue or White start tee and pin. The other tees align automatically from the scorecard yardages.</p></div>
             <div class="marker-palette">
+              <button data-tool="marker_blue_tee" type="button">Blue tee / start ball</button>
+              <button data-tool="marker_forward_tee" type="button">Forward tee / start ball</button>
               <button data-tool="marker_white_tee" type="button">White tee / start ball</button>
               <button data-tool="marker_pin" type="button">Pin</button>
               <button data-tool="route_point_1" type="button">Route point 1</button>
@@ -189,11 +204,11 @@
 
           <section class="ledger-section gps-calibration-section">
             <header>
-              <div><span class="eyebrow">On-course GPS</span><h2>Three-point calibration</h2></div>
+              <div><span class="eyebrow">On-course GPS</span><h2 id="gps-calibration-title">GPS alignment</h2></div>
               <strong id="gps-calibration-mark">—</strong>
             </header>
-            <p class="gps-calibration-intro">Paste Google Earth coordinates in decimal or degrees–minutes–seconds format. The bunker supplies the sideways reference needed to align phone GPS.</p>
-            <div class="gps-anchor-list">
+            <p id="gps-calibration-intro" class="gps-calibration-intro">For local or legacy artwork, paste three Google Earth coordinates. The bunker supplies the sideways reference needed to align phone GPS.</p>
+            <div id="gps-anchor-list" class="gps-anchor-list">
               <label class="gps-anchor-row">
                 <span class="gps-anchor-key">1</span>
                 <span class="gps-anchor-copy"><strong>White tee center</strong><small>Uses the W marker</small></span>
@@ -211,7 +226,7 @@
                 <input id="gps-green-center" inputmode="decimal" autocomplete="off" placeholder="40.12345, -74.12345" aria-label="Green center latitude and longitude" />
               </label>
             </div>
-            <div class="gps-calibration-actions">
+            <div id="gps-calibration-actions" class="gps-calibration-actions">
               <button id="save-gps-calibration" type="button">Validate &amp; save</button>
               <button id="clear-gps-calibration" type="button">Clear</button>
             </div>
@@ -285,7 +300,7 @@
               <button id="clear-measurements" type="button">Clear</button>
             </header>
             <div id="measurement-list" class="measurement-list">
-              <p class="empty-copy">Measure the white tee to the pin, then enter its scorecard yardage to set a local image's scale.</p>
+              <p class="empty-copy">Measure the blue tee to the green center, then enter its scorecard yardage to set a local image's scale.</p>
             </div>
           </section>
 
@@ -294,7 +309,7 @@
             <h2>Export mapped geometry</h2>
             <p>The installed course uses its scorecard and aligned geometry to draw a matching illustrated hole map.</p>
             <div class="export-actions">
-              <button id="preview-game-map" class="preview-game-button" type="button">Preview game map</button>
+              <button id="preview-game-map" data-game-preview class="preview-game-button" type="button">Preview game map</button>
               <button id="export-hole" type="button">Export Hole JSON</button>
               <button id="export-package" class="accent-button" type="button">Export game package</button>
               <button id="install-game" class="install-game-button" type="button">Install in game</button>
@@ -304,6 +319,62 @@
         </aside>
       </section>
     </main>
+    <dialog id="course-queue-dialog" class="mapper-dialog course-queue-dialog">
+      <form method="dialog" class="mapper-dialog-card course-queue-card">
+        <header>
+          <div><span class="eyebrow">Production demand</span><h2>Course request queue</h2></div>
+          <button class="dialog-close" value="cancel" aria-label="Close course request queue">×</button>
+        </header>
+        <div class="course-queue-intro">
+          <p>Oldest request first. Player and Coach demand stays tied to the directory course while you build and install it.</p>
+          <button id="refresh-course-queue" class="quiet-button" type="button">Refresh</button>
+        </div>
+        <p id="course-queue-status" class="dialog-status" role="status" aria-live="polite"></p>
+        <div id="course-queue-list" class="course-queue-list" aria-live="polite"></div>
+      </form>
+    </dialog>
+    <dialog id="osm-import-dialog" class="mapper-dialog course-import-dialog">
+      <form method="dialog" class="mapper-dialog-card course-import-card">
+        <header>
+          <div><span class="eyebrow">Zero-credit draft</span><h2>Import from OpenStreetMap</h2></div>
+          <button class="dialog-close" value="cancel" aria-label="Close OpenStreetMap import">×</button>
+        </header>
+        <p class="course-import-intro">Start with mapped hole routes and surfaces, then review every hole. Tee identities and scorecard yardages are never guessed.</p>
+        <section class="osm-location-card" aria-labelledby="osm-location-title">
+          <div class="course-import-section-heading">
+            <div><span class="import-ledger-key">Manual location</span><h3 id="osm-location-title">Find the golf facility near a coordinate</h3></div>
+            <span class="free-call-stamp">OSM · 0 credits</span>
+          </div>
+          <div class="osm-coordinate-grid">
+            <label><span>Latitude</span><input id="osm-import-latitude" inputmode="decimal" placeholder="40.5977" /></label>
+            <label><span>Longitude</span><input id="osm-import-longitude" inputmode="decimal" placeholder="-74.5032" /></label>
+            <label><span>Radius</span><select id="osm-import-radius"><option value="1500">1.5 km</option><option value="3000" selected>3 km</option><option value="5000">5 km</option></select></label>
+          </div>
+          <div class="osm-import-actions">
+            <button id="osm-use-map-center" class="quiet-button" type="button">Use map center</button>
+            <button id="search-osm-course" class="accent-button" type="button">Search nearby</button>
+          </div>
+          <p id="osm-import-status" class="dialog-status course-import-status" role="status" aria-live="polite"></p>
+          <div id="osm-import-results" class="course-import-results" aria-live="polite"></div>
+        </section>
+        <section id="osm-import-preview" class="course-import-preview" hidden>
+          <div class="course-import-section-heading">
+            <div><span class="import-ledger-key">Draft preview</span><h3 id="osm-import-preview-title">OpenStreetMap draft</h3></div>
+            <strong id="osm-import-readiness">Needs review</strong>
+          </div>
+          <dl id="osm-import-counts" class="course-import-checks"></dl>
+          <details id="osm-import-warnings" class="course-import-warnings" open><summary>Review warnings and skipped features</summary><ul></ul></details>
+          <footer>
+            <button id="refresh-osm-preview" class="quiet-button" type="button">Refresh from OSM</button>
+            <button id="commit-osm-import" class="accent-button" type="button">Open draft in Mapper</button>
+          </footer>
+        </section>
+        <footer class="provider-fallback">
+          <span>Need the existing paid provider workflow?</span>
+          <button id="open-golf-intelligence-import" class="quiet-button" type="button">Use Golf Intelligence</button>
+        </footer>
+      </form>
+    </dialog>
     <dialog id="scorecard-import-dialog" class="mapper-dialog">
       <form method="dialog" class="mapper-dialog-card">
         <header>
@@ -331,7 +402,7 @@
     <dialog id="course-import-dialog" class="mapper-dialog course-import-dialog">
       <form id="course-import-shell" method="dialog" class="mapper-dialog-card course-import-card">
         <header>
-          <div><span class="eyebrow">External course desk</span><h2>Import from Golf Intelligence</h2></div>
+          <div><span class="eyebrow">Provider fallback</span><h2>Import from Golf Intelligence</h2></div>
           <button class="dialog-close" value="cancel" aria-label="Close course import">×</button>
         </header>
         <p class="course-import-intro">Search is free. Course data is downloaded only after you choose one result and confirm the estimated credits.</p>
@@ -418,12 +489,74 @@
           <button class="dialog-close" value="close" aria-label="Close game map preview">×</button>
         </header>
         <p>This uses the game’s full-hole scale. Editor-installed bunkers remain exactly the size you mapped.</p>
+        <label>Preview hole <select id="game-preview-hole" aria-label="Preview hole"></select></label>
+        <label class="prototype-toggle"><input id="illustrated-preview-toggle" type="checkbox" /> Illustrated style</label>
+        <p id="illustrated-preview-note" hidden>Extra trees are decorative estimates. This preview does not change course geometry or installation.</p>
+        <p id="game-preview-notes" role="status"></p>
         <div id="game-preview-canvas" class="game-preview-canvas"></div>
         <footer><button class="accent-button" value="close">Return to editing</button></footer>
       </form>
     </dialog>
+    <dialog id="course-library-dialog" class="mapper-dialog library-dialog" aria-labelledby="course-library-title">
+      <section class="mapper-dialog-card">
+        <header class="dialog-header">
+          <div><span class="eyebrow">Draft → Game</span><h2 id="course-library-title">Course library</h2></div>
+          <button id="close-course-library" type="button" aria-label="Close course library">×</button>
+        </header>
+        <p>Import in small batches. Review saved drafts here; installation is always a separate action.</p>
+        <div class="library-controls">
+          <label>Find course or city<input id="library-search" type="search" placeholder="Warrenbrook or Middlesex" /></label>
+          <label>State<input id="library-state" maxlength="30" placeholder="NJ" /></label>
+          <label>Import status<select id="library-filter"><option value="">All</option><option>New</option><option>Queued</option><option>Importing</option><option>Retry pending</option><option>Incomplete</option><option>Needs review</option><option>Done</option><option>Failed</option></select></label>
+          <button id="library-search-button" type="button">Search / Refresh</button>
+        </div>
+        <div class="library-controls">
+          <button id="library-upload" type="button">Add updated CSV</button>
+          <input id="library-csv" type="file" accept=".csv,text/csv" hidden />
+          <button id="library-select-all" type="button">Select all on page</button>
+          <button id="library-select-none" type="button">Clear selection</button>
+          <button id="library-queue" type="button">Import selected (max 25)</button>
+          <button id="library-pause" type="button">Pause queue</button>
+          <button id="library-resume" type="button">Resume queues</button>
+          <button id="library-save" type="button">Save current library project</button>
+          <button id="library-report" type="button">Download results CSV</button>
+        </div>
+        <output id="library-message" class="dialog-status" role="status" aria-live="polite"></output>
+        <p id="library-summary"></p>
+        <div id="library-rows" class="library-rows"></div>
+        <div class="library-controls"><button id="library-prev" type="button">Previous</button><span id="library-page"></span><button id="library-next" type="button">Next</button></div>
+      </section>
+    </dialog>
+    <dialog id="library-source-dialog" class="mapper-dialog library-dialog" aria-labelledby="library-source-title">
+      <section class="mapper-dialog-card">
+        <header><div><span class="eyebrow">Your draft ↔ New OSM data</span><h2 id="library-source-title">Review source changes</h2></div><button id="library-source-close" type="button" aria-label="Close source review">×</button></header>
+        <p>Check only the geometry changes you want to use. Unchecked changes keep your saved draft. Scorecard values and course identity remain unchanged.</p>
+        <output id="library-source-message" role="status" aria-live="polite"></output>
+        <div class="library-controls"><button id="library-source-select-safe" type="button">Select uncontested changes</button><button id="library-source-download" type="button">Download source draft</button></div>
+        <div id="library-source-changes" class="library-rows"></div>
+        <div class="library-controls"><button id="library-source-apply" type="button">Save reviewed revision</button><button id="library-source-discard" type="button">Discard source update</button></div>
+      </section>
+    </dialog>
+    <dialog id="library-history-dialog" class="mapper-dialog library-dialog" aria-labelledby="library-history-title">
+      <section class="mapper-dialog-card">
+        <header><h2 id="library-history-title">Project revision history</h2><button id="library-history-close" type="button" aria-label="Close revision history">×</button></header>
+        <p>Historical revisions are immutable. Restoring one saves a new draft revision; it does not roll back the installed game.</p>
+        <output id="library-history-message" role="status" aria-live="polite"></output>
+        <div id="library-history-rows" class="library-rows"></div>
+      </section>
+    </dialog>
+    <dialog id="mapper-login-dialog" class="mapper-dialog" aria-labelledby="mapper-login-title">
+      <form id="mapper-login-form" class="mapper-dialog-card">
+        <h2 id="mapper-login-title">Sign in to Mapper</h2>
+        <p>Enter the Mapper password to search, import, and install courses.</p>
+        <label>Password <input id="mapper-password" type="password" autocomplete="current-password" required maxlength="512" /></label>
+        <p id="mapper-login-error" role="alert"></p>
+        <button id="mapper-login-submit" class="accent-button" type="submit">Sign in</button>
+        <button id="mapper-login-cancel" class="quiet-button" type="button">Cancel</button>
+      </form>
+    </dialog>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.js"></script>
-  <script type="module" src="editor.js?v=20260829-3"></script>
+  <script type="module" src="editor.js?v=20261008-course-batch25"></script>
   </body>
 </html>

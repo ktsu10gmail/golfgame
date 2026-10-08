@@ -24,6 +24,50 @@ Then open `http://localhost:8080`.
 
 The app must be served over HTTP because browsers do not allow JavaScript modules to load course JSON from a `file://` page.
 
+Both servers restrict static downloads using `scripts/public_files.py`. Only
+listed browser assets, the two player guides, the mapped-course catalog, and
+course scorecards/hole JSON/artwork are downloadable. New browser modules must
+be added to `PUBLIC_FILES`. Newly installed courses use the approved course-file
+pattern automatically. Secrets, databases, Git files, scripts, specifications,
+backups, symlinks, and directory listings return 404 for GET and HEAD requests.
+API routes retain their existing authorization. Restart both services after
+changing this policy; upstream caches containing previously exposed private
+files must also be purged. This restriction does not rotate credentials.
+
+Mapper uses a separate shared password for imports, the course queue, and
+installation. Configure it with `python3 scripts/configure_mapper_login.py`
+(interactive password entry) or `python3 scripts/configure_mapper_login.py --generate`
+(writes a generated password to the private, Git-excluded `.mapper-password`).
+Restart both services after setup, then use **Mapper sign in** in the header.
+Sessions expire after eight hours and are cleared by service restart or sign-out.
+Five failed attempts from one network address pause login for 15 minutes.
+Behind the LAN reverse proxy, users share that address and therefore that limit.
+
+Mapper sends authenticated course operations to the App at `127.0.0.1:8080`
+with a server-only token. The App accepts that token only over loopback.
+The shared service has no Player/Supabase account; existing nullable actor ID
+fields remain null for service operations, and Mapper service actions are logged
+in the service journal. Keep access limited to trusted operators. Use HTTPS for
+remote password entry; the reverse proxy must set `X-Forwarded-Proto: https`.
+
+OSM can open a partial draft even when numbered hole routes are unavailable.
+Dashed shapes are reference geometry: select a hole and click a shape to assign
+it; tee shapes require an explicit blue/white/forward choice. Course boundaries
+remain reference-only. References persist with the project but are not playable
+hole geometry until assigned. Complete missing routes, tees, yardages, and the
+existing readiness checks before installation. Shared OSM servers can limit
+free requests; rate-limit responses trigger a 60-second cooldown and are not
+retried immediately. Only one OSM provider request runs at a time.
+Preview first retrieves the selected facility boundary, then fetches features
+within its bounding box with a 30-meter margin. The search radius is used for
+preview only when the facility has no usable boundary, keeping normal geometry
+requests smaller than a radius around every course-boundary vertex.
+Nearby search also uses a bounded box and filters results by distance to their
+reported centers. Successful searches at the same coordinates/radius are cached
+for ten minutes in memory (at most 100 locations); failed requests are not cached.
+Queries explicitly request a 64 MiB server memory allowance instead of the
+Overpass default of 512 MiB, reducing unnecessary resource reservations.
+
 ### Map a new golf course
 
 Start the Course Mapper on its separate port:
@@ -63,6 +107,14 @@ Paid calls start OFF after every server restart. Enabling them in the editor doe
 not spend credits; the selected full-course download has a separate confirmation.
 Successful imports are cached locally, and published gameplay uses only Jetta
 course files. See [Golf Intelligence usage notes](docs/golf_intelligence_usage_notes.md).
+
+#### Import a course from OpenStreetMap
+
+OpenStreetMap is the default zero-credit draft source for authorized Mapper
+operators. Configure the allowlisted HTTPS Overpass endpoint with the
+`OSM_IMPORT_*` settings in `.env.example`. The import keeps WGS84 geometry,
+reports unsupported or ambiguous features, and never invents tee identities,
+yardages, or hole numbers. See [OpenStreetMap course-import operations](docs/openstreetmap-course-import.md).
 
 ### Player accounts and automatic round resume
 
@@ -307,3 +359,19 @@ Use `python3 scripts/run_license_lifecycle.py --dry-run` to inspect due work
 without changing subscription, notification, or audit state. The worker uses
 the same `.env`, SQLite database, licensing policy, and application SMTP2GO
 credentials as the web server. It adds no Stripe or payment functionality.
+
+## Preferred-course directory
+
+Player Profile and Coach Dashboard share one authenticated preferred-course
+list backed by `improvement/Implemented/jetta_us_course_directory_clean.csv`.
+At application startup, Jetta hashes the CSV and imports it only when the file
+has changed. The expected columns are `Course Name`, `Country`, `State`, `City`,
+and `Type`; only U.S. rows with a two-letter state are searchable.
+
+Because this export has no Golf Intelligence PublicId, an initial Jetta-owned
+directory ID is assigned from the normalized source identity and then stored as
+the immutable primary key. Operator display-name corrections update that stored
+row without replacing its ID. Replacing the CSV and restarting the application
+updates matching records and marks missing records inactive without deleting a
+player's saved preference.
+Set `GOLFGAME_COURSE_DIRECTORY_CSV` to use another installed CSV path.

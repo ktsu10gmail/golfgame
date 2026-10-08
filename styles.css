@@ -751,6 +751,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px s
 .brand strong, .brand small { display: block; }
 .brand strong { font-family: var(--font-system); font-size: 1.12rem; line-height: 1; }
 .course-picker { justify-self: start; display: grid; gap: 3px; }
+.course-source-attribution { max-width: 220px; color: var(--muted); font-size: .52rem; line-height: 1.15; }
 .course-select { justify-self: start; max-width: 220px; padding: 7px 28px 7px 9px; border: 1px solid var(--line); border-radius: 5px; background: var(--chalk); font-size: .68rem; font-weight: 600; }
 .map-version-status { color: var(--ink-soft); font-family: var(--font-system); font-size: .5rem; font-weight: 650; letter-spacing: .055em; text-transform: uppercase; }
 .map-version-status.custom { color: #1f6845; }
@@ -2438,6 +2439,36 @@ body.green-view-open .mobile-round-nav { display: none; }
 .access-timeline-card strong, .access-continuation-card strong, .coach-grace-notice strong { display: block; font-size: .72rem; }
 .access-timeline-card p, .access-continuation-card p, .coach-grace-notice p { margin: 4px 0 0; color: var(--ink-soft); font-size: .62rem; line-height: 1.45; }
 .access-continuation-card { border-color: rgba(71,109,132,.25); background: linear-gradient(105deg, rgba(71,109,132,.1), rgba(255,255,255,.72)); }
+.preferred-courses-card {
+  margin-top: 14px;
+  padding: 15px;
+  border: 1px solid rgba(30,69,48,.16);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(247,249,243,.98), rgba(229,238,224,.72));
+}
+.preferred-courses-card > header { display: flex; justify-content: space-between; gap: 18px; align-items: end; }
+.preferred-courses-card > header strong { display: block; margin-top: 3px; color: var(--ink); font-size: .82rem; }
+.preferred-courses-card > header small { max-width: 240px; color: var(--ink-soft); font-size: .59rem; line-height: 1.4; text-align: right; }
+.preferred-course-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 12px; align-items: end; }
+.preferred-course-search label span { display: block; margin: 0 0 5px 2px; color: var(--ink-soft); font-size: .56rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.preferred-course-search input { width: 100%; min-height: 36px; padding: 8px 11px; border: 1px solid rgba(30,69,48,.2); border-radius: 8px; background: rgba(255,255,255,.9); color: var(--ink); }
+.preferred-course-search button { min-height: 36px; padding: 8px 13px; border: 0; border-radius: 8px; background: var(--rough-dark); color: #fff; font-size: .62rem; font-weight: 700; }
+.preferred-course-status { min-height: 14px; margin: 7px 2px 0; color: var(--ink-soft); font-size: .58rem; }
+.preferred-course-results, .preferred-course-list { display: grid; gap: 7px; margin-top: 8px; }
+.preferred-course-results[hidden] { display: none; }
+.preferred-course-tag { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 10px 9px 13px; border-left: 4px solid #b88637; border-radius: 7px; background: rgba(255,255,255,.88); box-shadow: 0 3px 10px rgba(24,49,38,.05); }
+.preferred-course-results .preferred-course-tag { border-left-color: #789174; background: rgba(255,255,255,.68); }
+.preferred-course-tag strong, .preferred-course-tag small { display: block; }
+.preferred-course-tag strong { font-size: .65rem; }
+.preferred-course-tag small { margin-top: 3px; color: var(--ink-soft); font-size: .56rem; }
+.preferred-course-tag button { padding: 6px 9px; border: 1px solid rgba(30,69,48,.18); border-radius: 6px; background: #fff; color: var(--rough-dark); font-size: .56rem; font-weight: 700; }
+.preferred-course-empty { padding: 10px 2px 3px; color: var(--ink-soft); font-size: .59rem; line-height: 1.45; }
+.coach-preferred-courses { margin-bottom: 14px; }
+@media (max-width: 560px) {
+  .preferred-courses-card > header { display: block; }
+  .preferred-courses-card > header small { display: block; max-width: none; margin-top: 6px; text-align: left; }
+  .preferred-course-search { grid-template-columns: 1fr; }
+}
 .account-code-entry { margin-top: 12px; }
 .account-code-entry p { margin: 6px 0 0; color: var(--ink-soft); font-size: .61rem; }
 .account-code-entry label,
@@ -5497,3 +5528,5 @@ body.challenge-active:not(.green-view-open) .map-toolbar { top: 122px; }
   .utility-menu-panel #profile-monogram { display: grid; }
   .utility-menu-panel .mobile-action-icon { display: block; flex: 0 0 auto; }
 }
+
+.terrain-first-cut { fill: #6c9655; stroke: none; }

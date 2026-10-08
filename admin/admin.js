@@ -1,4 +1,4 @@
-import { createSupabaseAuth } from "../packages/accounts/browser_supabase_auth.mjs";
+import { createSupabaseAuth } from "../packages/accounts/browser_supabase_auth.mjs?v=20260930-2";
 
 let auth = null;
 let currentSection = "home";
@@ -31,15 +31,16 @@ function displayDate(value) {
 
 async function adminApi(path, options = {}) {
   const request = { ...options, headers: { ...(options.headers || {}) } };
+  let accessToken = null;
   if (auth) {
-    const token = await auth.getAccessToken();
-    if (token) request.headers.Authorization = `Bearer ${token}`;
+    accessToken = await auth.getAccessToken();
+    if (accessToken) request.headers.Authorization = `Bearer ${accessToken}`;
   }
   let response = await fetch(path, request);
   if (response.status === 401 && auth?.loadSession()?.refresh_token) {
-    const refreshed = await auth.refreshSession();
-    if (refreshed?.access_token) {
-      request.headers.Authorization = `Bearer ${refreshed.access_token}`;
+    const recoveredToken = await auth.recoverAccessToken(accessToken);
+    if (recoveredToken) {
+      request.headers.Authorization = `Bearer ${recoveredToken}`;
       response = await fetch(path, request);
     }
   }

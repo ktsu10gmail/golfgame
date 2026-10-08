@@ -1,3 +1,5 @@
+import { renderIllustratedTreeLayer } from "./packages/editor/illustrated_hole_prototype.mjs?v=20261008-game-style1";
+import { withFairwayFirstCut } from "./packages/simulation/fairway_first_cut.mjs?v=20261007-1";
 import {
   ENGINE_VERSION,
   declareUnplayable as resolveUnplayableRelief,
@@ -38,7 +40,7 @@ import {
 import { parsePuttAimInstruction } from "./packages/simulation/browser_putt_command.mjs?v=20260807-1";
 import { parseShotTargetInstruction } from "./packages/simulation/browser_shot_command.mjs?v=20260816-1";
 import { expandSandHazards, sandHazardScaleForCourse } from "./packages/simulation/browser_course_geometry.mjs?v=20260810-2";
-import { ensureHazardFreePinZones, generatedGreenHole } from "./packages/simulation/browser_green_generator.mjs?v=20260810-2";
+import { ensureHazardFreePinZones, mappedGreenHole } from "./packages/simulation/browser_green_generator.mjs?v=20261007-mapped-green1";
 import { projectPuttPath, puttMotionTiming, puttRollDurationMs } from "./packages/simulation/browser_putt_animation.mjs?v=20260808-3";
 import {
   closestProjectedPolygonPoint,
@@ -177,7 +179,7 @@ import {
   parseRoundSave,
   roundSaveFilename
 } from "./packages/simulation/round_save.mjs?v=20260927-1";
-import { createSupabaseAuth } from "./packages/accounts/browser_supabase_auth.mjs?v=20260920-1";
+import { createSupabaseAuth } from "./packages/accounts/browser_supabase_auth.mjs?v=20260930-2";
 import { personalizeCustomProfile, playerProfileName } from "./packages/accounts/browser_profile_naming.mjs?v=20260804-1";
 import {
   approachHoleCameraBounds,
@@ -350,7 +352,10 @@ async function loadMappedCourseCatalog() {
         illustrationExtension: mapped.illustrationExtension || "jpg",
         isCustomMap: true,
         mapUpdatedAt: mapped.mapUpdatedAt || mapped.dataVersion,
-        teeLabels: mapped.teeLabels || { Blue: "Blue", White: "White", Red: "Forward" }
+        teeLabels: mapped.teeLabels || { Blue: "Blue", White: "White", Red: "Forward" },
+        sourceAttribution: typeof mapped.sourceAttribution === "string"
+          ? mapped.sourceAttribution
+          : ""
       };
     }
     $("#course-select").innerHTML = visibleCourses()
@@ -1259,12 +1264,7 @@ async function loadData(courseId = state.courseId) {
     .map(raw => raw.hole_metadata ? raw : normalizeWarrenbrookHole(raw))
     .map((holeData, index) => withoutParThreeFairway(holeData, state.scorecard[index]?.Par))
     .map(holeData => expandSandHazards(holeData, sandHazardScaleForCourse(state.course, holeData)));
-  state.holes = state.holes.map((holeData, index) => generatedGreenHole(holeData, {
-    courseId: state.courseId,
-    holeNumber: index + 1,
-    targetWidthYards: 40,
-    courseUnitsPerYard: 1 / METERS_TO_YARDS
-  }));
+  state.holes = state.holes.map(mappedGreenHole).map(withFairwayFirstCut);
   state.holes.forEach(ensurePlayablePinZones);
   state.holes = state.holes.map(holeData => ensureHazardFreePinZones(holeData));
   state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
@@ -2351,7 +2351,7 @@ function terrainReliefMarkup() {
     ${feature(g.out_of_bounds || [], "terrain-out", "Out of bounds")}
     ${feature(g.rough_zones || [], "terrain-rough", "Rough")}
     ${feature(g.rough_zones || [], "terrain-rough-texture", "Rough texture", true)}
-    ${feature(g.fairway_segments, "terrain-fairway-collar", "Fairway first cut", true)}
+    ${feature((g.rough_zones || []).filter(zone => zone.lie_catalog_id === "lie_rough_light"), "terrain-first-cut", "Light rough")}
     ${feature(g.fairway_segments, "terrain-fairway", "Fairway")}
     ${feature(g.fairway_segments, "terrain-fairway-mowing", "Fairway mowing", true)}
     <path class="terrain-green-fringe" d="${path(greenPolygon, .22)}"/>
@@ -2364,7 +2364,7 @@ function terrainReliefMarkup() {
     ${feature(g.hazards.filter(item => !item.lie_catalog_id.includes("water")), "terrain-bunker-lip", "Bunker lip", true)}
     ${feature(g.hazards.filter(item => !item.lie_catalog_id.includes("water")), "terrain-bunker", "Bunker")}
     ${feature(g.hazards.filter(item => !item.lie_catalog_id.includes("water")), "terrain-bunker-texture", "Sand texture", true)}
-    <g>${feature(g.tree_zones || [], "terrain-trees terrain-trees-edge", "Trees", true)}${feature(treeCores, "terrain-trees terrain-trees-core", "Trees", true)}</g>
+    ${renderIllustratedTreeLayer(hole(), project)}
     ${feature(g.tee_boxes, "terrain-tee", "Tee", false, item => scaledDisplayPolygon(item.polygon, 1.75))}
     ${feature(g.tee_boxes, "terrain-tee-mowing", "Tee mowing", true, item => scaledDisplayPolygon(item.polygon, 1.75))}
     <polyline class="terrain-centerline" points="${centerline}"/>
@@ -2403,7 +2403,7 @@ function terrainReliefMarkup() {
       .terrain-trees{fill:url(#terrain-trees);stroke:none;filter:none;pointer-events:none}
       .terrain-trees-edge{opacity:.5}.terrain-trees-core{opacity:1}
       .terrain-fairway-collar{fill:none;stroke:#638d50;stroke-width:16;stroke-linejoin:round;stroke-linecap:round;pointer-events:none}
-      .terrain-fairway{fill:#8db967;stroke:none}
+      .terrain-fairway{fill:#9bbc61;stroke:none}
       .terrain-fairway-mowing{fill:url(#terrain-fairway-mow);stroke:none;pointer-events:none}
       .terrain-tee{fill:#b8d58a;stroke:#f1f2d4;stroke-width:3;stroke-linejoin:round}
       .terrain-tee-mowing{fill:url(#terrain-fairway-mow);stroke:none;pointer-events:none}
@@ -2412,8 +2412,8 @@ function terrainReliefMarkup() {
       .terrain-water-ripples{fill:url(#terrain-water-ripples);stroke:none;pointer-events:none}
       .terrain-green-shadow{fill:#1d422b;opacity:.55}
       .terrain-green-fringe{fill:none;stroke:#6f994d;stroke-width:18;stroke-linejoin:round;filter:url(#terrain-shadow)}
-      .terrain-green{fill:#b7d77d;stroke:#eff4c8;stroke-width:4;stroke-linejoin:round}
-      .terrain-green-mowing{fill:url(#terrain-green-mow);stroke:none;pointer-events:none}
+      .terrain-green{fill:#4fb344;stroke:none}
+      .terrain-green-mowing{display:none}
       .terrain-bunker-lip{fill:none;stroke:#887348;stroke-width:12;stroke-linejoin:round;filter:url(#terrain-shadow)}
       .terrain-bunker{fill:#d8c28b;stroke:#f4dfa7;stroke-width:4;stroke-linejoin:round}
       .terrain-bunker-texture{fill:url(#terrain-sand-grain);stroke:none;pointer-events:none}
@@ -2521,8 +2521,8 @@ function lieAt(point) {
   if (pointInPolygon(point, g.green_complex.polygon)) return { type: "Green", color: "#c3da83" };
   if (treeConditionAt(point)) return { type: "Trees", color: "#315a3b" };
   if (g.fairway_segments.some(x => pointInPolygon(point, x.polygon))) return { type: "Fairway", color: "#8ebd77" };
-  const rough = (g.rough_zones || []).find(x => pointInPolygon(point, x.polygon));
-  if (rough) return { type: rough.lie_catalog_id.includes("heavy") ? "Heavy rough" : "Rough", color: "#4f7a54" };
+  const rough = [...(g.rough_zones || [])].sort((a, b) => Number(b.lie_catalog_id === "lie_rough_light") - Number(a.lie_catalog_id === "lie_rough_light")).find(x => pointInPolygon(point, x.polygon));
+  if (rough) return { type: rough.lie_catalog_id === "lie_rough_light" ? "Light rough" : rough.lie_catalog_id.includes("heavy") ? "Heavy rough" : "Rough", color: "#4f7a54" };
   return { type: "Rough", color: "#4f7a54" };
 }
 
@@ -2688,7 +2688,7 @@ function renderMap() {
   const showTeeBoxes = !greenView && (!closeView || currentLieType() === "Tee");
   const svgViewport = mapSvgViewport();
   const yardageMarkers = closeView ? [] : markerPointsFromPin([200, 150, 100]);
-  const illustratedCourseImage = state.greenEnlarged || greenView ? null : courseIllustrationPath();
+  const illustratedCourseImage = null; // Render installed geometry with the approved illustrated style.
   const illustrationViewport = illustratedCourseImage
     ? courseIllustrationViewport(fullCourseBounds())
     : null;
@@ -2701,7 +2701,7 @@ function renderMap() {
     ${closeView ? "" : poly(g.out_of_bounds || [], "out-of-bounds")}
     ${greenView ? "" : poly(g.rough_zones || [], "rough-zone")}
     ${greenView ? "" : `<g class="course-art-overlay" aria-hidden="true">${poly(g.rough_zones || [], "rough-texture")}</g>`}
-    ${greenView ? "" : `<g class="course-art-overlay" aria-hidden="true">${poly(g.fairway_segments, "fairway-collar")}</g>`}
+    ${greenView ? "" : `<g class="course-art-overlay" aria-hidden="true">${poly((g.rough_zones || []).filter(item => item.lie_catalog_id === "lie_rough_light"), "approved-first-cut")}</g>`}
     ${greenView ? "" : poly(g.fairway_segments, "fairway-segment")}
     ${greenView ? "" : `<g class="course-art-overlay" aria-hidden="true">${poly(g.fairway_segments, "fairway-mowing")}</g>`}
     ${greenView ? "" : poly(g.cart_paths || [], "cart-path")}
@@ -2716,7 +2716,7 @@ function renderMap() {
     <g class="course-art-overlay" aria-hidden="true">${poly(g.hazards.filter(h => !h.lie_catalog_id.includes("water")), "sand-lip")}</g>
     ${poly(g.hazards.filter(h => !h.lie_catalog_id.includes("water")), "sand-hazard")}
     <g class="course-art-overlay" aria-hidden="true">${poly(g.hazards.filter(h => !h.lie_catalog_id.includes("water")), "sand-texture")}</g>
-    ${greenView ? "" : `<g class="course-art-overlay" aria-hidden="true">${poly(g.tree_zones || [], "tree-zone tree-zone-edge")}${poly(g.tree_zones || [], "tree-zone tree-zone-core", item => scaledDisplayPolygon(item.polygon, .7))}</g>`}
+    ${greenView ? "" : `<g class="course-art-overlay" aria-hidden="true">${renderIllustratedTreeLayer(hole(), point => [sx(point[0]), sy(point[1])])}</g>`}
     ${showTeeBoxes ? `<g class="course-art-overlay" aria-hidden="true">${teeArtwork("tee-box-shadow")}</g>${teeArtwork("tee-box")}<g class="course-art-overlay" aria-hidden="true">${teeArtwork("tee-mowing")}</g>` : ""}
     ${closeView ? "" : elevationContours}`;
   $("#course-map").innerHTML = `
@@ -2738,7 +2738,7 @@ function renderMap() {
         <pattern id="rough-grain" width="24" height="24" patternUnits="userSpaceOnUse">
           <path d="M2 21l3-5m5 6l2-6m6 5l3-7M6 8l2-4m7 5l2-5" stroke="rgba(236,243,220,.14)" stroke-width="1.2" stroke-linecap="round"/>
         </pattern>
-        <pattern id="fairway-mow" width="58" height="58" patternUnits="userSpaceOnUse">
+        <pattern id="fairway-mow" width="58" height="58" patternUnits="userSpaceOnUse" patternTransform="rotate(-32)">
           <rect width="29" height="58" fill="rgba(255,255,255,.085)"/><rect x="29" width="29" height="58" fill="rgba(38,91,48,.055)"/>
           <path d="M29 0v58" stroke="rgba(255,255,255,.055)" stroke-width="1"/>
         </pattern>
@@ -2858,7 +2858,7 @@ function renderMap() {
       .tree-zone{fill:url(#tree-canopy);stroke:none;filter:none}
       .tree-zone-edge{opacity:.5}.tree-zone-core{opacity:1}
       .fairway-collar{fill:none;stroke:#638d50;stroke-width:16;stroke-linejoin:round;stroke-linecap:round}
-      .fairway-segment{fill:#8db967;stroke:none}
+      .fairway-segment{fill:#9bbc61;stroke:none}.approved-first-cut{fill:#668d3c;stroke:none}
       .fairway-mowing{fill:url(#fairway-mow);stroke:none;opacity:.92}
       .cart-path{fill:#aaa89f;stroke:#dfddd4;stroke-width:3;stroke-linejoin:round}
       .par-three-approach polyline{fill:none;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
@@ -2874,8 +2874,8 @@ function renderMap() {
       .stream-bank{fill:#4f8791;stroke:#2b5960;stroke-width:9;stroke-linejoin:round}
       .stream-hazard{fill:url(#water-sheen);stroke:#4f91a8;stroke-width:7;stroke-linejoin:round}
       .green-fringe{fill:none;stroke:#6f994d;stroke-width:18;stroke-linejoin:round;filter:url(#course-feature-shadow)}
-      .green-complex{fill:#b7d77d;stroke:#e4efb9;stroke-width:3.5;stroke-linejoin:round}
-      .green-mowing{fill:url(#green-mow);stroke:none;opacity:.82}
+      .green-complex{fill:#4fb344;stroke:none}
+      .green-mowing{display:none}
       .sand-lip{fill:none;stroke:#8a754a;stroke-width:11;stroke-linejoin:round;filter:url(#course-feature-shadow)}
       .sand-hazard{fill:#d8c28b;stroke:#f2dfa9;stroke-width:3;stroke-linejoin:round}
       .sand-texture{fill:url(#sand-grain);stroke:none}
@@ -3058,7 +3058,7 @@ function resolveIntentTarget(start, linePoint, club = currentClub(), power = sta
   ];
 }
 
-const SURFACE_PRIORITIES = { out_of_bounds: 100, water: 90, bunker: 80, green: 70, tee: 60, native: 50, fairway: 40, rough: 20 };
+const SURFACE_PRIORITIES = { out_of_bounds: 100, water: 90, bunker: 80, green: 70, tee: 60, native: 50, fairway: 40, first_cut: 30, rough: 20 };
 
 function canonicalPoint(point) {
   const scale = finiteScale();
@@ -3174,7 +3174,7 @@ function canonicalSurfaces() {
     region("green", g.green_complex.polygon, g.green_complex.id || "green_primary"),
     ...g.tee_boxes.map((item, index) => region("tee", item.polygon, item.id || `tee_${index}`)),
     ...g.fairway_segments.map((item, index) => region("fairway", item.polygon, item.segment_id || item.id || `fairway_${index}`)),
-    ...(g.rough_zones || []).map((item, index) => region("rough", item.polygon, item.id || item.zone_id || `rough_${index}`))
+    ...(g.rough_zones || []).map((item, index) => region(item.lie_catalog_id === "lie_rough_light" ? "first_cut" : "rough", item.polygon, item.id || item.zone_id || `rough_${index}`))
   ];
 }
 
@@ -3817,7 +3817,7 @@ function authoritativeClub(club) {
 function authoritativeLie(type, lateralBiasYards = 0) {
   const modifiers = {
     Tee: [1, 1, .85, "tee_standard"], Fairway: [1, 1, 1, "fairway_clean"],
-    Rough: [.9, .9, 1.1, "rough_light"], "Heavy rough": [.7, .65, 2.5, "rough_deep"],
+    "Light rough": [.9, .9, 1.1, "rough_light"], Rough: [.85, .8, 1.5, "rough_medium"], "Heavy rough": [.7, .65, 2.5, "rough_deep"],
     Trees: [.65, .45, 2.8, "trees_restricted"],
     Bunker: [.8, .5, 2, "bunker_fairway"]
   }[type] || [.85, .8, 1.5, "rough_medium"];
@@ -3833,7 +3833,7 @@ function resultLieFromSurface(surface) {
     water: { type: "Water", penalty: true, color: "#75aeb3" },
     bunker: { type: "Bunker", color: "#d8bd79" }, green: { type: "Green", color: "#c3da83" },
     fairway: { type: "Fairway", color: "#8ebd77" }, tee: { type: "Tee", color: "#f1eedf" },
-    rough: { type: "Rough", color: "#4f7a54" }, native: { type: "Heavy rough", color: "#315a3b" }
+    first_cut: { type: "Light rough", color: "#6c9655" }, rough: { type: "Rough", color: "#4f7a54" }, native: { type: "Heavy rough", color: "#315a3b" }
   }[surface] || { type: "Rough", color: "#4f7a54" };
 }
 
@@ -4917,7 +4917,7 @@ function verifiedLearningNotesForShot(shot) {
   const notes = [];
   const requestContext = shot?.resultRequest?.context || {};
   const lieKey = requestContext?.lie?.lie_type || requestContext?.lie_type || {
-    Tee: "tee_standard", Fairway: "fairway_clean", Rough: "rough_light",
+    Tee: "tee_standard", Fairway: "fairway_clean", "Light rough": "rough_light", Rough: "rough_medium",
     "Heavy rough": "rough_deep", Bunker: "bunker_fairway", Green: "green"
   }[shot?.conditionSnapshot?.lie];
   const liePattern = patterns.find(pattern =>
@@ -6315,12 +6315,7 @@ async function loadChallengeSlotCandidate(slotIndex) {
   let holeData = payload.rawHole.hole_metadata ? payload.rawHole : normalizeWarrenbrookHole(payload.rawHole);
   holeData = withoutParThreeFairway(holeData, row.Par);
   holeData = expandSandHazards(holeData, sandHazardScaleForCourse(course, holeData));
-  holeData = generatedGreenHole(holeData, {
-    courseId: course.id,
-    holeNumber: ref.source_hole_number,
-    targetWidthYards: 40,
-    courseUnitsPerYard: 1 / METERS_TO_YARDS
-  });
+  holeData = withFairwayFirstCut(mappedGreenHole(holeData));
   ensurePlayablePinZones(holeData);
   holeData = ensureHazardFreePinZones(holeData);
   state.courseId = course.id;
@@ -8424,6 +8419,9 @@ function updateHoleBrief() {
   const mapStatus = $("#map-version-status");
   mapStatus.textContent = `${state.course.isCustomMap ? "Custom map" : "Built-in map"} · Updated ${readableMapDate}`;
   mapStatus.classList.toggle("custom", state.course.isCustomMap === true);
+  const attribution = $("#course-source-attribution");
+  attribution.textContent = state.course.sourceAttribution || "";
+  attribution.hidden = !state.course.sourceAttribution;
   $("#course-select").value = state.courseId;
   $("#scorecard-course-name").textContent = state.course.name;
   $("#header-hole").textContent = challengeActive() ? `${challengeSlot() + 1}/3` : state.holeIndex + 1;
@@ -12724,6 +12722,111 @@ async function refreshPlayerAccess() {
   return payload.access;
 }
 
+let preferredCourseIds = new Set();
+
+function preferredCourseLocation(course) {
+  const place = [course.city, course.state].filter(Boolean).join(", ");
+  return [place || course.state || "United States", course.type].filter(Boolean).join(" · ");
+}
+
+function preferredCourseTag(course, action) {
+  const isAdd = action === "add";
+  const availability = course.available_for_play ? " · Available in Jetta" : "";
+  return `<article class="preferred-course-tag">
+    <div><strong>${escapeHtml(course.name)}</strong><small>${escapeHtml(preferredCourseLocation(course))}${availability}</small></div>
+    <button type="button" data-${isAdd ? "add" : "remove"}-preferred-course="${escapeHtml(course.id)}"${isAdd && preferredCourseIds.has(course.id) ? " disabled" : ""}>${isAdd && preferredCourseIds.has(course.id) ? "Saved" : isAdd ? "Add" : "Remove"}</button>
+  </article>`;
+}
+
+function renderPreferredCourseLists(items = []) {
+  preferredCourseIds = new Set(items.map(course => course.id));
+  $$('[data-preferred-course-list]').forEach(list => {
+    list.innerHTML = items.length
+      ? items.map(course => preferredCourseTag(course, "remove")).join("")
+      : `<div class="preferred-course-empty">No preferred courses saved yet. Search above and add the courses you play most often.</div>`;
+  });
+}
+
+async function loadPreferredCourses() {
+  const payload = await playerApi("/api/player/preferred-courses");
+  renderPreferredCourseLists(Array.isArray(payload.items) ? payload.items : []);
+  return payload.items || [];
+}
+
+async function searchCourseDirectory(section) {
+  const input = section.querySelector("[data-course-search-input]");
+  const status = section.querySelector("[data-course-search-status]");
+  const results = section.querySelector("[data-course-search-results]");
+  const query = input.value.trim();
+  if (query.length < 2) {
+    status.textContent = "Enter at least two characters of the course name.";
+    results.hidden = true;
+    return;
+  }
+  status.textContent = "Searching the U.S. course directory…";
+  results.hidden = true;
+  try {
+    const payload = await playerApi(`/api/player/course-directory/search?query=${encodeURIComponent(query)}&limit=12`);
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    results.innerHTML = items.length
+      ? items.map(course => preferredCourseTag(course, "add")).join("")
+      : `<div class="preferred-course-empty">No matching course was found. Try a shorter course name or include the city.</div>`;
+    results.hidden = false;
+    status.textContent = items.length
+      ? `${items.length} ${items.length === 1 ? "course" : "courses"} found. Choose the correct city and state.`
+      : "No matching course found.";
+  } catch (error) {
+    status.textContent = error.message;
+    results.hidden = true;
+  }
+}
+
+async function changePreferredCourse(section, courseId, add) {
+  const status = section.querySelector("[data-course-search-status]");
+  const selector = add
+    ? `[data-add-preferred-course="${courseId}"]`
+    : `[data-remove-preferred-course="${courseId}"]`;
+  const button = section.querySelector(selector);
+  if (button?.disabled) return;
+  const originalLabel = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+  }
+  let completed = false;
+  status.textContent = add ? "Saving preferred course…" : "Removing preferred course…";
+  try {
+    const payload = await playerApi(
+      add ? "/api/player/preferred-courses" : "/api/player/preferred-courses/remove",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          course_id: courseId,
+          requester_context: section.dataset.coursePreferences === "coach" ? "COACH" : "PLAYER"
+        })
+      }
+    );
+    completed = true;
+    renderPreferredCourseLists(Array.isArray(payload.items) ? payload.items : []);
+    status.textContent = add ? "Preferred course saved." : "Preferred course removed.";
+    if (add) {
+      const button = section.querySelector(`[data-add-preferred-course="${courseId}"]`);
+      if (button) { button.disabled = true; button.textContent = "Saved"; }
+    }
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    if (button?.isConnected) {
+      button.removeAttribute("aria-busy");
+      if (!completed) {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+  }
+}
+
 async function redeemPlayerAccessCode() {
   const input = $("#account-access-code");
   const status = $("#account-access-code-status");
@@ -12821,7 +12924,7 @@ async function openCoachDashboard() {
   $("#coach-dashboard-dialog").showModal();
   $("#coach-seat-summary").textContent = "Loading sponsored seats…";
   try {
-    await loadCoachDashboard();
+    await Promise.all([loadCoachDashboard(), loadPreferredCourses()]);
     startCoachDashboardRefresh();
   }
   catch (error) { $("#coach-seat-summary").textContent = error.message; }
@@ -13560,15 +13663,16 @@ async function openFeedbackAttachment(attachmentId) {
 
 async function playerApi(path, options = {}) {
   const requestOptions = { ...options, headers: { ...(options.headers || {}) } };
+  let accessToken = null;
   if (supabaseAuth) {
-    const accessToken = await supabaseAuth.getAccessToken();
+    accessToken = await supabaseAuth.getAccessToken();
     if (accessToken) requestOptions.headers.Authorization = `Bearer ${accessToken}`;
   }
   let response = await fetch(path, requestOptions);
   if (response.status === 401 && supabaseAuth?.loadSession()?.refresh_token) {
-    const refreshed = await supabaseAuth.refreshSession();
-    if (refreshed?.access_token) {
-      requestOptions.headers.Authorization = `Bearer ${refreshed.access_token}`;
+    const recoveredToken = await supabaseAuth.recoverAccessToken(accessToken);
+    if (recoveredToken) {
+      requestOptions.headers.Authorization = `Bearer ${recoveredToken}`;
       response = await fetch(path, requestOptions);
     }
   }
@@ -13983,10 +14087,31 @@ function bindEvents() {
   $("#account-button").addEventListener("click", () => {
     updatePlayerAccountUI();
     $("#account-dialog").showModal();
+    void loadPreferredCourses().catch(error => {
+      $('[data-course-preferences="profile"] [data-course-search-status]').textContent = error.message;
+    });
     void refreshPlayerAccess().catch(error => {
       $("#account-access-detail").textContent = `Access status could not be refreshed: ${error.message}`;
     });
   });
+  $$('[data-course-search-form]').forEach(search => {
+    const section = search.closest("[data-course-preferences]");
+    search.querySelector("[data-course-search-button]").addEventListener("click", () => {
+      void searchCourseDirectory(section);
+    });
+    search.querySelector("[data-course-search-input]").addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void searchCourseDirectory(section);
+      }
+    });
+  });
+  $$('[data-course-preferences]').forEach(section => section.addEventListener("click", event => {
+    const add = event.target.closest("[data-add-preferred-course]");
+    const remove = event.target.closest("[data-remove-preferred-course]");
+    if (add) void changePreferredCourse(section, add.dataset.addPreferredCourse, true);
+    if (remove) void changePreferredCourse(section, remove.dataset.removePreferredCourse, false);
+  }));
   $("#account-redeem-code").addEventListener("click", () => void redeemPlayerAccessCode());
   $("#account-access-code").addEventListener("keydown", event => {
     if (event.key === "Enter") { event.preventDefault(); void redeemPlayerAccessCode(); }
