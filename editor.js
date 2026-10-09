@@ -73,7 +73,7 @@ const FEATURE_STYLE = {
   tee_blue: { name: "Blue tee box", color: "#2468c9", length: 14, width: 8, shape: "box" },
   tee_white: { name: "White tee box", color: "#f6f3e8", length: 14, width: 8, shape: "box" },
   tee_forward: { name: "Forward tee box", color: "#e65b9a", length: 14, width: 8, shape: "box" },
-  fairway: { name: "Fairway", color: "#78a866", length: 105, width: 38, shape: "box" },
+  fairway: { name: "Fairway", color: "#78a866", length: 105, width: 38, shape: "capsule" },
   rough: { name: "Rough", color: "#4c704f", length: 125, width: 72, shape: "box" },
   bunker: { name: "Sand bunker", color: "#d2b66f", length: 19, width: 9, shape: "oval", points: 8 },
   bunker_circle: { name: "Circle bunker", color: "#d2b66f", length: 15, width: 15, shape: "oval", points: 8, type: "bunker" },
@@ -1401,7 +1401,39 @@ function downloadText(text, filename, type = "application/json") {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function fairwayCapsule(center, length, width, direction = { east: 0, north: 1 }) {
+  const radius = width / 2;
+  const straight = Math.max(0, length / 2 - radius);
+  const right = { east: direction.north, north: -direction.east };
+  return [1, -1].flatMap(end => Array.from({ length: 13 }, (_, i) => {
+    const angle = (end === 1 ? 0 : Math.PI) + i * Math.PI / 12;
+    const lateral = Math.cos(angle) * radius;
+    const forward = end * straight + Math.sin(angle) * radius;
+    return offsetGpsPoint(center, right.east * lateral + direction.east * forward, right.north * lateral + direction.north * forward);
+  }));
+}
+
+function stretchFairway(factor) {
+  const feature = selectedFeature();
+  if (feature?.type !== "fairway" || feature.template_shape !== "capsule" || feature.points.length !== 26) {
+    setStatus("Select a rounded fairway template to change its length.", "error"); return;
+  }
+  const midpoint = (a, b) => ({ lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 });
+  const top = midpoint(feature.points[0], feature.points[12]);
+  const bottom = midpoint(feature.points[13], feature.points[25]);
+  const center = midpoint(top, bottom);
+  const delta = gpsDeltaMeters(bottom, top);
+  const straight = Math.hypot(delta.east, delta.north);
+  const width = distanceMeters(feature.points[0], feature.points[12]);
+  if (straight < .1) return;
+  const direction = { east: delta.east / straight, north: delta.north / straight };
+  recordUndo("change fairway length");
+  feature.points = fairwayCapsule(center, Math.max(width + 1, (straight + width) * factor), width, direction);
+  markFeatureManual(feature); persistProject(); renderMappedHole();
+}
+
 function templatePoints(center, style) {
+  if (style.shape === "capsule") return fairwayCapsule(center, style.length, style.width);
   if (style.shape === "rounded_box") {
     return roundedGpsRectangle(center, style.width, style.length, .22);
   }
@@ -1666,6 +1698,7 @@ function addFeature(tool, center) {
     id: `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     type,
     label: `${style.name}${sameTypeCount ? ` ${sameTypeCount + 1}` : ""}`,
+    ...(style.shape === "capsule" ? { template_shape: "capsule" } : {}),
     points: templatePoints(center, style)
   };
   recordUndo(`add ${style.name.toLowerCase()}`);
@@ -2381,6 +2414,7 @@ function renderSelectedFeature() {
     return;
   }
   $("#feature-label").value = feature.label || "";
+  $("#fairway-length-controls").hidden = feature.type !== "fairway" || feature.template_shape !== "capsule";
   $("#feature-type").value = feature.type;
   $("#feature-points").textContent = String(feature.points.length);
   const area = gpsPolygonAreaMeters(feature.points);
@@ -3544,6 +3578,8 @@ function bindEvents() {
   $("#rotate-feature-left").addEventListener("click", () => rotateSelectedFeature(5));
   $("#rotate-feature-right").addEventListener("click", () => rotateSelectedFeature(-5));
   $("#shrink-feature").addEventListener("click", () => scaleSelectedFeature(.95));
+  $("#fairway-shorter").addEventListener("click", () => stretchFairway(.9));
+  $("#fairway-longer").addEventListener("click", () => stretchFairway(1.1));
   $("#enlarge-feature").addEventListener("click", () => scaleSelectedFeature(1.05));
   $("#merge-features").addEventListener("click", mergeSelectedFeatures);
   $("#duplicate-feature").addEventListener("click", () => {

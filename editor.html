@@ -110,10 +110,9 @@
               <p>Choose a template and click the map. Select a shape to edit its points, or choose Move shape to reposition the whole shape.</p>
             </div>
             <div class="shape-palette" aria-label="Hole shape tools">
-              <button data-tool="tee_blue" type="button"><i class="swatch tee-blue"></i>Blue tee box</button>
-              <button data-tool="tee_forward" type="button"><i class="swatch tee-forward"></i>Forward tee box</button>
-              <button data-tool="tee_white" type="button"><i class="swatch tee-white"></i>White tee box</button>
-              <button data-tool="fairway" type="button"><i class="swatch fairway"></i>Fairway</button>
+
+
+              <button data-tool="fairway" type="button"><i class="swatch fairway"></i>Rounded fairway</button>
               <button data-tool="rough" type="button"><i class="swatch rough"></i>Rough</button>
               <button data-tool="bunker" type="button"><i class="swatch bunker"></i>Sand bunker</button>
               <button data-tool="bunker_circle" type="button"><i class="swatch bunker circle"></i>Circle bunker</button>
@@ -271,6 +270,7 @@
                 <button id="shrink-feature" type="button" aria-label="Make selected shape 5 percent smaller"><span aria-hidden="true">−</span> 5% smaller</button>
                 <button id="enlarge-feature" type="button" aria-label="Make selected shape 5 percent larger"><span aria-hidden="true">+</span> 5% larger</button>
               </div>
+              <div id="fairway-length-controls" class="size-actions" hidden><button id="fairway-shorter" type="button">10% shorter</button><button id="fairway-longer" type="button">10% longer</button></div>
               <div id="cluster-actions" class="cluster-actions" hidden>
                 <button id="merge-features" type="button">Make one cluster</button>
                 <small id="cluster-help">Selected shapes must be the same type.</small>
@@ -557,6 +557,6 @@
     </dialog>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.js"></script>
-  <script type="module" src="editor.js?v=20261008-course-batch25"></script>
+  <script type="module" src="editor.js?v=20261008-rounded-fairway1"></script>
   </body>
 </html>
