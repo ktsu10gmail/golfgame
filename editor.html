@@ -311,6 +311,8 @@
               <button id="preview-game-map" data-game-preview class="preview-game-button" type="button">Preview game map</button>
               <button id="export-hole" type="button">Export Hole JSON</button>
               <button id="export-package" class="accent-button" type="button">Export game package</button>
+              <div id="install-target-controls" hidden><label for="install-target">Install destination</label>
+              <select id="install-target"><option value="dev">Dev Golfgame (.47)</option><option value="prod">Prod Golfgame (.15)</option></select></div>
               <button id="install-game" class="install-game-button" type="button">Install in game</button>
             </div>
             <p id="editor-status" class="editor-status" role="status" aria-live="polite"></p>
@@ -556,6 +558,6 @@
     </dialog>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.js"></script>
-  <script type="module" src="editor.js?v=20261008-nine-rounded-fairway1"></script>
+  <script type="module" src="editor.js?v=20261009-install-targets"></script>
   </body>
 </html>

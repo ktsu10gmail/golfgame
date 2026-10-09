@@ -1049,6 +1049,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             self._json_response(HTTPStatus.OK, {
                 "authenticated": MAPPER_ACCESS.authenticated(self.headers.get("Cookie", "")),
                 "configured": bool(MAPPER_ACCESS.password_digest and MAPPER_ACCESS.service_token),
+                "install_targets": ["dev", "prod"] if os.getenv("GOLFGAME_ENVIRONMENT") == "development" else ["dev"],
             })
             return True
         if path in {"/api/mapper/login", "/api/mapper/logout"} and method == "POST":
@@ -1098,7 +1099,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 "Content-Type": "application/json", "X-Jetta-Mapper-Service": MAPPER_ACCESS.service_token,
             })
             try:
-                upstream = urlopen(request, timeout=75)
+                upstream = urlopen(request, timeout=200 if path == "/api/course-mapper/install" else 75)
             except HTTPError as error:
                 upstream = error
             with upstream:
@@ -1256,17 +1257,26 @@ class AppHandler(SimpleHTTPRequestHandler):
                     production_context.get("directory_course_id"),
                     player["id"],
                 )
-            destination = install_package(payload, force=True)
-            if library_context:
+            target = payload.get("install_target", "dev")
+            target_result = None
+            if os.getenv("GOLFGAME_ENVIRONMENT") == "development":
+                from scripts.course_install_targets import install_target
+                target_result = install_target(ROOT, payload, target)
+                destination = ROOT / "data" / payload["course_id"]
+            else:
+                if target != "dev":
+                    raise ValueError("Remote installation is enabled only on the development server")
+                destination = install_package(payload, force=True)
+            if library_context and target != "prod":
                 course_library().installed_package(library_context['id'], library_context['revision'], {
                     'course_id': payload['course_id'], 'map_updated_at': payload.get('exported_at')})
         except (CoursePreferenceError, ValueError, KeyError, TypeError, json.JSONDecodeError, UnicodeDecodeError) as error:
             self._json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
             return
-        except OSError as error:
+        except (OSError, subprocess.SubprocessError) as error:
             self._json_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
-                {"error": f"could not write the course files: {error}"},
+                {"error": f"could not install the course: {error}"},
             )
             return
         self._json_response(HTTPStatus.OK, {
@@ -1281,6 +1291,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             "map_updated_at": payload.get("exported_at"),
             "destination": str(destination.relative_to(ROOT)),
             "installed_by": player["id"],
+            **(target_result or {}),
         })
 
     def _handle_course_production(self, path: str) -> None:

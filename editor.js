@@ -138,6 +138,7 @@ let referencePanelOpen = Boolean(REQUESTED_PRESET_ID);
 let uprightViewCache = null;
 let mapResizeFrame = null;
 let mapperSignedIn = false;
+let mapperInstallTargetsEnabled = false;
 let courseImportServerStatus = null;
 let selectedExternalCourse = null;
 let externalImportJobId = null;
@@ -154,6 +155,9 @@ async function initializeEditorAuth() {
     const response = await fetch("/api/mapper/session", { cache: "no-store" });
     const config = response.ok ? await response.json() : {};
     mapperSignedIn = Boolean(config.authenticated);
+    mapperInstallTargetsEnabled = Boolean(config.install_targets?.includes("prod"));
+    $("#install-target-controls").hidden = !mapperInstallTargetsEnabled;
+    if ($("#install-target-controls").hidden) $("#install-target").value = "dev";
   } catch {
     mapperSignedIn = false;
   }
@@ -3763,6 +3767,9 @@ function bindEvents() {
     }
   });
   $("#install-game").addEventListener("click", async event => {
+    const installTarget = $("#install-target").value;
+    const targetLabel = mapperInstallTargetsEnabled
+      ? (installTarget === "prod" ? "Prod Golfgame (.15)" : "Dev Golfgame (.47)") : "local Golfgame";
     if (mapperHoleCount(project) === 9) {
       setStatus("Save or export this nine-hole course. Game installation currently requires 18 holes.", "error");
       return;
@@ -3814,7 +3821,7 @@ function bindEvents() {
     const installDescription = payloads.length === 1
       ? project.course_name
       : `${project.course_name} as all six ordered combinations of ${projectNineLoops().map(loop => loop.name).join(", ")}`;
-    if (!window.confirm(`Install ${installDescription} in the golf game now? Existing game data for these routes will be replaced.`)) {
+    if (!window.confirm(`Install ${installDescription} in ${targetLabel} now? ${installTarget === "prod" ? "Confirm you have tested this content in Dev. " : ""}Existing game data for these routes will be replaced.`)) {
       button.disabled = false;
       button.textContent = originalLabel;
       setStatus("Installation canceled. Your mapped project remains saved.");
@@ -3832,7 +3839,7 @@ function bindEvents() {
         const response = await editorApiFetch("/api/course-mapper/install", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, ...(project.library_context ? { library_context: project.library_context } : {}) })
+          body: JSON.stringify({ ...payload, install_target: installTarget, ...(project.library_context ? { library_context: project.library_context } : {}) })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(`${payload.course_name}: ${result.error || `server returned ${response.status}`}`);
@@ -3843,11 +3850,11 @@ function bindEvents() {
       const installed = Array.isArray(installedCourses) && results.every(result => installedCourses.some(course =>
         course.id === result.course_id && course.dataVersion === result.map_updated_at
       ));
-      if (!installed) throw new Error("the server did not confirm the installed map");
-      if (project.library_context) {
+      if (installTarget === "prod" ? !results.every(result => result.verified && result.install_target === "prod") : !installed) throw new Error("the destination did not confirm the installed map");
+      if (project.library_context && installTarget === "dev") {
         await libraryRequest("installed", { id: project.library_context.id, revision: project.library_context.revision, results });
       }
-      const context = productionContext();
+      const context = installTarget === "dev" ? productionContext() : null;
       if (context) {
         await courseImportRequest(`/api/v1/course-production/${context.production_item_id}/complete`, {
           ...context,
@@ -3858,11 +3865,11 @@ function bindEvents() {
         });
       }
       setStatus(results.length === 1
-        ? `Installed all 18 ${results[0].course_name} holes in the game${context ? " and marked the request READY" : ""}. Reload the game page to use them.`
-        : `Installed all six ordered ${project.course_name} 18-hole routes${context ? " and marked the request READY" : ""}. Reload the game page to choose one.`, "success");
+        ? `Installed all 18 ${results[0].course_name} holes in ${targetLabel}${context ? " and marked the request READY" : ""}. Reload the game page to use them.`
+        : `Installed all six ordered ${project.course_name} 18-hole routes in ${targetLabel}${context ? " and marked the request READY" : ""}. Reload the game page to choose one.`, "success");
       window.alert(results.length === 1
-        ? `${results[0].course_name} was installed and verified. Reload the game to use it.`
-        : `${project.course_name} was installed in both directions for every pair of nines. Reload the game and choose the route from the course menu.`);
+        ? `${results[0].course_name} was installed and verified in ${targetLabel}. Reload that game to use it.`
+        : `${project.course_name} was installed in ${targetLabel} in both directions for every pair of nines. Reload that game and choose the route from the course menu.`);
     } catch (error) {
       setStatus(`Game installation failed: ${error.message}.`, "error");
     } finally {
