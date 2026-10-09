@@ -38,7 +38,7 @@ import {
   scaleGpsPointAround,
   uprightHoleViewTarget,
   validateMapperProject
-} from "./packages/editor/course_mapper.mjs?v=20261008-nine-layout1";
+} from "./packages/editor/course_mapper.mjs?v=20261009-primary-green1";
 import { createUndoHistory } from "./packages/editor/undo_history.mjs?v=20260801-1";
 import { unionSimplePolygons } from "./packages/editor/polygon_union.mjs?v=20260812-1";
 import { renderGameMapPreview } from "./packages/editor/game_map_preview.mjs?v=20261008-prototype1";

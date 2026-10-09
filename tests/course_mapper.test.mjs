@@ -1058,3 +1058,17 @@ test("switching to nine holes preserves back-nine work and exports only the acti
   assert.equal(mapperHoleCount(project), 18);
   assert.equal(project.holes["10"].par, 5);
 });
+
+
+test("export selects the green containing the pin when another green comes first", () => {
+  const project = mappedProject();
+  const before = buildGameHoleJson(project, 1);
+  const hole = project.holes["1"];
+  const green = hole.features.find(feature => feature.type === "green");
+  const other = structuredClone(green);
+  other.id = "neighbor-green";
+  other.points = other.points.map(point => ({...point, lat: point.lat + .01, lng: point.lng + .01}));
+  hole.features.unshift(other);
+  assert.equal(holeMappingStatus(project, 1).ready, true);
+  assert.deepEqual(buildGameHoleJson(project, 1).geometries.green_complex.polygon, before.geometries.green_complex.polygon);
+});

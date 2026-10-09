@@ -1209,7 +1209,7 @@ function buildMappedGameHole(project, holeNumber, preview) {
   const holeOutlines = featuresOf(hole, "hole_outline");
   const cartPaths = featuresOf(hole, "cart_path");
   const trees = featuresOf(hole, "trees");
-  const green = featuresOf(hole, "green")[0];
+  const green = featuresOf(hole, "green").find(feature => pointInPolygon(hole.markers.pin, feature.points));
   const outOfBounds = featuresOf(hole, "out_of_bounds");
   const elevationChange = Number(hole.elevation_change_meters) || 0;
 
