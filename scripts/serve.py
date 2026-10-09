@@ -252,6 +252,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/auth/config":
             payload = SUPABASE_CONFIG.public_payload() if SUPABASE_CONFIG else {"provider": "local"}
+            payload["environment"] = os.getenv("GOLFGAME_ENVIRONMENT", "production")
             self._json_response(HTTPStatus.OK, payload)
             return
         if parsed.path == "/api/player/active-round":

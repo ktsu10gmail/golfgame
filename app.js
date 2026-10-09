@@ -13727,6 +13727,10 @@ async function initializeAuthentication() {
   const response = await fetch("/api/auth/config", { cache: "no-store" });
   if (!response.ok) throw new Error("The player login configuration could not be loaded.");
   authConfig = await response.json();
+  if (authConfig.environment === "development") {
+    document.title = "Jetta Golf — Development .47";
+    document.querySelector(".brand small").textContent = "Development .47";
+  }
   if (authConfig.provider !== "supabase") return;
   supabaseAuth = createSupabaseAuth(authConfig);
   const redirect = supabaseAuth.consumeRedirect();
