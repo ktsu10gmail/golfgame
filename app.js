@@ -264,10 +264,22 @@ function normalizePuttingMakeRates(profile) {
   };
 }
 
+function clubSortOrder(name) {
+  const key = String(name).trim().toLowerCase();
+  if (key === "driver") return 0;
+  const numbered = key.match(/^(\d+)\s*(wood|hybrid|iron)$/);
+  if (numbered) return ({ wood: 100, hybrid: 200, iron: 300 })[numbered[2]] + Number(numbered[1]);
+  const wedges = { "pitching wedge": 410, "pw": 410, "gap wedge": 420, "approach wedge": 420, "gw": 420, "aw": 420, "sand wedge": 430, "sw": 430, "lob wedge": 440, "lw": 440 };
+  if (key in wedges) return wedges[key];
+  if (key === "putter") return 1000;
+  return 500;
+}
+
 function normalizeProfile(profile) {
   const clubs = profile.clubs
     .filter(club => club.name !== "Putter")
-    .map(club => ({ ...club }));
+    .map(club => ({ ...club }))
+    .sort((a, b) => clubSortOrder(a.name) - clubSortOrder(b.name));
   clubs.push({ name: "Putter", carry: PUTTER_RANGE_FEET / 3, accuracy: 100 });
   return { ...profile, puttingMakeRates: normalizePuttingMakeRates(profile), clubs };
 }
@@ -11998,14 +12010,8 @@ function applyOnCourseClubValues(clubName, button) {
   button.disabled = true;
 }
 
-function openCustomizer() {
-  const clone = structuredClone(state.profile);
-  const fullSwingClubs = clone.clubs.filter(club => club.name !== "Putter");
-  const puttingRates = normalizePuttingMakeRates(clone);
-  $("#custom-name").value = state.profile.id.startsWith("custom")
-    ? personalizeCustomProfile(state.profile, state.player?.name).name
-    : playerProfileName(state.player?.name);
-  $("#club-editor").innerHTML = fullSwingClubs.map((club, i) => `
+function clubEditorRow(club, i) {
+  return `
     <div class="club-row" data-index="${i}" data-profile-club-name="${escapeHtml(club.name)}">
       <strong>${escapeHtml(club.name)}</strong>
       <input data-profile-field="carry" type="number" inputmode="numeric" min="5" max="350" step="1" value="${club.carry}" aria-label="${escapeHtml(club.name)} carry yards" required>
@@ -12014,7 +12020,18 @@ function openCustomizer() {
         <span aria-hidden="true">%</span>
       </div>
       <div class="on-course-club-stat" data-on-course-club="${escapeHtml(club.name)}">${onCourseClubStatMarkup(club.name)}</div>
-    </div>`).join("");
+    </div>`;
+}
+
+function openCustomizer() {
+  const clone = structuredClone(state.profile);
+  const fullSwingClubs = clone.clubs.filter(club => club.name !== "Putter");
+  const puttingRates = normalizePuttingMakeRates(clone);
+  $("#custom-name").value = state.profile.id.startsWith("custom")
+    ? personalizeCustomProfile(state.profile, state.player?.name).name
+    : playerProfileName(state.player?.name);
+  $("#club-editor").innerHTML = fullSwingClubs.map(clubEditorRow).join("");
+  $("#custom-add-club-status").textContent = "";
   $$('[data-putting-distance]').forEach(input => {
     input.value = puttingRates[input.dataset.puttingDistance];
   });
@@ -12025,9 +12042,8 @@ function openCustomizer() {
 
 async function saveCustomProfile(event) {
   event.preventDefault();
-  const fullSwingClubs = state.profile.clubs.filter(club => club.name !== "Putter");
-  const clubs = $$(".club-row").map((row, i) => ({
-    name: fullSwingClubs[i].name,
+  const clubs = $$("#club-editor .club-row").map(row => ({
+    name: row.dataset.profileClubName,
     carry: Number(row.querySelector('[data-profile-field="carry"]').value),
     accuracy: Number(row.querySelector('[data-profile-field="accuracy"]').value)
   }));
@@ -14639,6 +14655,25 @@ function bindEvents() {
   $("#club-editor").addEventListener("click", event => {
     const button = event.target.closest("[data-apply-on-course]");
     if (button) applyOnCourseClubValues(button.dataset.applyOnCourse, button);
+  });
+  $("#custom-add-club").addEventListener("click", () => {
+    const name = $("#custom-club-choice").value;
+    const rows = $$("#club-editor .club-row");
+    if (rows.length >= 19) {
+      $("#custom-add-club-status").textContent = "Your profile supports up to 20 clubs including the putter.";
+      return;
+    }
+    if (rows.some(row => row.dataset.profileClubName === name)) {
+      $("#custom-add-club-status").textContent = `${name} is already in your bag.`;
+      return;
+    }
+    $("#club-editor").insertAdjacentHTML("beforeend", clubEditorRow({ name, carry: "", accuracy: "" }, rows.length));
+    const addedRow = $("#club-editor").lastElementChild;
+    const orderedRows = $$("#club-editor .club-row").sort((a, b) => clubSortOrder(a.dataset.profileClubName) - clubSortOrder(b.dataset.profileClubName));
+    $("#club-editor").append(...orderedRows);
+    const input = addedRow.querySelector('[data-profile-field="carry"]');
+    input.focus();
+    $("#custom-add-club-status").textContent = `${name} added. Enter your carry and accuracy, then Save profile.`;
   });
   $("#custom-form").addEventListener("submit", saveCustomProfile);
   $$("[data-close-custom]").forEach(button => button.addEventListener("click", () => $("#custom-dialog").close()));

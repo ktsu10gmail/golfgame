@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildScorecardCsv,
   buildGameCoursePackage,
   buildGameCoursePackages,
   buildGameHoleJson,
@@ -1029,4 +1030,31 @@ test("Mapper route starts at the selected blue tee without requiring a white tee
   assert.deepEqual(mapperStartTeePoint(hole), hole.markers.forward_tee);
   hole.markers = {};
   assert.equal(mapperStartTeePoint(hole), null);
+});
+
+
+test("standalone nine-hole project validates and round-trips without adding holes", () => {
+  const project = createMapperProject({ courseName: "Nine Links", courseStructure: MAPPER_COURSE_STRUCTURES.NINE });
+  assert.equal(mapperHoleCount(project), 9);
+  assert.equal(Object.keys(project.holes).length, 9);
+  validateMapperProject(project);
+  assert.equal(mapperHoleCount(parseMapperProject(JSON.stringify(project))), 9);
+  assert.equal(buildScorecardCsv(project).trim().split("\n").length, 10);
+});
+
+test("switching to nine holes preserves back-nine work and exports only the active nine", () => {
+  const project = mappedProject();
+  const template = structuredClone(project.holes["1"]);
+  for (let i = 1; i <= 9; i++) project.holes[String(i)] = { ...structuredClone(template), hole_number: i, handicap: i };
+  project.holes["10"].par = 5;
+  configureMapperCourseStructure(project, MAPPER_COURSE_STRUCTURES.NINE);
+  assert.equal(project.holes["10"].par, 5);
+  const [payload] = buildGameCoursePackages(project);
+  assert.equal(payload.hole_count, 9);
+  assert.deepEqual(Object.keys(payload.holes), Array.from({ length: 9 }, (_, i) => String(i + 1)));
+  assert.deepEqual(payload.incomplete_holes, {});
+  assert.equal(payload.scorecard_csv.trim().split("\n").length, 10);
+  configureMapperCourseStructure(project, MAPPER_COURSE_STRUCTURES.STANDARD);
+  assert.equal(mapperHoleCount(project), 18);
+  assert.equal(project.holes["10"].par, 5);
 });

@@ -30,3 +30,7 @@ Courses/
 data/alta-sierra-country-club-a080da119f/
 data/osm-relation-3568943/
 data/osm-way-31387250/
+
+# Host-local imported courses; source deployments must not include them.
+data/osm-way-*/
+data/osm-relation-*/

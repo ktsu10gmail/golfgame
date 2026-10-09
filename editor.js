@@ -38,7 +38,7 @@ import {
   scaleGpsPointAround,
   uprightHoleViewTarget,
   validateMapperProject
-} from "./packages/editor/course_mapper.mjs?v=20261008-start-route1";
+} from "./packages/editor/course_mapper.mjs?v=20261008-nine-layout1";
 import { createUndoHistory } from "./packages/editor/undo_history.mjs?v=20260801-1";
 import { unionSimplePolygons } from "./packages/editor/polygon_union.mjs?v=20260812-1";
 import { renderGameMapPreview } from "./packages/editor/game_map_preview.mjs?v=20261008-prototype1";
@@ -73,7 +73,7 @@ const FEATURE_STYLE = {
   tee_blue: { name: "Blue tee box", color: "#2468c9", length: 14, width: 8, shape: "box" },
   tee_white: { name: "White tee box", color: "#f6f3e8", length: 14, width: 8, shape: "box" },
   tee_forward: { name: "Forward tee box", color: "#e65b9a", length: 14, width: 8, shape: "box" },
-  fairway: { name: "Fairway", color: "#78a866", length: 105, width: 38, shape: "box" },
+  fairway: { name: "Fairway", color: "#78a866", length: 105, width: 38, shape: "capsule" },
   rough: { name: "Rough", color: "#4c704f", length: 125, width: 72, shape: "box" },
   bunker: { name: "Sand bunker", color: "#d2b66f", length: 19, width: 9, shape: "oval", points: 8 },
   bunker_circle: { name: "Circle bunker", color: "#d2b66f", length: 15, width: 15, shape: "oval", points: 8, type: "bunker" },
@@ -1345,6 +1345,9 @@ function editorHoleLabel(holeNumber) {
 }
 
 function renderHoleSwitcherOptions() {
+  const nineOnly = project.course_structure === MAPPER_COURSE_STRUCTURES.NINE;
+  $("#install-game").disabled = nineOnly;
+  $("#install-game").title = nineOnly ? "Nine-hole courses can be saved and exported. Game installation currently requires 18 holes." : "";
   if (project.course_structure === MAPPER_COURSE_STRUCTURES.THREE_NINES) {
     $("#hole-number").innerHTML = projectNineLoops().map(loop => `
       <optgroup label="${escapeHtml(loop.name)} nine">
@@ -1354,7 +1357,7 @@ function renderHoleSwitcherOptions() {
         }).join("")}
       </optgroup>`).join("");
   } else {
-    $("#hole-number").innerHTML = Array.from({ length: 18 }, (_, index) =>
+    $("#hole-number").innerHTML = Array.from({ length: mapperHoleCount(project) }, (_, index) =>
       `<option value="${index + 1}">Hole ${index + 1}</option>`
     ).join("");
   }
@@ -1401,7 +1404,39 @@ function downloadText(text, filename, type = "application/json") {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function fairwayCapsule(center, length, width, direction = { east: 0, north: 1 }) {
+  const radius = width / 2;
+  const straight = Math.max(0, length / 2 - radius);
+  const right = { east: direction.north, north: -direction.east };
+  return [1, -1].flatMap(end => Array.from({ length: 13 }, (_, i) => {
+    const angle = (end === 1 ? 0 : Math.PI) + i * Math.PI / 12;
+    const lateral = Math.cos(angle) * radius;
+    const forward = end * straight + Math.sin(angle) * radius;
+    return offsetGpsPoint(center, right.east * lateral + direction.east * forward, right.north * lateral + direction.north * forward);
+  }));
+}
+
+function stretchFairway(factor) {
+  const feature = selectedFeature();
+  if (feature?.type !== "fairway" || feature.template_shape !== "capsule" || feature.points.length !== 26) {
+    setStatus("Select a rounded fairway template to change its length.", "error"); return;
+  }
+  const midpoint = (a, b) => ({ lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 });
+  const top = midpoint(feature.points[0], feature.points[12]);
+  const bottom = midpoint(feature.points[13], feature.points[25]);
+  const center = midpoint(top, bottom);
+  const delta = gpsDeltaMeters(bottom, top);
+  const straight = Math.hypot(delta.east, delta.north);
+  const width = distanceMeters(feature.points[0], feature.points[12]);
+  if (straight < .1) return;
+  const direction = { east: delta.east / straight, north: delta.north / straight };
+  recordUndo("change fairway length");
+  feature.points = fairwayCapsule(center, Math.max(width + 1, (straight + width) * factor), width, direction);
+  markFeatureManual(feature); persistProject(); renderMappedHole();
+}
+
 function templatePoints(center, style) {
+  if (style.shape === "capsule") return fairwayCapsule(center, style.length, style.width);
   if (style.shape === "rounded_box") {
     return roundedGpsRectangle(center, style.width, style.length, .22);
   }
@@ -1666,6 +1701,7 @@ function addFeature(tool, center) {
     id: `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     type,
     label: `${style.name}${sameTypeCount ? ` ${sameTypeCount + 1}` : ""}`,
+    ...(style.shape === "capsule" ? { template_shape: "capsule" } : {}),
     points: templatePoints(center, style)
   };
   recordUndo(`add ${style.name.toLowerCase()}`);
@@ -2357,6 +2393,7 @@ async function rotateHoleArtwork(degrees) {
 function renderSelectedFeature() {
   const features = selectedFeatures();
   const feature = selectedFeature();
+  $("#fairway-length-controls").hidden = features.length !== 1 || feature?.type !== "fairway" || feature?.template_shape !== "capsule";
   $("#selected-empty").hidden = Boolean(feature);
   $("#selected-controls").hidden = !feature;
   const multiple = features.length > 1;
@@ -2821,10 +2858,12 @@ function initializeMap() {
 }
 
 function selectedScorecardHoleCount() {
+  if (project.course_structure === MAPPER_COURSE_STRUCTURES.NINE) return 9;
   return Number($('[name="scorecard-hole-count"]:checked')?.value) === 9 ? 9 : 18;
 }
 
 function scorecardNineDestinations() {
+  if (project.course_structure === MAPPER_COURSE_STRUCTURES.NINE) return [{ value: 0, label: "Holes 1–9" }];
   if (project.course_structure === MAPPER_COURSE_STRUCTURES.THREE_NINES) {
     return projectNineLoops().map(loop => ({ value: loop.start - 1, label: `${loop.name} nine` }));
   }
@@ -2839,6 +2878,10 @@ function selectedScorecardTargetStart() {
 }
 
 function updateScorecardImportChoice() {
+  const nineOnly = project.course_structure === MAPPER_COURSE_STRUCTURES.NINE;
+  const eighteenChoice = $('[name="scorecard-hole-count"][value="18"]');
+  eighteenChoice.disabled = nineOnly;
+  if (nineOnly) $('[name="scorecard-hole-count"][value="9"]').checked = true;
   const holeCount = selectedScorecardHoleCount();
   const destination = $("#scorecard-nine-destination");
   const target = $("#scorecard-nine-target");
@@ -3360,22 +3403,23 @@ function bindEvents() {
     saveHoleForm();
     const nextStructure = event.target.value === MAPPER_COURSE_STRUCTURES.THREE_NINES
       ? MAPPER_COURSE_STRUCTURES.THREE_NINES
-      : MAPPER_COURSE_STRUCTURES.STANDARD;
+      : event.target.value === MAPPER_COURSE_STRUCTURES.NINE ? MAPPER_COURSE_STRUCTURES.NINE : MAPPER_COURSE_STRUCTURES.STANDARD;
     if (nextStructure === project.course_structure) return;
     recordUndo("course layout change");
     configureMapperCourseStructure(project, nextStructure);
     currentHoleNumber = Math.min(currentHoleNumber, mapperHoleCount(project));
     renderHoleSwitcherOptions();
     syncNineLoopNameFields();
-    if (nextStructure === MAPPER_COURSE_STRUCTURES.THREE_NINES) {
+    if (nextStructure !== MAPPER_COURSE_STRUCTURES.STANDARD) {
       const nineOption = $('[name="scorecard-hole-count"][value="9"]');
       if (nineOption) nineOption.checked = true;
     }
+    updateScorecardImportChoice();
     persistProject();
     renderHoleForm();
     setStatus(nextStructure === MAPPER_COURSE_STRUCTURES.THREE_NINES
       ? `${projectNineLoops().map(loop => loop.name).join(", ")} are ready for separate nine-hole scorecards.`
-      : "Course layout set to a standard 18 holes.", "success");
+      : nextStructure === MAPPER_COURSE_STRUCTURES.NINE ? "Course layout set to 9 holes. Save and export are available; game installation currently requires 18 holes." : "Course layout set to a standard 18 holes.", "success");
   });
   $$('[data-nine-loop-id]').forEach(input => input.addEventListener("change", event => {
     const loop = project.nine_loops.find(item => item.id === event.target.dataset.nineLoopId);
@@ -3544,6 +3588,8 @@ function bindEvents() {
   $("#rotate-feature-left").addEventListener("click", () => rotateSelectedFeature(5));
   $("#rotate-feature-right").addEventListener("click", () => rotateSelectedFeature(-5));
   $("#shrink-feature").addEventListener("click", () => scaleSelectedFeature(.95));
+  $("#fairway-shorter").addEventListener("click", () => stretchFairway(.9));
+  $("#fairway-longer").addEventListener("click", () => stretchFairway(1.1));
   $("#enlarge-feature").addEventListener("click", () => scaleSelectedFeature(1.05));
   $("#merge-features").addEventListener("click", mergeSelectedFeatures);
   $("#duplicate-feature").addEventListener("click", () => {
@@ -3717,6 +3763,10 @@ function bindEvents() {
     }
   });
   $("#install-game").addEventListener("click", async event => {
+    if (mapperHoleCount(project) === 9) {
+      setStatus("Save or export this nine-hole course. Game installation currently requires 18 holes.", "error");
+      return;
+    }
     saveHoleForm();
     const preparedProject = structuredClone(project);
     prepareCourseTeeBoxes(preparedProject);

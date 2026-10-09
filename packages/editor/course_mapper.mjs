@@ -5,6 +5,7 @@ export const EARTH_RADIUS_METERS = 6371008.8;
 export const YARDS_PER_METER = 1.09361;
 export const MAPPER_COURSE_STRUCTURES = Object.freeze({
   STANDARD: "standard_18",
+  NINE: "standard_9",
   THREE_NINES: "three_nines"
 });
 export const MAPPER_NINE_LOOPS = Object.freeze([
@@ -82,7 +83,7 @@ export function createMapperProject({
   courseStructure = MAPPER_COURSE_STRUCTURES.STANDARD
 } = {}) {
   const threeNines = courseStructure === MAPPER_COURSE_STRUCTURES.THREE_NINES;
-  const holeCount = threeNines ? 27 : 18;
+  const holeCount = threeNines ? 27 : courseStructure === MAPPER_COURSE_STRUCTURES.NINE ? 9 : 18;
   return {
     version: MAPPER_PROJECT_VERSION,
     course_name: courseName,
@@ -91,7 +92,7 @@ export function createMapperProject({
     updated_at: new Date().toISOString(),
     imagery_source: "User-selected local hole images",
     map_view: null,
-    course_structure: threeNines ? MAPPER_COURSE_STRUCTURES.THREE_NINES : MAPPER_COURSE_STRUCTURES.STANDARD,
+    course_structure: threeNines ? MAPPER_COURSE_STRUCTURES.THREE_NINES : courseStructure === MAPPER_COURSE_STRUCTURES.NINE ? MAPPER_COURSE_STRUCTURES.NINE : MAPPER_COURSE_STRUCTURES.STANDARD,
     nine_loops: MAPPER_NINE_LOOPS.map(loop => ({ id: loop.id, name: loop.name })),
     holes: Object.fromEntries(
       Array.from({ length: holeCount }, (_, index) => {
@@ -105,20 +106,20 @@ export function createMapperProject({
 }
 
 export function mapperHoleCount(project) {
-  return project?.course_structure === MAPPER_COURSE_STRUCTURES.THREE_NINES ? 27 : 18;
+  return project?.course_structure === MAPPER_COURSE_STRUCTURES.THREE_NINES ? 27 : project?.course_structure === MAPPER_COURSE_STRUCTURES.NINE ? 9 : 18;
 }
 
 export function configureMapperCourseStructure(project, structure) {
   if (!project || typeof project !== "object") throw new Error("mapping project must be an object");
   const normalized = structure === MAPPER_COURSE_STRUCTURES.THREE_NINES
     ? MAPPER_COURSE_STRUCTURES.THREE_NINES
-    : MAPPER_COURSE_STRUCTURES.STANDARD;
+    : structure === MAPPER_COURSE_STRUCTURES.NINE ? MAPPER_COURSE_STRUCTURES.NINE : MAPPER_COURSE_STRUCTURES.STANDARD;
   project.course_structure = normalized;
   project.nine_loops = MAPPER_NINE_LOOPS.map(loop => ({
     id: loop.id,
     name: project.nine_loops?.find(item => item?.id === loop.id)?.name || loop.name
   }));
-  const holeCount = normalized === MAPPER_COURSE_STRUCTURES.THREE_NINES ? 27 : 18;
+  const holeCount = mapperHoleCount(project);
   for (let holeNumber = 1; holeNumber <= holeCount; holeNumber += 1) {
     if (!project.holes?.[String(holeNumber)]) {
       project.holes ||= {};
@@ -1348,7 +1349,7 @@ function buildMappedGameHole(project, holeNumber, preview) {
 export function buildScorecardCsv(project) {
   validateMapperProject(project);
   const rows = ["Hole,Par,Handicap,Yards_Blue,Yards_White,Yards_Red"];
-  for (let holeNumber = 1; holeNumber <= 18; holeNumber += 1) {
+  for (let holeNumber = 1; holeNumber <= Math.min(mapperHoleCount(project), 18); holeNumber += 1) {
     const hole = project.holes[String(holeNumber)];
     rows.push([
       holeNumber,
@@ -1508,7 +1509,7 @@ export function buildGameCoursePackage(project) {
   return buildRoutedGameCoursePackage(project, {
     courseId: cleanId(project.course_id),
     courseName: project.course_name,
-    sourceHoles: Array.from({ length: 18 }, (_, index) => index + 1),
+    sourceHoles: Array.from({ length: Math.min(mapperHoleCount(project), 18) }, (_, index) => index + 1),
     exportedAt: new Date().toISOString()
   });
 }
@@ -1561,6 +1562,7 @@ function buildRoutedGameCoursePackage(project, { courseId, courseName, sourceHol
     gps_calibrated_holes: Object.values(holes).filter(hole => hole.hole_metadata?.gps_calibration).length,
     incomplete_holes: errors,
     source_holes: [...sourceHoles],
+    hole_count: sourceHoles.length,
     production_context: project.production_context && typeof project.production_context === "object" && !Array.isArray(project.production_context) && Object.keys(project.production_context).length === 0 ? null : project.production_context || null,
     external_course_source: project.external_course_source || null
   };
