@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildScorecardCsv,
   buildGameCoursePackage,
   buildGameCoursePackages,
   buildGameHoleJson,
@@ -11,12 +12,15 @@ import {
   prepareCourseTeeBoxes,
   placeStartTeeBox,
   selectStartTee,
+  selectCourseStartTee,
   applyOsmStartTeeDefault,
   buildHoleGpsCalibration,
   buildWgs84GpsCalibration,
   buildAutoDraft,
   alignSecondaryTeesFromWhite,
   alignSecondaryTees,
+  teeBoxSize,
+  resizeHoleTeeBoxes,
   buildTreeBrushPolygon,
   createUprightGpsViewTransform,
   createEngineTransform,
@@ -144,7 +148,7 @@ test("secondary tee boxes align from the white tee shape and scorecard yardages"
   ];
   hole.features = [{ id: "white", type: "tee_white", label: "White tee", points: whitePoints }];
 
-  const result = alignSecondaryTeesFromWhite(hole);
+  const result = alignSecondaryTees(hole, { generateBoxes: true });
 
   assert.deepEqual(result.aligned, ["blue", "forward"]);
   assert.ok(Math.abs(distanceMeters(hole.markers.white_tee, hole.markers.blue_tee) - 20 * .9144) < .05);
@@ -478,17 +482,17 @@ test("game preview frames tee to green instead of distant water", () => {
   assert.ok(Math.abs((bounds.minX + bounds.maxX) / 2) < 100);
 });
 
-test("par-three export and preview contain no fairway or synthetic approach", () => {
+test("par-three export and preview preserve mapped fairway without synthetic approach", () => {
   const project = mappedProject();
   project.holes["1"].par = 3;
   const gameHole = buildGameHoleJson(project, 1);
   const preview = renderGameMapPreview(gameHole);
 
-  assert.equal(gameHole.geometries.fairway_segments.length, 0);
+  assert.equal(gameHole.geometries.fairway_segments.length, 1);
   assert.equal(gameHole.geometries.tee_boxes.length, 3);
   assert.match(preview, /class="preview-tee"/);
   assert.doesNotMatch(preview, /preview-par-three-approach/);
-  assert.doesNotMatch(preview, /class="preview-fairway"/);
+  assert.match(preview, /class="preview-fairway"/);
 });
 
 test("local-image holes record their calibration source without embedding the image", () => {
@@ -662,20 +666,22 @@ test("auto draft builds editable playing surfaces from tee, route, and pin", () 
   assert.ok(draft.markers.forward_tee);
   assert.deepEqual(
     new Set(draft.features.map(feature => feature.type)),
-    new Set(["rough", "fairway", "green", "tee_blue", "tee_white", "tee_forward"])
+    new Set(["rough", "fairway", "green"])
   );
   assert.ok(draft.features.every(feature => feature.source === "auto_draft"));
   assert.ok(draft.features.every(feature => feature.points.length >= 4));
 });
 
-test("auto draft does not create fairway geometry for a par three", () => {
+test("auto draft preserves manual par-three fairways without inventing one", () => {
   const project = mappedProject();
   const hole = project.holes["1"];
   hole.par = 3;
 
   const draft = buildAutoDraft(hole);
 
-  assert.equal(draft.features.some(feature => feature.type === "fairway"), false);
+  assert.deepEqual(draft.features.filter(feature => feature.type === "fairway"), hole.features.filter(feature => feature.type === "fairway"));
+  hole.features = hole.features.filter(feature => feature.type !== "fairway");
+  assert.equal(buildAutoDraft(hole).features.some(feature => feature.type === "fairway"), false);
 });
 
 test("auto draft preserves hand-drawn surfaces instead of duplicating them", () => {
@@ -763,7 +769,7 @@ test("blue start generates white and forward tees, survives saving, and follows 
   hole.yardages = { blue: 420, white: 400, forward: 340 };
   hole.markers.blue_tee = ORIGIN;
   hole.markers.pin = offsetGpsPoint(ORIGIN, 120, 360);
-  assert.deepEqual(alignSecondaryTees(hole).aligned, ["white", "forward"]);
+  assert.deepEqual(alignSecondaryTees(hole, { generateBoxes: true }).aligned, ["white", "forward"]);
   const blueBox = hole.features.find(feature => feature.type === "tee_blue");
   assert.ok(blueBox);
   for (const [tee, yards] of [["white", 20], ["forward", 80]]) {
@@ -771,7 +777,7 @@ test("blue start generates white and forward tees, survives saving, and follows 
     const delta = gpsDeltaMeters(ORIGIN, hole.markers[`${tee}_tee`]);
     assert.ok(delta.east > 0 && delta.north > 0);
     const box = hole.features.find(feature => feature.type === `tee_${tee}`);
-    assert.ok(Math.abs(distanceMeters(box.points[0], box.points[1]) - distanceMeters(blueBox.points[0], blueBox.points[1])) < .01);
+    assert.ok(Math.abs(distanceMeters(box.points[0], box.points[1]) - teeBoxSize(hole.yardages[tee]).length) < .01);
   }
   const restored = parseMapperProject(JSON.stringify(project)).holes["1"];
   assert.equal(restored.tee_alignment_anchor, "blue");
@@ -802,17 +808,17 @@ test("blue alignment waits for pin and valid scorecard yardages", () => {
 });
 
 
-test("preview allows a tee outside its box while export retains containment checks", () => {
+test("tee markers outside optional artwork are valid in preview and export", () => {
   const project = mappedProject();
   const hole = project.holes["1"];
   hole.markers.forward_tee = offsetGpsPoint(ORIGIN, 200, 50);
   const before = JSON.stringify(hole);
   const preview = buildGameHolePreview(project, 1);
-  assert.equal(preview.hole_metadata.mapper_preview.draft, true);
-  assert.ok(preview.hole_metadata.mapper_preview.remaining_items.includes("place the forward tee marker inside its tee box"));
+  assert.equal(preview.hole_metadata.mapper_preview.draft, false);
+  assert.ok(!preview.hole_metadata.mapper_preview.remaining_items.includes("place the forward tee marker inside its tee box"));
   assert.match(renderGameMapPreview(preview), /<svg/);
   assert.equal(JSON.stringify(hole), before);
-  assert.throws(() => buildGameHoleJson(project, 1), /place the forward tee marker inside its tee box/);
+  assert.doesNotThrow(() => buildGameHoleJson(project, 1));
 });
 
 test("creating either start box centers its marker and makes an imported hole previewable", () => {
@@ -828,7 +834,7 @@ test("creating either start box centers its marker and makes an imported hole pr
     const result = placeStartTeeBox(hole, box, center);
     assert.equal(result.aligned.length, 2);
     assert.deepEqual(hole.markers[`${anchor}_tee`], center);
-    assert.equal(hole.features.filter(feature => feature.type.startsWith("tee_")).length, 3);
+    assert.equal(hole.features.filter(feature => feature.type.startsWith("tee_")).length, 1);
     assert.equal(holeMappingStatus(project, 1).ready, true);
     assert.match(renderGameMapPreview(buildGameHolePreview(project, 1)), /<svg/);
     assert.doesNotThrow(() => buildGameHoleJson(project, 1));
@@ -877,7 +883,7 @@ test("operator can assign the imported start to any tee and preview the ball the
   }
 });
 
-test("choosing blue on an OSM start without boxes generates all tee boxes", () => {
+test("choosing blue on an OSM start without boxes generates tee markers without boxes", () => {
   const project = mappedProject();
   const hole = project.holes["1"];
   hole.features = hole.features.filter(feature => !feature.type.startsWith("tee_"));
@@ -885,7 +891,7 @@ test("choosing blue on an OSM start without boxes generates all tee boxes", () =
   hole.markers.forward_tee = null;
   assert.deepEqual(selectStartTee(hole, "blue").aligned, ["white", "forward"]);
   assert.deepEqual(hole.markers.blue_tee, ORIGIN);
-  assert.equal(hole.features.filter(feature => feature.type.startsWith("tee_")).length, 3);
+  assert.equal(hole.features.filter(feature => feature.type.startsWith("tee_")).length, 0);
   assert.equal(holeMappingStatus(project, 1).ready, true);
 });
 
@@ -896,10 +902,10 @@ test("preview accepts the reported missing secondary tees, white box, and rough"
   hole.markers.blue_tee = null;
   hole.markers.forward_tee = null;
   hole.features = hole.features.filter(feature => !["tee_white", "tee_forward", "rough"].includes(feature.type));
-  assert.throws(() => buildGameHoleJson(project, 1), /mark the blue tee, add a white tee box, mark the forward tee, add a forward tee box/);
+  assert.throws(() => buildGameHoleJson(project, 1), /mark the blue tee, mark the forward tee/);
   const preview = buildGameHolePreview(project, 1);
   assert.match(renderGameMapPreview(preview), /<svg/);
-  assert.equal(preview.hole_metadata.mapper_preview.remaining_items.length, 4);
+  assert.equal(preview.hole_metadata.mapper_preview.remaining_items.length, 0);
 });
 
 
@@ -920,7 +926,7 @@ test("legacy OSM defaults become blue while pin and explicit tee choices remain"
 });
 
 
-test("preview prepares missing white and forward boxes from a blue start and scorecard", () => {
+test("preview prepares missing white and forward markers from a blue start and scorecard", () => {
   const project = mappedProject();
   const hole = project.holes["1"];
   hole.tee_alignment_anchor = "blue";
@@ -930,14 +936,14 @@ test("preview prepares missing white and forward boxes from a blue start and sco
   hole.features = hole.features.filter(feature => !feature.type.startsWith("tee_"));
   const original = JSON.stringify(hole);
   const preview = buildGameHolePreview(project, 1);
-  assert.equal(preview.geometries.tee_boxes.length, 3);
+  assert.equal(preview.geometries.tee_boxes.length, 0);
   assert.equal(preview.hole_metadata.default_start_tee, "blue");
   assert.equal(JSON.stringify(hole), original);
   const prepared = prepareHoleForPreview(hole);
   assert.ok(prepared.markers.white_tee);
   assert.ok(prepared.markers.forward_tee);
   assert.deepEqual(prepared.markers.blue_tee, ORIGIN);
-  assert.equal(prepared.features.filter(feature => feature.type.startsWith("tee_")).length, 3);
+  assert.equal(prepared.features.filter(feature => feature.type.startsWith("tee_")).length, 0);
   assert.deepEqual(prepareHoleForPreview(prepared), prepared);
 });
 
@@ -1029,4 +1035,135 @@ test("Mapper route starts at the selected blue tee without requiring a white tee
   assert.deepEqual(mapperStartTeePoint(hole), hole.markers.forward_tee);
   hole.markers = {};
   assert.equal(mapperStartTeePoint(hole), null);
+});
+
+
+test("standalone nine-hole project validates and round-trips without adding holes", () => {
+  const project = createMapperProject({ courseName: "Nine Links", courseStructure: MAPPER_COURSE_STRUCTURES.NINE });
+  assert.equal(mapperHoleCount(project), 9);
+  assert.equal(Object.keys(project.holes).length, 9);
+  validateMapperProject(project);
+  assert.equal(mapperHoleCount(parseMapperProject(JSON.stringify(project))), 9);
+  assert.equal(buildScorecardCsv(project).trim().split("\n").length, 10);
+});
+
+test("switching to nine holes preserves back-nine work and exports only the active nine", () => {
+  const project = mappedProject();
+  const template = structuredClone(project.holes["1"]);
+  for (let i = 1; i <= 9; i++) project.holes[String(i)] = { ...structuredClone(template), hole_number: i, handicap: i };
+  project.holes["10"].par = 5;
+  configureMapperCourseStructure(project, MAPPER_COURSE_STRUCTURES.NINE);
+  assert.equal(project.holes["10"].par, 5);
+  const [payload] = buildGameCoursePackages(project);
+  assert.equal(payload.hole_count, 9);
+  assert.deepEqual(Object.keys(payload.holes), Array.from({ length: 9 }, (_, i) => String(i + 1)));
+  assert.deepEqual(payload.incomplete_holes, {});
+  assert.equal(payload.scorecard_csv.trim().split("\n").length, 10);
+  configureMapperCourseStructure(project, MAPPER_COURSE_STRUCTURES.STANDARD);
+  assert.equal(mapperHoleCount(project), 18);
+  assert.equal(project.holes["10"].par, 5);
+});
+
+
+test("export selects the green containing the pin when another green comes first", () => {
+  const project = mappedProject();
+  const before = buildGameHoleJson(project, 1);
+  const hole = project.holes["1"];
+  const green = hole.features.find(feature => feature.type === "green");
+  const other = structuredClone(green);
+  other.id = "neighbor-green";
+  other.points = other.points.map(point => ({...point, lat: point.lat + .01, lng: point.lng + .01}));
+  hole.features.unshift(other);
+  assert.equal(holeMappingStatus(project, 1).ready, true);
+  assert.deepEqual(buildGameHoleJson(project, 1).geometries.green_complex.polygon, before.geometries.green_complex.polygon);
+});
+
+
+test("manual GPS override applies only to one imported hole and requires anchors for export", () => {
+  const project = mappedProject();
+  project.external_course_source = { provider_name: "openstreetmap" };
+  project.imagery_source = "OpenStreetMap geometry";
+  const hole = project.holes["1"];
+  hole.geometry_reference = { coordinate_system: "WGS84", georeferenced: true };
+  hole.gps_alignment_mode = "manual";
+  assert.equal(hasDeterministicWgs84Geometry(hole, project), false);
+  assert.equal(hasDeterministicWgs84Geometry(project.holes["2"], project), true);
+  delete hole.gps_control_points;
+  assert.throws(() => buildGameHoleJson(project, 1), /three Google Earth/);
+  const tee = { lat: 40.31912, lng: -74.61984 };
+  hole.gps_control_points = { white_tee: tee, green_center: offsetGpsPoint(tee, 25, 360),
+    bunker_center: offsetGpsPoint(tee, 43, 350), bunker_feature_id: "bunker" };
+  assert.equal(buildGameHoleJson(project, 1).hole_metadata.gps_calibration.version, "gps-affine-v1");
+  const restored = parseMapperProject(JSON.stringify(project));
+  assert.equal(restored.holes["1"].gps_alignment_mode, "manual");
+  hole.gps_alignment_mode = "default";
+  assert.equal(buildHoleGpsCalibration(hole, { project }).version, "gps-wgs84-derived-v1");
+});
+
+
+test("white start marker creates anchor and secondary boxes without an existing white polygon", () => {
+  const project = mappedProject();
+  const hole = project.holes["1"];
+  hole.tee_alignment_anchor = "white";
+  hole.features = hole.features.filter(f => !f.type.startsWith("tee_"));
+  hole.yardages = { blue: 420, white: 390, forward: 340 };
+  const result = alignSecondaryTees(hole, { createAnchorBox: true, generateBoxes: true });
+  assert.deepEqual(result.aligned, ["blue", "forward"]);
+  for (const tee of ["blue", "white", "forward"]) {
+    assert.equal(hole.features.filter(f => f.type === `tee_${tee}`).length, 1);
+    assert.ok(hole.markers[`${tee}_tee`]);
+  }
+  alignSecondaryTees(hole, { createAnchorBox: true, generateBoxes: true });
+  assert.equal(hole.features.filter(f=>f.type.startsWith("tee_")).length,3);
+});
+
+test("tee box sizing follows yardage, preserves aspect ratio and is bounded", () => {
+  assert.ok(teeBoxSize(140).length < teeBoxSize(350).length);
+  assert.ok(teeBoxSize(350).length < teeBoxSize(500).length);
+  assert.equal(teeBoxSize(900).length,14);
+  assert.equal(teeBoxSize(50).length,4);
+  const project=mappedProject(),hole=project.holes["1"];
+  hole.yardages={blue:170,white:150,forward:120};
+  assert.equal(resizeHoleTeeBoxes(hole).length,3);
+  for (const tee of ["blue","white","forward"]) {
+    const f=hole.features.find(f=>f.type===`tee_${tee}`);
+    assert.ok(f.points.every(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lng)));
+    assert.ok(distanceMeters(f.points[0],f.points[1])<15);
+  }
+});
+
+test("marker-only tees are ready and export without tee surfaces", () => {
+  const project=mappedProject(),hole=project.holes["1"];
+  hole.features=hole.features.filter(f=>!f.type.startsWith("tee_"));
+  hole.tee_alignment_anchor="white";
+  assert.equal(alignSecondaryTees(hole).aligned.length,2);
+  assert.equal(hole.features.filter(f=>f.type.startsWith("tee_")).length,0);
+  assert.equal(holeMappingStatus(project,1).ready,true);
+  assert.equal(buildGameHoleJson(project,1).geometries.tee_boxes.length,0);
+});
+
+
+test("course start tee applies to every hole and preserves mapped tee locations", () => {
+  const project = createMapperProject({ courseName: "White and Forward" });
+  project.holes["1"].markers.white_tee = { lat: 25, lng: 121 };
+  project.holes["1"].markers.blue_tee = { lat: 25.001, lng: 121 };
+  project.holes["1"].tee_alignment_anchor = "blue";
+  selectCourseStartTee(project, "white");
+  assert.ok(Object.values(project.holes).every(hole => hole.tee_alignment_anchor === "white"));
+  assert.deepEqual(project.holes["1"].markers.white_tee, { lat: 25, lng: 121 });
+  assert.deepEqual(project.holes["1"].markers.blue_tee, { lat: 25.001, lng: 121 });
+  selectCourseStartTee(project, "forward");
+  assert.ok(Object.values(project.holes).every(hole => hole.tee_alignment_anchor === "forward"));
+  assert.equal(parseMapperProject(JSON.stringify(project)).holes["18"].tee_alignment_anchor, "forward");
+});
+
+
+test("par-3 fairways are optional but mapped fairways export", () => {
+  const project = mappedProject();
+  const hole = project.holes["1"];
+  hole.par = 3;
+  assert.ok(buildGameHoleJson(project, 1).geometries.fairway_segments.length > 0);
+  hole.features = hole.features.filter(feature => feature.type !== "fairway");
+  assert.equal(holeMappingStatus(project, 1).ready, true);
+  assert.deepEqual(buildGameHoleJson(project, 1).geometries.fairway_segments, []);
 });

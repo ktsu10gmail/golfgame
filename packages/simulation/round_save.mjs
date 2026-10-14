@@ -72,7 +72,7 @@ export function validateRoundSave(save) {
   if (save.course_id !== save.round_state.course_id) {
     throw new Error("save file course does not match its round");
   }
-  assertIndex(save.current_hole_index, "current_hole_index", 17);
+  assertIndex(save.current_hole_index, "current_hole_index", save.round_state.holes.length - 1);
   assertIndex(save.pin_index, "pin_index", 20);
   validateProfile(save.player_profile);
   validateRoundSummary(save.round_summary);

@@ -447,3 +447,62 @@ export function buildPolygonMask(width, height, polygons) {
   });
   return mask;
 }
+
+/** Four-connected color selection; trace concavities rather than a convex hull. */
+export function detectMagicWandRegion({ data, width, height, seedX, seedY, tolerance = 30 }) {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || !data || data.length < width * height * 4) throw new Error('Invalid image pixels');
+  const x = Math.round(seedX), y = Math.round(seedY);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= width || y >= height) throw new Error('Click inside the local image');
+  if (!Number.isFinite(tolerance) || tolerance < 0 || tolerance > 100) throw new Error('Tolerance must be between 0 and 100');
+  const start = y * width + x, offset = start * 4;
+  if (data[offset + 3] < 128) throw new Error('Click an opaque part of the image');
+  const mask = new Uint8Array(width * height), visited = new Uint8Array(width * height);
+  const queue = [start]; visited[start] = 1;
+  const threshold = (tolerance * 2.55) ** 2 * 3;
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const index = queue[cursor]; mask[index] = 1;
+    if (queue.length > width * height * .65) throw new Error('Selection spread across most of the image; reduce tolerance');
+    const px = index % width, py = Math.floor(index / width);
+    const neighbors = [];
+    if (px) neighbors.push(index - 1); if (px + 1 < width) neighbors.push(index + 1);
+    if (py) neighbors.push(index - width); if (py + 1 < height) neighbors.push(index + width);
+    for (const next of neighbors) {
+      if (visited[next]) continue; visited[next] = 1;
+      const n = next * 4;
+      const distance = [0,1,2].reduce((sum, channel) => sum + (data[n + channel] - data[offset + channel]) ** 2, 0);
+      if (data[n + 3] >= 128 && distance <= threshold) queue.push(next);
+    }
+  }
+  if (queue.length < 10) throw new Error('Selection is too small; increase tolerance or click farther inside');
+  const points = tracedMaskBoundary(mask, width, height);
+  if (points.length < 3) throw new Error('No usable boundary found');
+  if (points.length > 2000) throw new Error('Boundary is too detailed; adjust tolerance or use a simpler image');
+  return { points, pixels: queue.length };
+}
+
+/** Smooth a closed pixel contour at uniform spacing so long edges keep their shape. */
+export function smoothWandOutline(points, strength = 1) {
+  if (!Array.isArray(points) || points.length < 3) throw new Error('A closed outline needs at least three points');
+  if (![0, 1, 2].includes(strength)) throw new Error('Invalid smoothing strength');
+  if (!strength) return points.map(point => ({ ...point }));
+  const lengths = points.map((p, i) => Math.hypot(points[(i + 1) % points.length].x - p.x, points[(i + 1) % points.length].y - p.y));
+  const perimeter = lengths.reduce((sum, length) => sum + length, 0);
+  if (!Number.isFinite(perimeter) || perimeter === 0) throw new Error('Invalid outline');
+  const count = Math.max(12, Math.min(240, Math.ceil(perimeter / 1.5)));
+  let edge = 0, edgeStart = 0;
+  let result = Array.from({ length: count }, (_, i) => {
+    const distance = i * perimeter / count;
+    while (edge < lengths.length - 1 && edgeStart + lengths[edge] < distance) edgeStart += lengths[edge++];
+    const a = points[edge], b = points[(edge + 1) % points.length];
+    const t = lengths[edge] ? (distance - edgeStart) / lengths[edge] : 0;
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+  });
+  for (let iteration = 0; iteration < strength; iteration++) {
+    result = result.flatMap((a, i) => {
+      const b = result[(i + 1) % result.length];
+      return [{ x: .75 * a.x + .25 * b.x, y: .75 * a.y + .25 * b.y },
+        { x: .25 * a.x + .75 * b.x, y: .25 * a.y + .75 * b.y }];
+    });
+  }
+  return result;
+}

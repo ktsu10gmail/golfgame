@@ -67,7 +67,7 @@ def _token_hash(token: str) -> str:
 
 def _round_is_complete(round_save: dict[str, Any]) -> bool:
     holes = round_save.get("round_state", {}).get("holes")
-    return bool(isinstance(holes, list) and len(holes) == 18 and all(
+    return bool(isinstance(holes, list) and len(holes) in (9, 18) and all(
         isinstance(hole, dict) and isinstance(hole.get("score"), int)
         for hole in holes
     ))
@@ -129,10 +129,10 @@ def _validate_round_save(round_save: Any) -> dict[str, Any]:
     if not isinstance(round_state, dict) or round_state.get("course_id") != course_id:
         raise AccountError("round state does not match its course")
     holes = round_state.get("holes")
-    if not isinstance(holes, list) or len(holes) != 18:
-        raise AccountError("round state must contain 18 holes")
+    if not isinstance(holes, list) or len(holes) not in (9, 18):
+        raise AccountError("round state must contain 9 or 18 holes")
     current_hole = round_save.get("current_hole_index")
-    if not isinstance(current_hole, int) or not 0 <= current_hole <= 17:
+    if not isinstance(current_hole, int) or not 0 <= current_hole < len(holes):
         raise AccountError("current hole is invalid")
     return round_save
 
@@ -146,13 +146,13 @@ def _validated_round_summary(round_save: dict[str, Any]) -> dict[str, Any]:
     holes = round_save["round_state"]["holes"]
     completed_scores = [hole.get("score") for hole in holes if isinstance(hole.get("score"), int)]
     total_strokes = sum(completed_scores)
-    complete = len(completed_scores) == 18
+    complete = len(completed_scores) == len(holes)
     course_name = " ".join(str(summary.get("course_name") or round_save["course_id"]).strip().split())[:100]
     tee = " ".join(str(round_save["round_state"].get("tee") or summary.get("tee") or "White").strip().split())[:30]
     total_par = summary.get("total_par")
     if total_par is not None and (isinstance(total_par, bool) or not isinstance(total_par, int) or not 0 <= total_par <= 100):
         raise AccountError("round total par is invalid")
-    if complete and total_par is not None and total_par < 45:
+    if complete and total_par is not None and total_par < len(holes) * 2.5:
         raise AccountError("completed round total par is invalid")
     strategy_score = summary.get("strategy_score")
     execution_score = summary.get("execution_score")
@@ -286,9 +286,11 @@ def _validate_gps_round(gps_round: Any) -> dict[str, Any]:
     started_at = gps_round.get("started_at")
     if not isinstance(started_at, str) or not 10 <= len(started_at) <= 50:
         raise AccountError("GPS round start time is invalid")
+    if "ended_early" in gps_round and not isinstance(gps_round["ended_early"], bool):
+        raise AccountError("GPS round early-end state is invalid")
     holes = gps_round.get("holes")
-    if not isinstance(holes, list) or len(holes) != 18:
-        raise AccountError("GPS round must contain 18 holes")
+    if not isinstance(holes, list) or len(holes) not in (9, 18):
+        raise AccountError("GPS round must contain 9 or 18 holes")
     for index, hole in enumerate(holes):
         if not isinstance(hole, dict) or hole.get("hole_number") != index + 1:
             raise AccountError("GPS round contains an invalid hole")
@@ -1043,7 +1045,7 @@ class PlayerStore:
     def save_gps_round(self, player_id: int, gps_round: Any) -> dict[str, Any]:
         validated = _validate_gps_round(gps_round)
         revision = validated["revision"]
-        complete = all(hole["finished"] for hole in validated["holes"])
+        complete = validated.get("ended_early") is True or all(hole["finished"] for hole in validated["holes"])
         synced_at = _iso(_utc_now())
         with self._connect() as database:
             existing = database.execute(
@@ -1127,6 +1129,7 @@ class PlayerStore:
         for row in rows:
             item = dict(row)
             gps_round = json.loads(item.pop("round_json"))
+            item["hole_count"] = len(gps_round["holes"])
             item["holes_recorded"], item["holes_completed"] = _gps_round_progress(gps_round)
             history.append(item)
         return history
@@ -1155,7 +1158,8 @@ class PlayerStore:
             rows = database.execute("""
                 SELECT id, course_id, course_name, tee, completed_at,
                        total_strokes, total_par, score_to_par, strategy_score,
-                       execution_score, scored_shots
+                       execution_score, scored_shots,
+                       json_array_length(round_json, '$.round_state.holes') AS hole_count
                 FROM completed_rounds
                 WHERE player_id = ?
                 ORDER BY completed_at DESC, id DESC

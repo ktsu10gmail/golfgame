@@ -11,6 +11,7 @@ function playingLinePoints(hole) {
 function allGeometryPoints(hole) {
   const geometries = hole.geometries;
   return [
+    ...(Array.isArray(hole.hole_metadata?.default_start_point) ? [hole.hole_metadata.default_start_point] : []),
     ...(geometries.tee_boxes || []).flatMap(item => item.polygon || []),
     ...(geometries.fairway_segments || []).flatMap(item => item.polygon || []),
     ...(geometries.rough_zones || []).flatMap(item => item.polygon || []),
@@ -25,6 +26,8 @@ function allGeometryPoints(hole) {
 
 export function gamePreviewBounds(hole) {
   const playingLine = playingLinePoints(hole);
+  const start = hole.hole_metadata?.default_start_point;
+  if (Array.isArray(start) && start.length === 2 && start.every(Number.isFinite)) playingLine.unshift(start);
   if (playingLine.length >= 2) {
     return uprightHoleCameraBounds(playingLine, FRAME);
   }

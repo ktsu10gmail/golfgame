@@ -477,3 +477,15 @@ test("GPS club recommendation adjusts expected carry for the lie", () => {
   assert.equal(match.power, 100);
   assert.ok(Math.abs(match.expectedYards - 127.8) < .01);
 });
+
+
+test("ending early keeps unplayed holes unfinished and scores unchanged", () => {
+  const round = createGpsRound("test-course");
+  round.holes[0].finished = true;
+  const score = gpsRoundScore(round);
+  assert.equal(gpsRoundComplete(round), false);
+  round.ended_early = true;
+  assert.equal(gpsRoundComplete(round), true);
+  assert.equal(round.holes.filter(h => h.finished).length, 1);
+  assert.equal(gpsRoundScore(round), score);
+});

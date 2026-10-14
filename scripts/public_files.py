@@ -21,6 +21,8 @@ packages/challenge/challenge_generator.mjs
 packages/challenge/challenge_hole_loader.mjs
 packages/challenge/challenge_state.mjs
 packages/editor/course_mapper.mjs
+packages/editor/geometry_assist.mjs
+packages/editor/batch_install.mjs
 packages/editor/game_map_preview.mjs
 packages/editor/illustrated_hole_prototype.mjs
 packages/editor/hazard_detection.mjs
@@ -32,6 +34,7 @@ packages/gps/browser_gps_replay.mjs
 packages/presentation/gm_conversation.mjs
 packages/presentation/in_play_presentation_policy.mjs
 packages/presentation/post_round_export.mjs
+packages/presentation/post_round_coaching.mjs
 packages/presentation/post_round_report.mjs
 packages/replay/browser_replay_loader.mjs
 packages/simulation/browser_adjustment_reward.mjs
@@ -62,6 +65,7 @@ packages/simulation/competition.mjs
 packages/simulation/fairway_first_cut.mjs
 packages/simulation/round_save.mjs
 packages/simulation/round_state.mjs
+packages/simulation/tee_selection.mjs
 """.split())
 
 # Newly installed courses work without exposing other data/runtime files.

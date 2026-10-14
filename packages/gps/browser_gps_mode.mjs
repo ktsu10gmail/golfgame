@@ -100,7 +100,7 @@ export function gpsRoundScore(round) {
 
 export function gpsRoundComplete(round) {
   return Array.isArray(round?.holes) && round.holes.length > 0
-    && round.holes.every(holeState => holeState?.finished === true);
+    && (round.ended_early === true || round.holes.every(holeState => holeState?.finished === true));
 }
 
 export function completeGpsHole(holeState) {

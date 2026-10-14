@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import math
 from dataclasses import dataclass
@@ -302,12 +303,15 @@ def adapt_hole_payload(
     available = {region.surface for region in regions}
     # Unmapped ground resolves to the model's default ROUGH surface.
     # Rough polygons are optional; explicit tee/green boundaries remain required.
-    for required in (SurfaceType.TEE, SurfaceType.GREEN):
+    marker_only = payload.get("hole_metadata", {}).get("tee_surface_mode") == "markers-only"
+    if marker_only:
+        _point(payload["hole_metadata"].get("default_start_point"), source, "default_start_point")
+    for required in ((SurfaceType.GREEN,) if marker_only else (SurfaceType.TEE, SurfaceType.GREEN)):
         if required not in available:
             raise _fail(source, f"required {required.value} surface is missing")
     tee = centerline[0]
     pin = centerline[-1]
-    if not any(_point_in_or_on_polygon(tee, region.polygon) for region in regions if region.surface is SurfaceType.TEE):
+    if not marker_only and not any(_point_in_or_on_polygon(tee, region.polygon) for region in regions if region.surface is SurfaceType.TEE):
         raise _fail(source, "centerline start is outside every tee polygon")
     if not any(_point_in_or_on_polygon(pin, region.polygon) for region in regions if region.surface is SurfaceType.GREEN):
         raise _fail(source, "centerline finish is outside the green polygon")
@@ -338,11 +342,19 @@ def load_hole(path: Path, *, course_id: str | None = None) -> AdaptedHole:
 
 
 def load_course(course_directory: Path, *, course_id: str | None = None) -> tuple[AdaptedHole, ...]:
-    """Load and validate a complete 18-hole course directory."""
+    """Load and validate a complete 9- or 18-hole course directory."""
     identifier = course_id or course_directory.name
-    holes = tuple(load_hole(course_directory / f"hole{number}.json", course_id=identifier) for number in range(1, 19))
-    if tuple(hole.hole_number for hole in holes) != tuple(range(1, 19)):
-        raise _fail(str(course_directory), "hole files do not contain hole numbers 1 through 18")
+    count = 18
+    scorecard = course_directory / "scorecard.csv"
+    if scorecard.exists():
+        with scorecard.open(encoding="utf-8-sig", newline="") as stream:
+            rows = [row for row in csv.DictReader(stream) if str(row.get("Hole", "")).isdigit()]
+        count = len(rows)
+        if count not in (9, 18) or [int(row["Hole"]) for row in rows] != list(range(1, count + 1)):
+            raise _fail(str(scorecard), "scorecard must contain 9 or 18 holes")
+    holes = tuple(load_hole(course_directory / f"hole{number}.json", course_id=identifier) for number in range(1, count + 1))
+    if tuple(hole.hole_number for hole in holes) != tuple(range(1, count + 1)):
+        raise _fail(str(course_directory), f"hole files do not contain hole numbers 1 through {count}")
     if len({hole.course_name for hole in holes}) != 1:
         raise _fail(str(course_directory), "hole files disagree on course name")
     return holes

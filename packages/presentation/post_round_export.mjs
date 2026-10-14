@@ -1,3 +1,4 @@
+import { coachingReportMarkdown } from "./post_round_coaching.mjs?v=20261014-live4";
 export const POST_ROUND_REPORT_VERSION = "golf-post-round-report-v1";
 
 function cleanText(value) {
@@ -46,6 +47,7 @@ export function postRoundReportFilename(report, extension) {
 }
 
 function reportTextLines(report) {
+  if (report?.coaching_review) return coachingReportMarkdown(report).split("\n").map(line => line.replace(/^#{1,3} /, "").replaceAll("**", ""));
   if (report?.schema_version === "2.0" && report?.round && report?.summary) {
     const score = value => value === 0 ? "E" : value > 0 ? `+${value}` : String(value ?? "-");
     const ungradedDecisions = report.summary.ungraded_decisions ?? Math.max(0, report.summary.scored_decisions - report.summary.graded_decisions);

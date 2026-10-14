@@ -245,6 +245,20 @@ class PlayerStoreTests(unittest.TestCase):
         with self.assertRaises(AccountError):
             self.store.save_challenge(stranger["id"], challenge)
 
+    def test_early_end_archives_partial_gps_round_without_completing_holes(self):
+        player = self.store.create_player("Early Finish", "1234")
+        saved_round = gps_round()
+        saved_round["ended_early"] = True
+        result = self.store.save_gps_round(player["id"], saved_round)
+        self.assertTrue(result["complete"])
+        self.assertIsNone(self.store.active_gps_round(player["id"], "warrenbrook"))
+        stored = self.store.gps_round(player["id"], saved_round["round_id"])
+        self.assertEqual(stored["holes"], saved_round["holes"])
+        self.assertEqual(len(self.store.gps_round_history(player["id"])), 1)
+        saved_round["ended_early"] = "yes"
+        with self.assertRaises(AccountError):
+            self.store.save_gps_round(player["id"], saved_round)
+
     def test_gps_round_sync_is_scoped_to_player_and_course(self):
         player = self.store.create_player("GPS Golfer", "1234")
         another = self.store.create_player("Other GPS Golfer", "1234")
@@ -325,11 +339,29 @@ class PlayerStoreTests(unittest.TestCase):
         self.assertEqual(driver["estimated_carry_yards"], 200)
         self.assertEqual(driver["rounds"], 3)
 
+    def test_nine_hole_round_is_saved_as_complete(self):
+        player = self.store.create_player("Nine Hole Golfer", "1234")
+        saved = round_save(complete=True, hole=8)
+        saved["round_state"]["holes"] = saved["round_state"]["holes"][:9]
+        saved["round_summary"]["total_par"] = 36
+        self.store.save_round(player["id"], saved)
+        history = self.store.completed_round_history(player["id"])
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["total_strokes"], 36)
+        self.assertEqual(history[0]["hole_count"], 9)
+        invalid = dict(saved, current_hole_index=9)
+        with self.assertRaisesRegex(AccountError, "current hole"):
+            self.store.save_round(player["id"], invalid)
+        gps = gps_round(complete=True)
+        gps["holes"] = gps["holes"][:9]
+        self.store.save_gps_round(player["id"], gps)
+        self.assertEqual(self.store.gps_round_history(player["id"])[0]["holes_completed"], 9)
+
     def test_invalid_gps_round_is_rejected(self):
         player = self.store.create_player("Invalid GPS Golfer", "1234")
         invalid = gps_round()
-        invalid["holes"] = invalid["holes"][:9]
-        with self.assertRaisesRegex(AccountError, "18 holes"):
+        invalid["holes"] = invalid["holes"][:8]
+        with self.assertRaisesRegex(AccountError, "9 or 18 holes"):
             self.store.save_gps_round(player["id"], invalid)
 
     def test_leaderboard_uses_each_players_best_management_round_and_stroke_tiebreak(self):

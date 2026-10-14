@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import csv
+import io
 import json
 import re
 import sys
@@ -36,7 +38,7 @@ def decoded_hole_images(payload: dict) -> dict[int, tuple[str, bytes]]:
         raise ValueError("Package hole_images must contain an object")
     decoded: dict[int, tuple[str, bytes]] = {}
     extensions = {"jpeg": "jpg", "png": "png", "webp": "webp"}
-    for hole_number in range(1, 19):
+    for hole_number in range(1, len(payload["holes"]) + 1):
         source = images.get(str(hole_number))
         if source is None:
             continue
@@ -54,7 +56,7 @@ def decoded_hole_images(payload: dict) -> dict[int, tuple[str, bytes]]:
 
 def validate_course_holes(payload: dict) -> None:
     course_id = payload["course_id"]
-    for hole_number in range(1, 19):
+    for hole_number in range(1, len(payload["holes"]) + 1):
         try:
             adapted = adapt_hole_payload(
                 payload["holes"][str(hole_number)],
@@ -91,14 +93,16 @@ def validate_package(payload: dict) -> dict:
     holes = payload.get("holes")
     if not isinstance(holes, dict):
         raise ValueError("Package holes are missing")
-    missing = [number for number in range(1, 19) if str(number) not in holes]
-    if missing:
-        raise ValueError(
-            "A game import requires all 18 holes; missing "
-            + ", ".join(str(number) for number in missing)
-        )
+    count = payload.get('hole_count', len(holes))
+    if isinstance(count, bool) or not isinstance(count, int) or count not in (9, 18):
+        raise ValueError('A game import requires 9 or 18 holes')
+    if set(holes) != {str(number) for number in range(1, count + 1)}:
+        raise ValueError(f'A game import requires all {count} holes with consecutive numbering')
     if not isinstance(payload.get("scorecard_csv"), str):
         raise ValueError("Package scorecard_csv is missing")
+    rows = list(csv.DictReader(io.StringIO(payload["scorecard_csv"])))
+    if [row.get("Hole") for row in rows] != [str(number) for number in range(1, count + 1)]:
+        raise ValueError("Package scorecard must match the consecutive course holes")
     production_context = payload.get("production_context")
     if production_context is not None:
         if not isinstance(production_context, dict):
@@ -125,7 +129,7 @@ def load_catalog() -> list[dict]:
 
 
 def install_package(payload: dict, *, force: bool) -> Path:
-    validate_course_holes(payload)
+    validate_package(payload)
     hole_images = decoded_hole_images(payload)
     course_id = payload["course_id"]
     destination = DATA_DIR / course_id
@@ -135,7 +139,7 @@ def install_package(payload: dict, *, force: bool) -> Path:
         )
     destination.mkdir(parents=True, exist_ok=True)
     (destination / "scorecard.csv").write_text(payload["scorecard_csv"], encoding="utf-8")
-    for hole_number in range(1, 19):
+    for hole_number in range(1, len(payload["holes"]) + 1):
         hole_path = destination / f"hole{hole_number}.json"
         hole_path.write_text(
             json.dumps(payload["holes"][str(hole_number)], indent=2) + "\n",
@@ -156,11 +160,17 @@ def install_package(payload: dict, *, force: bool) -> Path:
         "dataVersion": payload.get("exported_at", "mapped-v1"),
         "mapUpdatedAt": payload.get("exported_at", "mapped-v1"),
         "images": False,
-        "illustrations": len(hole_images) == 18,
+        "holeCount": len(payload["holes"]),
+        "illustrations": len(hole_images) == len(payload["holes"]),
         "illustrationPath": f"data/{course_id}/illustrations" if hole_images else "",
         "illustrationExtension": next(iter(hole_images.values()))[0] if hole_images else "jpg",
         "teeLabels": {"Blue": "Blue", "White": "White", "Red": "Forward"},
     }
+    location = payload.get("course_location")
+    if isinstance(location, dict):
+        for key in ('country', 'state', 'city'):
+            if isinstance(location.get(key), str):
+                entry[key] = location[key].strip()[:200]
     production_context = payload.get("production_context")
     if isinstance(production_context, dict):
         entry["directoryCourseId"] = production_context["directory_course_id"]

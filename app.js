@@ -1,3 +1,5 @@
+import { improvePostRoundReport, coachingReportHtml } from "./packages/presentation/post_round_coaching.mjs?v=20261014-live4";
+import { availableScorecardTees, selectedScorecardTee, originTeeYardage } from "./packages/simulation/tee_selection.mjs?v=20261011-1";
 import { renderIllustratedTreeLayer } from "./packages/editor/illustrated_hole_prototype.mjs?v=20261008-game-style1";
 import { withFairwayFirstCut } from "./packages/simulation/fairway_first_cut.mjs?v=20261007-1";
 import {
@@ -90,7 +92,7 @@ import { replaceDraftMessage } from "./packages/presentation/gm_conversation.mjs
 import {
   buildPostRoundPdf,
   postRoundReportFilename
-} from "./packages/presentation/post_round_export.mjs?v=20260927-1";
+} from "./packages/presentation/post_round_export.mjs?v=20261014-live4";
 import { buildAccessGuidance } from "./packages/accounts/browser_access_guidance.mjs?v=20260930-1";
 import {
   attachPostRoundNarrative,
@@ -173,26 +175,28 @@ import {
   replaceHoleEvents,
   resetRoundState,
   saveRoundState
-} from "./packages/simulation/round_state.mjs?v=20260804-2";
+} from "./packages/simulation/round_state.mjs?v=20261011-nine1";
 import {
   createRoundSave,
   parseRoundSave,
   roundSaveFilename
-} from "./packages/simulation/round_save.mjs?v=20260927-1";
+} from "./packages/simulation/round_save.mjs?v=20261011-nine1";
 import { createSupabaseAuth } from "./packages/accounts/browser_supabase_auth.mjs?v=20260930-2";
 import { personalizeCustomProfile, playerProfileName } from "./packages/accounts/browser_profile_naming.mjs?v=20260804-1";
 import {
   approachHoleCameraBounds,
   createUniformMapProjector,
   imageViewportForWorldBounds,
-  uprightHoleCameraBounds
-} from "./packages/editor/map_projection.mjs?v=20260903-1";
+  uprightHoleCameraBounds,
+  mobileFullHoleBounds
+} from "./packages/editor/map_projection.mjs?v=20261010-hole-fit2";
 import {
   coursePointToGps as gpsCoursePointToGps,
   correctGpsRecordedShot,
   createGpsShotEvidenceSnapshot,
   createGpsRoundId,
   createGpsRound,
+  firstUnfinishedGpsHoleIndex,
   deleteGpsRecordedShot,
   deleteLastGpsPutt,
   gpsDistanceYards,
@@ -210,7 +214,7 @@ import {
   normalizeGpsBallConditions,
   recommendGpsClub,
   undoGpsHoleAction
-} from "./packages/gps/browser_gps_mode.mjs?v=20260928-2";
+} from "./packages/gps/browser_gps_mode.mjs?v=20261010-finish-game1";
 import {
   gpsReplayShotEvidence,
   gpsReplaySteps
@@ -334,6 +338,11 @@ function courseIllustrationPath() {
   return null;
 }
 
+function courseOptionLabel(course) {
+  const location = [course.country, course.state, course.city].filter(Boolean).join(" · ");
+  return location ? `${course.name} — ${location}` : course.name;
+}
+
 async function loadMappedCourseCatalog() {
   try {
     const response = await fetch("data/mapped_courses.json", { cache: "no-store" });
@@ -353,6 +362,10 @@ async function loadMappedCourseCatalog() {
         id: mapped.id,
         name: mapped.name,
         shortName: mapped.shortName || mapped.name,
+        holeCount: mapped.holeCount === 9 ? 9 : 18,
+        country: mapped.country || "",
+        state: mapped.state || "",
+        city: mapped.city || "",
         dataPath: mapped.dataPath,
         imagePath: mapped.imagePath || "",
         dataVersion: mapped.dataVersion || "mapped-v1",
@@ -371,7 +384,7 @@ async function loadMappedCourseCatalog() {
       };
     }
     $("#course-select").innerHTML = visibleCourses()
-      .map(course => `<option value="${course.id}">${escapeHtml(course.name)}</option>`)
+      .map(course => `<option value="${course.id}">${escapeHtml(courseOptionLabel(course))}</option>`)
       .join("");
   } catch (error) {
     console.warn("Mapped course catalog could not be loaded.", error);
@@ -574,6 +587,8 @@ let targetPointerId = null;
 let targetDragStart = null;
 let suppressMapClickUntil = 0;
 let gpsRound = null;
+let gpsPracticeActive = false;
+let gpsFinishedUploadPromise = null;
 let gpsSyncTimer = null;
 let gpsSyncPromise = Promise.resolve();
 let gpsReplayTimer = null;
@@ -591,8 +606,13 @@ let mobileCarouselSwipe = null;
 let mobileCarouselWheelUntil = 0;
 let mobileShotToastHandle = null;
 let mapViewportResizeFrame = null;
-let lastMapViewportWidth = window.innerWidth;
+let lastMapViewportWidth = 0;
+let lastMapViewportHeight = 0;
 let liveMapMeasurePointerId = null;
+let liveMapCamera = null;
+const liveMapTouches = new Map();
+let liveMapGesture = null;
+let liveMapGestureConsumed = false;
 let liveMapMeasureSurface = null;
 let liveMapInstructionUtterance = null;
 let replayPageState = null;
@@ -764,11 +784,6 @@ function normalizeWarrenbrookHole(raw) {
   };
 }
 
-function withoutParThreeFairway(holeData, par = holeData?.hole_metadata?.par) {
-  if (Number(par) === 3 && holeData?.geometries) holeData.geometries.fairway_segments = [];
-  return holeData;
-}
-
 function playerStorageKey(type) {
   return state.player ? `golfgame-player-${state.player.id}-${type}` : `golfgame-${type}`;
 }
@@ -907,7 +922,7 @@ function currentPostRoundReport({ freezeCompleted = true } = {}) {
   const roundId = `${state.courseId}:${state.roundSeed || state.roundState?.round_seed || "legacy"}`;
   const completed = state.scores.filter(Number.isInteger).length === state.scorecard.length;
   if (completed && state.postRoundReport?.round?.round_id === roundId) {
-    const refreshed = refreshPostRoundReportNarrative(state.postRoundReport);
+    const refreshed = state.postRoundReport.coaching_review?.summary_statistics && "score_opportunity" in state.postRoundReport.coaching_review.summary_statistics ? state.postRoundReport : improvePostRoundReport({ ...state.postRoundReport, source_round: state.postRoundReport.source_round || { round_state: structuredClone(state.roundState) } });
     state.postRoundReport = structuredClone(refreshed);
     return refreshed;
   }
@@ -927,6 +942,7 @@ function currentPostRoundReport({ freezeCompleted = true } = {}) {
   if (!completed && report.narrative.status === "available" && report.narrative.input_hash !== buildReportNarrativePacket(report).input_hash) {
     report = buildPostRoundReportModel({ ...input, narrative: null });
   }
+  report = improvePostRoundReport({ ...report, source_round: { round_state: structuredClone(state.roundState) } });
   if (completed && freezeCompleted) state.postRoundReport = structuredClone(report);
   return report;
 }
@@ -1197,13 +1213,15 @@ function syncActiveHoleStateFromRoundState() {
   // Course geometry is authoritative when resuming. This also migrates a ball
   // that was saved against the older visual-only green into the generated
   // green, while hazards retain their higher surface priority.
-  state.currentLie = lieAt(state.ball).type;
+  state.currentLie = state.shots.length === 0 && distance(state.ball, teeBall) < .01
+    ? "Tee" : lieAt(state.ball).type;
   state.holeFinished = holeState.hole_finished;
   state.completionType = holeState.completion_type;
   state.lastShotLine = holeState.last_shot_line;
 }
 
 function currentLieType() {
+  if (state.ball && state.shots.length === 0 && distance(state.ball, teePoint()) < .01) return "Tee";
   return state.currentLie || lieAt(state.ball).type;
 }
 
@@ -1219,10 +1237,10 @@ function lieTypeForPoint(point) {
 function syncRoundStateCaches() {
   if (!state.roundState) return;
   const initialStates = state.scorecard.map((_, holeIndex) => {
-    const selectedTee = state.roundState.tee;
-    const whiteMeters = state.scorecard[holeIndex].Yards_White / METERS_TO_YARDS;
+    const selectedTee = selectedScorecardTee(state.scorecard[holeIndex], state.roundState.tee, state.holes[holeIndex].hole_metadata);
+    const originMeters = originTeeYardage(state.scorecard[holeIndex], state.holes[holeIndex].hole_metadata) / METERS_TO_YARDS;
     const selectedMeters = state.scorecard[holeIndex][`Yards_${selectedTee}`] / METERS_TO_YARDS;
-    const delta = whiteMeters - selectedMeters;
+    const delta = originMeters - selectedMeters;
     const p0 = state.holes[holeIndex].centerline_waypoints[0].point;
     const p1 = state.holes[holeIndex].centerline_waypoints[1].point;
     const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
@@ -1255,12 +1273,14 @@ function newRoundSeed() {
   return values[0] || 1;
 }
 
+function activeCourseHoleCount() { return state.course?.holeCount === 9 ? 9 : 18; }
+
 async function loadData(courseId = state.courseId) {
   state.courseId = courseId;
   state.course = courseCatalog[courseId] || courseCatalog.meadows;
   const [scoreText, ...holes] = await Promise.all([
     fetch(`${state.course.dataPath}/${state.course.scorecard}?v=${state.course.dataVersion}`).then(r => r.text()),
-    ...Array.from({ length: 18 }, (_, i) => fetch(`${state.course.dataPath}/${state.course.holeFile(i + 1)}?v=${state.course.dataVersion}`).then(r => r.json()))
+    ...Array.from({ length: activeCourseHoleCount() }, (_, i) => fetch(`${state.course.dataPath}/${state.course.holeFile(i + 1)}?v=${state.course.dataVersion}`).then(r => r.json()))
   ]);
   const lines = scoreText.trim().split(/\r?\n/);
   const headers = lines.shift().split(",");
@@ -1274,11 +1294,11 @@ async function loadData(courseId = state.courseId) {
     }));
   state.holes = holes
     .map(raw => raw.hole_metadata ? raw : normalizeWarrenbrookHole(raw))
-    .map((holeData, index) => withoutParThreeFairway(holeData, state.scorecard[index]?.Par))
     .map(holeData => expandSandHazards(holeData, sandHazardScaleForCourse(state.course, holeData)));
   state.holes = state.holes.map(mappedGreenHole).map(withFairwayFirstCut);
   state.holes.forEach(ensurePlayablePinZones);
   state.holes = state.holes.map(holeData => ensureHazardFreePinZones(holeData));
+  state.holeIndex = bounded(state.holeIndex, 0, activeCourseHoleCount() - 1);
   state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
   const storedProfiles = readBrowserJson(customProfilesStorageKey(), []);
   state.customProfiles = (Array.isArray(storedProfiles) ? storedProfiles : [])
@@ -1287,19 +1307,20 @@ async function loadData(courseId = state.courseId) {
   writeBrowserValue(customProfilesStorageKey(), JSON.stringify(state.customProfiles));
   const storedHistory = readBrowserJson(storageKey("history"), null);
   const storedScores = readBrowserJson(storageKey("scores"), null);
-  state.roundHistory = Array.isArray(storedHistory) ? storedHistory : Array.from({ length: 18 }, () => []);
-  state.scores = Array.isArray(storedScores) ? storedScores : Array(18).fill(null);
+  state.roundHistory = Array.isArray(storedHistory) ? storedHistory : Array.from({ length: activeCourseHoleCount() }, () => []);
+  state.scores = Array.isArray(storedScores) ? storedScores : Array(activeCourseHoleCount()).fill(null);
   state.roundSeed = Number(readBrowserValue(storageKey("round-seed"))) || newRoundSeed();
   const browserRoundState = loadBrowserRoundState(state.courseId, state.player?.id);
   const accountRoundState = state.roundState?.course_id === state.courseId ? state.roundState : null;
   state.roundState = accountRoundState || browserRoundState;
   if (!state.roundState) {
     state.roundState = state.player
-      ? createRoundState({ courseId: state.courseId, roundSeed: state.roundSeed, tee: state.tee })
+      ? createRoundState({ courseId: state.courseId, roundSeed: state.roundSeed, tee: state.tee, holeCount: activeCourseHoleCount() })
       : migrateLegacyRoundState({
         courseId: state.courseId,
         roundSeed: state.roundSeed,
         tee: state.tee,
+        holeCount: activeCourseHoleCount(),
         roundHistory: state.roundHistory,
         scores: state.scores
       });
@@ -1307,7 +1328,8 @@ async function loadData(courseId = state.courseId) {
   }
   state.roundSeed = state.roundState.round_seed;
   writeBrowserValue(storageKey("round-seed"), String(state.roundSeed));
-  state.tee = state.roundState?.tee || "White";
+  state.tee = selectedScorecardTee(card(), state.roundState?.tee || "White", hole().hole_metadata);
+  state.roundState.tee = state.tee;
   syncRoundStateCaches();
   const savedId = readBrowserValue(profileStorageKey(), "90");
   state.profile = [...builtInProfiles, ...state.customProfiles].find(p => p.id === savedId) || builtInProfiles[1];
@@ -1371,7 +1393,7 @@ function validCenterPoint(value) {
 
 function hole() { return state.holes[state.holeIndex]; }
 function card() { return state.scorecard[state.holeIndex]; }
-function teeYards() { return card()[`Yards_${state.tee}`]; }
+function teeYards() { return card()[`Yards_${selectedScorecardTee(card(), state.tee, hole().hole_metadata)}`]; }
 function pin() {
   const zones = hole().geometries.green_complex.pin_zones || [];
   return zones.find((zone, index) => index === state.pinIndex && validCenterPoint(zone?.center_point))
@@ -1427,9 +1449,9 @@ function formatPuttDistance(feet) {
 }
 
 function teePoint() {
-  const whiteMeters = card().Yards_White / METERS_TO_YARDS;
+  const originMeters = originTeeYardage(card(), hole().hole_metadata) / METERS_TO_YARDS;
   const selectedMeters = teeYards() / METERS_TO_YARDS;
-  const delta = whiteMeters - selectedMeters;
+  const delta = originMeters - selectedMeters;
   const p0 = hole().centerline_waypoints[0].point;
   const p1 = hole().centerline_waypoints[1].point;
   const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
@@ -1437,6 +1459,8 @@ function teePoint() {
 }
 
 function resetHole() {
+  state.tee = selectedScorecardTee(card(), state.tee, hole().hole_metadata);
+  if (state.roundState) state.roundState.tee = state.tee;
   clearPendingAutoPlay();
   clearPuttAnimation();
   clearFlightAnimation();
@@ -1518,6 +1542,17 @@ function fullHoleRoute() {
 
 function uprightFullHoleBounds() {
   const route = fullHoleRoute();
+  if (window.matchMedia?.("(max-width: 760px)").matches) {
+    const g = hole().geometries;
+    return mobileFullHoleBounds({
+      route,
+      corePoints: [teePoint(), ...g.tee_boxes.flatMap(item => item.polygon),
+        ...g.fairway_segments.flatMap(item => item.polygon), ...g.green_complex.polygon],
+      featurePolygons: [...(g.rough_zones || []), ...(g.tree_zones || []),
+        ...g.hazards, ...(g.cart_paths || [])].map(item => item.polygon),
+      corridorWidth: 75 / METERS_TO_YARDS
+    });
+  }
   return route.length >= 2 ? uprightHoleCameraBounds(route, mapFrame()) : fullCourseBounds();
 }
 
@@ -1623,19 +1658,22 @@ function mapSvgViewport() {
   const width = Number(surface?.clientWidth || window.innerWidth || 390);
   const height = Number(surface?.clientHeight || window.innerHeight || 740);
   return {
-    width: bounded(1000 * width / Math.max(height, 1), 480, 720),
+    width: 1000 * Math.max(width, 1) / Math.max(height, 1),
     height: 1000
   };
 }
 
 function refreshMapAfterViewportWidthChange() {
-  const nextWidth = window.innerWidth;
-  if (Math.abs(nextWidth - lastMapViewportWidth) < 2) return;
+  const surface = $("#course-map");
+  const nextWidth = surface?.clientWidth || window.innerWidth;
+  const nextHeight = surface?.clientHeight || window.innerHeight;
+  if (Math.abs(nextWidth - lastMapViewportWidth) < 2 && Math.abs(nextHeight - lastMapViewportHeight) < 2) return;
   lastMapViewportWidth = nextWidth;
+  lastMapViewportHeight = nextHeight;
   if (mapViewportResizeFrame !== null) cancelAnimationFrame(mapViewportResizeFrame);
   mapViewportResizeFrame = requestAnimationFrame(() => {
     mapViewportResizeFrame = null;
-    renderMap();
+    if (state.course) renderMap();
   });
 }
 
@@ -2341,7 +2379,7 @@ function terrainReliefMarkup() {
     ? `<line class="terrain-aim" x1="${ballScreen[0]}" y1="${ballScreen[1]}" x2="${targetScreen[0]}" y2="${targetScreen[1]}"/>`
     : "";
   const centerline = hole().centerline_waypoints.map(waypoint => project(waypoint.point).join(",")).join(" ");
-  return `<svg class="hole-terrain-map" viewBox="0 0 1000 1000" role="img" aria-label="Interactive bird’s-eye course view of hole ${state.holeIndex + 1}">
+  return `<svg class="hole-terrain-map" viewBox="-60 -80 1120 1160" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Interactive bird’s-eye course view of hole ${state.holeIndex + 1}">
     <defs>
       <linearGradient id="terrain-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8ccbd"/><stop offset=".22" stop-color="#dbe4d2"/><stop offset=".34" stop-color="#769071"/><stop offset="1" stop-color="#24462f"/></linearGradient>
       <linearGradient id="terrain-ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#376942"/><stop offset="1" stop-color="#23472f"/></linearGradient>
@@ -2699,6 +2737,8 @@ function renderMap() {
   // a reason to hide it.
   const showTeeBoxes = !greenView && (!closeView || currentLieType() === "Tee");
   const svgViewport = mapSvgViewport();
+  const mapViewBox = !greenView && !mobileTallMapActive()
+    ? "-60 -80 1120 1160" : `0 0 ${svgViewport.width} ${svgViewport.height}`;
   const yardageMarkers = closeView ? [] : markerPointsFromPin([200, 150, 100]);
   const illustratedCourseImage = null; // Render installed geometry with the approved illustrated style.
   const illustrationViewport = illustratedCourseImage
@@ -2732,7 +2772,7 @@ function renderMap() {
     ${showTeeBoxes ? `<g class="course-art-overlay" aria-hidden="true">${teeArtwork("tee-box-shadow")}</g>${teeArtwork("tee-box")}<g class="course-art-overlay" aria-hidden="true">${teeArtwork("tee-mowing")}</g>` : ""}
     ${closeView ? "" : elevationContours}`;
   $("#course-map").innerHTML = `
-    <svg viewBox="0 0 ${svgViewport.width} ${svgViewport.height}" role="img" aria-label="${enlargedGreenView ? "Enlarged green aiming view" : greenView ? "Close-up putting view" : "Top-down map"} of hole ${state.holeIndex + 1}">
+    <svg viewBox="${mapViewBox}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${enlargedGreenView ? "Enlarged green aiming view" : greenView ? "Close-up putting view" : "Top-down map"} of hole ${state.holeIndex + 1}">
       <defs>
         <linearGradient id="course-ground" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stop-color="#315f3b"/><stop offset=".52" stop-color="#244d33"/><stop offset="1" stop-color="#1f412c"/>
@@ -2957,6 +2997,7 @@ function renderMap() {
   $("#course-map svg").addEventListener("pointercancel", endLiveMapMeasurement);
   $("#course-map svg").addEventListener("lostpointercapture", endLiveMapMeasurement);
   $("#course-map svg").addEventListener("pointerleave", onMapDistancePreviewLeave);
+  applyLiveMapCamera();
 }
 
 function splitPlayedPath(points, fraction) {
@@ -3247,7 +3288,7 @@ function currentStrategyChoices() {
 
 // This adapter deliberately produces parameters for the existing chip-and-run
 // engine.  It does not model a second short-game physics system.
-const GREENSIDE_STRATEGY_VERSION = "greenside-strategy-v1";
+const GREENSIDE_STRATEGY_VERSION = "greenside-strategy-v2";
 
 function greensideStrategyEligible(start = state.ball) {
   const lie = lieTypeForPoint(start);
@@ -3271,15 +3312,22 @@ function buildGreensideStrategyChoices() {
   if (!start || !greensideStrategyEligible(start)) return [];
   const total = distance(start, pin().center_point);
   const edge = greenEdgeDistanceOnCupLine(start);
-  const make = ({ id, title, objective, clubIndex, carryBias, minimumOnGreen = 0 }) => {
+  const make = ({ id, title, objective, carryFraction, minimumOnGreen = 0, greenCenter = false }) => {
+    const clubIndex = state.selectedClub;
     if (clubIndex < 0) return null;
     const club = state.profile.clubs[clubIndex];
     const ratio = greensideRollRatio(club.name);
-    const naturalCarry = total / (1 + ratio);
-    const carry = bounded(Math.max(naturalCarry * carryBias, (edge ?? 0) + minimumOnGreen), 1, Math.min(30, total));
+    // Choose the landing target from the situation, independently of the club.
+    let carry = bounded(Math.max(total * carryFraction, (edge ?? 0) + minimumOnGreen), 1, Math.min(30, total));
+    let landing = projectPointToward(start, pin().center_point, carry);
+    if (greenCenter) {
+      const center = centerOfPolygon(hole().geometries.green_complex.polygon);
+      if (pointInPolygon(center, hole().geometries.green_complex.polygon) && distance(start, center) <= 30) landing = center;
+    }
+    carry = distance(start, landing);
     const solved = solveShortGamePower({ clubCarryYards: club.carry, desiredCarryYards: carry, lieMultiplier: liePenalty() });
     if (!Number.isFinite(solved.power)) return null;
-    const target = canonicalPoint(projectPointToward(start, pin().center_point, carry));
+    const target = canonicalPoint(landing);
     const roll = expectedShortGameRoll({
       carryYards: solved.expected_carry_yards, rollRatio: ratio,
       slopeFactor: greenRollSlopeFactor(coursePointFromCanonical(target)), landingSurface: "green"
@@ -3301,18 +3349,11 @@ function buildGreensideStrategyChoices() {
       }
     };
   };
-  const soft = make({ id: "soft-pitch", title: "Soft Pitch", objective: "Higher flight · softer release", clubIndex: greensideClubByNames(["lob wedge", "sand wedge"]), carryBias: 1.15, minimumOnGreen: 1.5 });
-  const runner = make({ id: "chip-run", title: "Chip and Run", objective: "Lower flight · more release", clubIndex: greensideClubByNames(["pitching wedge", "gap wedge", "9 iron"]), carryBias: .88, minimumOnGreen: .25 });
-  const center = make({ id: "center-green", title: "Center Green", objective: "Favor the wider green", clubIndex: greensideClubByNames(["sand wedge", "gap wedge"]), carryBias: 1.4, minimumOnGreen: 3 });
-  const distinct = [];
-  for (const choice of [soft, runner, center]) {
-    if (!choice || distinct.some(other => other.clubIndex === choice.clubIndex && Math.abs(other.greensideStrategy.nominal_carry_yards - choice.greensideStrategy.nominal_carry_yards) < 2)) continue;
-    distinct.push(choice);
-  }
-  // A routine shot should not masquerade as a decision. One card is enough
-  // when the plans collapse to the same club/landing construction.
-  if (distinct.length === 1) distinct[0] = { ...distinct[0], title: "Straightforward Chip", objective: "Simple greenside play" };
-  return distinct.slice(0, 3);
+  return [
+    make({ id: "soft-pitch", title: "Soft Pitch", objective: "Later landing · shorter release", carryFraction: .82, minimumOnGreen: 1.5 }),
+    make({ id: "chip-run", title: "Chip and Run", objective: "Earlier landing · rolling finish", carryFraction: .4, minimumOnGreen: .25 }),
+    make({ id: "center-green", title: "Green Center", objective: "Favor the wider green", carryFraction: 1, minimumOnGreen: 3, greenCenter: true })
+  ].filter(Boolean);
 }
 
 const strategyAnalysisCache = new Map();
@@ -3541,7 +3582,7 @@ function renderStrategyProbabilityAnalysis(analysis, choices, selectedChoice) {
       })()
     : "";
   const greensideDetails = selectedChoice.greensideStrategy
-    ? `<p class="greenside-strategy-details"><strong>Shot construction:</strong> land about ${selectedChoice.greensideStrategy.nominal_carry_yards} yd, release about ${selectedChoice.greensideStrategy.expected_rollout_yards} yd. The landing target and nominal power are locked in when you play this plan.</p>`
+    ? `<p class="greenside-strategy-details"><strong>Shot construction:</strong> land about ${selectedChoice.greensideStrategy.nominal_carry_yards} yd, release about ${selectedChoice.greensideStrategy.expected_rollout_yards} yd. Your selected club determines carry and release. Changing clubs preserves the landing target and recalculates power.</p>`
     : "";
   container.innerHTML = `
     <p><strong>Comparison from the same ${analysis.sample_count} simulated outcomes.</strong> These are tradeoffs, not a preselected answer.</p>
@@ -3570,9 +3611,11 @@ function strategyReasonsWithoutOldRanking(choice) {
 
 function renderStrategyExplanationReasons(choice, analysis = null) {
   const probability = analysis?.candidates?.[choice.id] || null;
-  const reasons = choice.greensideStrategy && probability
+  const reasons = choice.greensideStrategy
     ? [
-        `The figures compare ${analysis.sample_count} deterministic simulated outcomes for this plan.`,
+        `Choose the landing target first, then pick your own club in Club & Swing.`,
+        `Changing clubs keeps this target and recalculates power, carry and rollout.`,
+        probability ? `The figures compare ${analysis.sample_count} simulated outcomes using your currently selected club.` : "Predictions use your currently selected club; it is not a club recommendation.",
         "Use the landing, rollout, proximity, and miss evidence to choose the tradeoff you prefer."
       ]
     : probability
@@ -3605,9 +3648,6 @@ function strategyOutlookLabel(outlook, source = "deterministic") {
 function strategyChoiceMarkup(choice, analysis = null) {
   const selected = state.strategySelectedId === choice.id;
   const probability = analysis?.candidates?.[choice.id] || null;
-  const greensideSummary = choice.greensideStrategy && probability
-    ? `${probability.inside_8ft_percent}% inside 8 ft · expected ${probability.expected_leave_feet} ft`
-    : null;
   const treeSummary = choice.treeRecovery
     ? (() => {
         const recovery = choice.treeRecovery;
@@ -3618,16 +3658,16 @@ function strategyChoiceMarkup(choice, analysis = null) {
   return `
     <article class="strategy-choice ${selected ? "selected" : ""}">
       <div class="strategy-choice-head">
-        <span>${escapeHtml(choice.objective)}</span>
+        ${choice.greensideStrategy ? "" : `<span>${escapeHtml(choice.objective)}</span>`}
         <button class="strategy-help" type="button" data-strategy-help="${choice.id}" aria-label="Explain ${escapeHtml(choice.title)} strategy">?</button>
       </div>
       <button class="strategy-choice-main" type="button" data-strategy-choice="${choice.id}" aria-pressed="${selected}">
         <strong>${escapeHtml(choice.title)}</strong>
-        <span>${escapeHtml(choice.clubName)} · ${shotPowerLabel(choice.power, choice.clubName)} · ${choice.treeRecovery ? `clean outcome leaves ~${choice.treeRecovery.reward.expected_leave_if_clean_yards} yd` : choice.mode === "approach" && choice.leavesYards <= 8 ? `${choice.rollYards} yd roll` : choice.leavesYards <= 8 ? "green" : `${choice.leavesYards} yd left`}</span>
+        <span>${choice.greensideStrategy ? escapeHtml(choice.objective) : `${escapeHtml(choice.clubName)} · ${shotPowerLabel(choice.power, choice.clubName)} · ${choice.treeRecovery ? `clean outcome leaves ~${choice.treeRecovery.reward.expected_leave_if_clean_yards} yd` : choice.mode === "approach" && choice.leavesYards <= 8 ? `${choice.rollYards} yd roll` : choice.leavesYards <= 8 ? "green" : `${choice.leavesYards} yd left`}`}</span>
         ${choice.treeRecovery
           ? `<small class="tree-recovery-summary">${treeSummary}</small>`
           : choice.greensideStrategy
-            ? `<small class="greenside-strategy-summary">${greensideSummary || `${escapeHtml(choice.targetLabel)} · simulating tradeoffs…`}</small>`
+            ? ""
             : `<small>${escapeHtml(choice.targetLabel)} · ${strategyOutlookLabel(probability?.hybrid_outlook || choice.outlook, probability ? "hybrid" : "deterministic")}</small>`}
       </button>
     </article>`;
@@ -3686,7 +3726,7 @@ function selectStrategyChoice(choiceId) {
   const choice = currentStrategyChoices().find(item => item.id === choiceId);
   if (!choice) return;
   state.strategySelectedId = choice.id;
-  state.selectedClub = choice.clubIndex;
+  if (!choice.greensideStrategy) state.selectedClub = choice.clubIndex;
   state.swingPower = choice.power / 100;
   state.target = coursePointFromCanonical(choice.target);
   state.aimType = choice.greensideStrategy || isGreensideChip(state.ball, state.profile.clubs[choice.clubIndex])
@@ -3715,7 +3755,9 @@ function showStrategyExplanation(choiceId) {
   if (!choice) return;
   $("#strategy-explanation-objective").textContent = choice.objective;
   $("#strategy-explanation-title").textContent = `Why ${choice.title.toLowerCase()}?`;
-  $("#strategy-explanation-club").textContent = `${choice.clubName} · ${shotPowerLabel(choice.power, choice.clubName)}`;
+  $("#strategy-explanation-club").textContent = choice.greensideStrategy
+    ? "Choose your own club"
+    : `${choice.clubName} · ${shotPowerLabel(choice.power, choice.clubName)}`;
   const clearance = choice.nearestHazard && choice.hazardClearanceYards != null
     ? ` · ${choice.hazardClearanceYards} yd from ${choice.nearestHazard.replaceAll("_", " ")}`
     : "";
@@ -3728,18 +3770,20 @@ function showStrategyExplanation(choiceId) {
   const dialog = $("#strategy-explanation-dialog");
   dialog.dataset.choiceId = choice.id;
   $("#strategy-probability-content").innerHTML = `<p class="strategy-probability-loading">Running 400 paired outcomes for each plan…</p>`;
-  $("#strategy-ai-verdict").textContent = "Reviewing the calculated options…";
-  $("#strategy-ai-advice").textContent = "The probability comparison will be supplied to the local caddie when it is ready.";
+  $("#strategy-ai-verdict").textContent = choice.greensideStrategy ? "Your target, your club choice" : "Reviewing the calculated options…";
+  $("#strategy-ai-advice").textContent = choice.greensideStrategy
+    ? "Choose a landing target and select your preferred club. Carry, release and miss estimates use that club; no club is recommended or selected for you."
+    : "The probability comparison will be supplied to the local caddie when it is ready.";
   dialog.showModal();
   void loadStrategyAnalysis(choices).then(analysis => {
     if (dialog.dataset.choiceId !== choice.id) return;
     renderStrategyProbabilityAnalysis(analysis, choices, choice);
-    return requestAiStrategyCritique(choice, choices, analysis);
+    if (!choice.greensideStrategy) return requestAiStrategyCritique(choice, choices, analysis);
   }).catch(error => {
     console.warn("Strategy probability analysis could not be generated.", error);
     if (dialog.dataset.choiceId !== choice.id) return;
     $("#strategy-probability-content").innerHTML = `<p class="strategy-probability-loading">Probability comparison unavailable. The deterministic course analysis remains available.</p>`;
-    void requestAiStrategyCritique(choice, choices, null);
+    if (!choice.greensideStrategy) void requestAiStrategyCritique(choice, choices, null);
   });
 }
 
@@ -4859,6 +4903,7 @@ function queueAutoPlay() {
 }
 
 async function postAiJson(path, payload, { retry = false } = {}) {
+  if ((document.body.classList.contains("gps-mode-open") || state.liveGpsView) && (gpsRound?.local_only || state.liveGpsRound?.local_only)) return null;
   if (state.aiAvailable === false && !retry) return null;
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
@@ -5882,9 +5927,21 @@ function showMapDistancePreview(event, yardsFromBall, putting = false, hoverPoin
   } else {
     badge.textContent = `${Math.round(yardsFromBall)} yd from ball`;
   }
-  badge.style.left = `${bounded(event.clientX - stageRect.left, 48, stageRect.width - 48)}px`;
-  badge.style.top = `${bounded(event.clientY - stageRect.top, 42, stageRect.height - 8)}px`;
   badge.hidden = false;
+  // Measure the wrapped label so it stays inside the map and clear of a finger.
+  const mapRect = $("#course-map").getBoundingClientRect();
+  const badgeRect = badge.getBoundingClientRect();
+  const touch = event.pointerType === "touch" || event.pointerType === "pen";
+  const gap = touch ? 72 : 12;
+  const edge = 8;
+  const x = event.clientX - stageRect.left;
+  const y = event.clientY - stageRect.top;
+  const mapTop = mapRect.top - stageRect.top;
+  const mapBottom = mapRect.bottom - stageRect.top;
+  let top = y - gap - badgeRect.height;
+  if (top < mapTop + edge) top = y + gap;
+  badge.style.left = `${bounded(x - badgeRect.width / 2, edge, Math.max(edge, stageRect.width - badgeRect.width - edge))}px`;
+  badge.style.top = `${bounded(top, mapTop + edge, Math.max(mapTop + edge, mapBottom - badgeRect.height - edge))}px`;
 }
 
 function updateLiveMapMeasurement(event) {
@@ -5899,6 +5956,108 @@ function updateLiveMapMeasurement(event) {
   const target = coursePoint(screenPoint[0], screenPoint[1]);
   const greenCenter = centerOfPolygon(hole().geometries.green_complex.polygon);
   showMapDistancePreview(event, distance(origin, target), false, target, distance(target, greenCenter));
+}
+
+function constrainLiveMapView(base, view) {
+  const width = bounded(view[2], base[2] / 6, base[2]);
+  const height = base[3] * width / base[2];
+  return [bounded(view[0], base[0], base[0] + base[2] - width),
+    bounded(view[1], base[1], base[1] + base[3] - height), width, height];
+}
+
+function applyLiveMapCamera() {
+  const svg = $("#course-map svg");
+  if (!state.liveGpsView || !svg) return;
+  const key = `${state.courseId}:${state.holeIndex}`;
+  if (!liveMapCamera || liveMapCamera.key !== key) {
+    const base = svg.getAttribute("viewBox").trim().split(/\s+/).map(Number);
+    liveMapCamera = { key, base, view: [...base] };
+    liveMapTouches.clear();
+    liveMapGesture = null;
+    liveMapGestureConsumed = false;
+  }
+  svg.setAttribute("viewBox", liveMapCamera.view.join(" "));
+  $("#live-map-reset").hidden = liveMapCamera.view[2] >= liveMapCamera.base[2] - .01;
+}
+
+function beginLiveMapGesture() {
+  const svg = $("#course-map svg");
+  const matrix = svg?.getScreenCTM();
+  if (!matrix || !liveMapCamera) return;
+  const points = [...liveMapTouches.values()].slice(0, 2);
+  if (!points.length) { liveMapGesture = null; return; }
+  const midpoint = points.length === 2
+    ? [(points[0][0] + points[1][0]) / 2, (points[0][1] + points[1][1]) / 2] : points[0];
+  const inverse = matrix.inverse();
+  const anchor = new DOMPoint(...midpoint).matrixTransform(inverse);
+  liveMapGesture = { inverse, anchor, midpoint, view: [...liveMapCamera.view],
+    span: points.length === 2 ? Math.max(1, Math.hypot(points[0][0] - points[1][0], points[0][1] - points[1][1])) : null };
+}
+
+function onLiveMapTouchDown(event) {
+  if (!state.liveGpsView || event.pointerType === "mouse") return;
+  applyLiveMapCamera();
+  liveMapTouches.set(event.pointerId, [event.clientX, event.clientY]);
+  beginLiveMapGesture();
+  if (liveMapTouches.size > 1) {
+    liveMapGestureConsumed = true;
+    liveMapMeasurePointerId = null;
+    liveMapMeasureSurface = null;
+    hideMapDistancePreview();
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+}
+
+function onLiveMapTouchMove(event) {
+  if (!liveMapTouches.has(event.pointerId)) return;
+  if (!state.liveGpsView) { liveMapTouches.clear(); liveMapGesture = null; return; }
+  liveMapTouches.set(event.pointerId, [event.clientX, event.clientY]);
+  const gesture = liveMapGesture;
+  if (!gesture) return;
+  const points = [...liveMapTouches.values()].slice(0, 2);
+  const midpoint = points.length === 2
+    ? [(points[0][0] + points[1][0]) / 2, (points[0][1] + points[1][1]) / 2] : points[0];
+  const movement = Math.hypot(midpoint[0] - gesture.midpoint[0], midpoint[1] - gesture.midpoint[1]);
+  if (points.length === 1 && !liveMapGestureConsumed && (movement < 8 || liveMapCamera.view[2] >= liveMapCamera.base[2] - .01)) return;
+  liveMapGestureConsumed = true;
+  const span = points.length === 2 ? Math.hypot(points[0][0] - points[1][0], points[0][1] - points[1][1]) : null;
+  const ratio = gesture.span && span !== null
+    ? bounded(span / gesture.span, gesture.view[2] / liveMapCamera.base[2], 6 * gesture.view[2] / liveMapCamera.base[2]) : 1;
+  const current = new DOMPoint(...midpoint).matrixTransform(gesture.inverse);
+  liveMapCamera.view = constrainLiveMapView(liveMapCamera.base, [
+    gesture.anchor.x - (current.x - gesture.view[0]) / ratio,
+    gesture.anchor.y - (current.y - gesture.view[1]) / ratio,
+    gesture.view[2] / ratio, gesture.view[3] / ratio
+  ]);
+  liveMapMeasurePointerId = null;
+  liveMapMeasureSurface = null;
+  hideMapDistancePreview();
+  applyLiveMapCamera();
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}
+
+function onLiveMapTouchEnd(event) {
+  if (!liveMapTouches.has(event.pointerId)) return;
+  if (liveMapGestureConsumed) {
+    suppressMapClickUntil = performance.now() + 400;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+  liveMapTouches.delete(event.pointerId);
+  if (liveMapTouches.size) beginLiveMapGesture();
+  else { liveMapGesture = null; liveMapGestureConsumed = false; }
+}
+
+function resetLiveMapCamera() {
+  if (!liveMapCamera) return;
+  liveMapCamera.view = [...liveMapCamera.base];
+  liveMapTouches.clear();
+  liveMapGesture = null;
+  liveMapGestureConsumed = false;
+  hideMapDistancePreview();
+  applyLiveMapCamera();
 }
 
 function onLiveMapMeasurePointerDown(event) {
@@ -5945,7 +6104,7 @@ function preventLiveMapNativeGesture(event) {
 
 function liveMapInstructionText() {
   return liveGpsBallPoint()
-    ? "Touch and hold the map to measure distance from the ball. Drag to move the point."
+    ? "Pinch to zoom. Drag the enlarged map to move around. Tap to measure distance from the ball."
     : "No location is recorded on this hole. Tap Record GPS to set the ball position first.";
 }
 
@@ -6053,6 +6212,7 @@ function setTargetFromPointer(event, announce = false) {
 }
 
 function onMapClick(event) {
+  if (state.liveGpsView && performance.now() < suppressMapClickUntil) return;
   if (state.liveGpsView && state.gpsTargetPicking) {
     setGpsTargetPickFromPointer(event);
     return;
@@ -6063,6 +6223,7 @@ function onMapClick(event) {
 }
 
 function onMapPointerUp(event) {
+  if (state.liveGpsView && performance.now() < suppressMapClickUntil) return;
   if (event.pointerType === "mouse") return;
   if (state.liveGpsView && state.gpsTargetPicking) {
     setGpsTargetPickFromPointer(event);
@@ -6325,7 +6486,6 @@ async function loadChallengeSlotCandidate(slotIndex) {
     throw new Error(`${ref.tee_id} tee is unavailable on the selected hole`);
   }
   let holeData = payload.rawHole.hole_metadata ? payload.rawHole : normalizeWarrenbrookHole(payload.rawHole);
-  holeData = withoutParThreeFairway(holeData, row.Par);
   holeData = expandSandHazards(holeData, sandHazardScaleForCourse(course, holeData));
   holeData = withFairwayFirstCut(mappedGreenHole(holeData));
   ensurePlayablePinZones(holeData);
@@ -6837,7 +6997,7 @@ function competitionScores() {
     };
   }
   const humanScores = state.competition?.human_round?.holes?.map(holeState => holeState.score ?? null) || state.scores;
-  const strategistScores = state.competition?.strategist_round?.holes?.map(holeState => holeState.score ?? null) || Array(18).fill(null);
+  const strategistScores = state.competition?.strategist_round?.holes?.map(holeState => holeState.score ?? null) || Array(activeCourseHoleCount()).fill(null);
   const pars = state.scorecard.map(entry => entry.Par);
   const pairedTotals = competitionPairedTotals(state.competition, pars);
   return {
@@ -6857,7 +7017,7 @@ function academyProfiles() {
 
 function renderAcademySetup() {
   $("#academy-course").innerHTML = visibleCourses()
-    .map(course => `<option value="${escapeHtml(course.id)}" ${course.id === state.courseId ? "selected" : ""}>${escapeHtml(course.name)}</option>`)
+    .map(course => `<option value="${escapeHtml(course.id)}" ${course.id === state.courseId ? "selected" : ""}>${escapeHtml(courseOptionLabel(course))}</option>`)
     .join("");
   $("#academy-profile").innerHTML = academyProfiles()
     .map(profile => `<option value="${escapeHtml(profile.id)}" ${profile.id === state.profile.id ? "selected" : ""}>${escapeHtml(profile.name)}</option>`)
@@ -7088,7 +7248,7 @@ async function startAcademyFromSetup(event) {
     state.holeIndex = parFiveIndex;
     state.pinIndex = rotatingPinIndex(parFiveIndex, hole().geometries.green_complex.pin_zones.length);
     state.roundSeed = newRoundSeed();
-    state.roundState = createRoundState({ courseId, roundSeed: state.roundSeed, tee });
+    state.roundState = createRoundState({ courseId, roundSeed: state.roundSeed, tee, holeCount: activeCourseHoleCount() });
     $("#academy-dialog").close();
     resetHole();
     syncGameModeSelector();
@@ -7453,7 +7613,7 @@ function renderCompetitionScorecard() {
 
 function renderCompetitionSetup() {
   const profiles = [...builtInProfiles, ...state.customProfiles];
-  $("#competition-course").innerHTML = visibleCourses().map(course => `<option value="${escapeHtml(course.id)}" ${course.id === state.courseId ? "selected" : ""}>${escapeHtml(course.name)}</option>`).join("");
+  $("#competition-course").innerHTML = visibleCourses().filter(course => course.holeCount !== 9).map(course => `<option value="${escapeHtml(course.id)}" ${course.id === state.courseId ? "selected" : ""}>${escapeHtml(courseOptionLabel(course))}</option>`).join("");
   $("#competition-tee").value = state.tee;
   $("#competition-profile").innerHTML = profiles.map(profile => `<option value="${escapeHtml(profile.id)}" ${profile.id === state.profile.id ? "selected" : ""}>${escapeHtml(profile.name)}</option>`).join("");
   const savedPace = localStorage.getItem(playerStorageKey("competition-pace")) || "normal";
@@ -7507,6 +7667,7 @@ async function restoreCompetitionRound() {
 
 async function startCompetitionFromSetup(event) {
   event.preventDefault();
+  if (!$("#competition-course").value) throw new Error("Choose an 18-hole course for this match.");
   const courseId = $("#competition-course").value;
   const tee = $("#competition-tee").value;
   const profileId = $("#competition-profile").value;
@@ -7527,7 +7688,7 @@ async function startCompetitionFromSetup(event) {
   state.competition = competition;
   const fairness = validateSameGameplayProfile(state.profile, state.competition.strategist_profile);
   if (!fairness.same_profile) throw new Error("The Game Master profile clone did not pass fairness validation.");
-  state.roundState = createRoundState({ courseId, roundSeed: state.roundSeed, tee });
+  state.roundState = createRoundState({ courseId, roundSeed: state.roundSeed, tee, holeCount: activeCourseHoleCount() });
   state.roundState.license_activity_id = state.competition.license_activity_id;
   state.roundState.license_activity_kind = "EIGHTEEN_HOLE_MATCH";
   state.competition.human_round = structuredClone(state.roundState);
@@ -8244,7 +8405,7 @@ function openHoleCompleteDialog() {
     : `It is holed. You completed Hole ${state.holeIndex + 1} in ${strokes} strokes for ${golfScoreName(relative)}.`;
   nextButton.textContent = challengeActive()
     ? challengeSlot() < 2 ? `Play challenge hole ${challengeSlot() + 2}` : "See match result"
-    : state.holeIndex < 17 ? `Play Hole ${state.holeIndex + 2}` : "Game finished";
+    : state.holeIndex < activeCourseHoleCount() - 1 ? `Play Hole ${state.holeIndex + 2}` : "Game finished";
   // Mobile Safari can leave the fixed enlarged-green layer above a newly
   // opened dialog. Remove that layer first, then open on the next frame.
   if (state.greenEnlarged) closeEnlargedGreen();
@@ -8279,9 +8440,9 @@ function holeCompletionMessage(strokes) {
     : state.shots.at(-1)?.club === "Putter" ? "Good putt! " : "";
   const next = challengeActive()
     ? `Challenge hole ${challengeSlot() + 1} complete in ${strokes} strokes for ${scoreName}.`
-    : state.holeIndex < 17
+    : state.holeIndex < activeCourseHoleCount() - 1
     ? `Hole complete. You finished in ${strokes} strokes for ${scoreName}. Move on to Hole ${state.holeIndex + 2} when you’re ready.`
-    : `Round complete. You finished the 18th in ${strokes} strokes for ${scoreName}. Tap Game finished to save and review your round.`;
+    : `Round complete. You finished Hole ${activeCourseHoleCount()} in ${strokes} strokes for ${scoreName}. Tap Game finished to save and review your round.`;
   return `${puttLead}${next}`;
 }
 
@@ -8303,7 +8464,7 @@ function showResult(lie, remaining, penalty) {
         ? " One penalty stroke; unplayable-ball relief applied."
         : penalty ? " One penalty stroke added." : "";
   const resultCopy = state.holeFinished
-    ? `${fmtScore(state.scores[state.holeIndex] - card().Par)} on the hole. ${challengeActive() ? "Finish the paired hole, then continue the challenge." : state.holeIndex < 17 ? "Move to the next tee when ready." : "Your round is complete."}`
+    ? `${fmtScore(state.scores[state.holeIndex] - card().Par)} on the hole. ${challengeActive() ? "Finish the paired hole, then continue the challenge." : state.holeIndex < activeCourseHoleCount() - 1 ? "Move to the next tee when ready." : "Your round is complete."}`
     : last.club === "Putter"
       ? `${formatPuttDistance(remaining * 3)} remain.${reliefCopy}`
       : `${Math.round(remaining)} yards remain.${reliefCopy}`;
@@ -8410,7 +8571,7 @@ function roundCardMarkup() {
       </div>
     </section>`;
   };
-  return nine("Front nine", 0) + nine("Back nine", 9);
+  return nine(activeCourseHoleCount() === 9 ? "Nine holes" : "Front nine", 0) + (activeCourseHoleCount() === 18 ? nine("Back nine", 9) : "");
 }
 
 function renderRoundNavigation() {
@@ -8424,6 +8585,9 @@ function renderRoundNavigation() {
 function updateHoleBrief() {
   const h = hole().hole_metadata;
   $("#brand-course-name").textContent = state.course.shortName;
+  const location = $("#brand-course-location");
+  location.textContent = [state.course.country, state.course.state, state.course.city].filter(Boolean).join(" · ");
+  location.hidden = !location.textContent;
   const mapDate = new Date(state.course.mapUpdatedAt);
   const readableMapDate = Number.isNaN(mapDate.getTime())
     ? "date unavailable"
@@ -8436,6 +8600,8 @@ function updateHoleBrief() {
   attribution.hidden = !state.course.sourceAttribution;
   $("#course-select").value = state.courseId;
   $("#scorecard-course-name").textContent = state.course.name;
+  $("#header-hole-count").textContent = activeCourseHoleCount();
+  $("#game-mode-select option[value=round]").textContent = `${activeCourseHoleCount()}-hole round`;
   $("#header-hole").textContent = challengeActive() ? `${challengeSlot() + 1}/3` : state.holeIndex + 1;
   $("#hole-number").textContent = String(activeDisplayHoleNumber()).padStart(2, "0");
   $("#hole-name").textContent = state.courseId === "meadows" && !challengeActive() ? holeNames[state.holeIndex] : h.layout_type;
@@ -8466,10 +8632,12 @@ function updateHoleBrief() {
       ? "<i></i> Approach view · move for distance · click to set line"
       : "<i></i> Move for distance · click to set line";
   $("#previous-hole").disabled = challengeActive() || state.holeIndex === 0;
-  $("#next-hole").disabled = challengeActive() || state.holeIndex === 17;
+  $("#next-hole").disabled = challengeActive() || state.holeIndex === activeCourseHoleCount() - 1;
   syncMobileSheetUI();
   renderRoundNavigation();
   $$(".tee-switch button").forEach(button => {
+    button.disabled = !availableScorecardTees(card()).includes(button.dataset.tee);
+    button.title = button.disabled ? "This tee is unavailable for this hole." : "";
     button.classList.toggle("active", button.dataset.tee === state.tee);
     button.textContent = state.course.teeLabels?.[button.dataset.tee] || button.dataset.tee;
   });
@@ -8754,8 +8922,10 @@ function updateClubPowerLabels() {
 }
 
 function setSelectedClub(index) {
-  clearStrategyPlan();
+  const keepGreensidePlan = state.strategySelectedId?.startsWith("greenside-") && state.aimType === AimType.LANDING_TARGET;
+  if (!keepGreensidePlan) clearStrategyPlan();
   state.selectedClub = Number(index);
+  if (keepGreensidePlan) syncLandingTargetPower();
   if (!finePaceControl()) state.swingPower = nearestSwingPower(state.swingPower);
   state.shotDraft.club = true;
   syncManualTargetPreview();
@@ -9438,6 +9608,20 @@ function renderShortGamePlan() {
   }
 }
 
+function updateMobileTargetDistance() {
+  const planTarget = state.gpsTargetPicking?.point || (state.liveGpsView ? null : state.target);
+  const planBall = state.liveGpsView ? liveGpsBallPoint() : state.ball;
+  if (planTarget && planBall) {
+    const targetFromBall = distance(planBall, planTarget);
+    const targetToPin = distance(planTarget, pin().center_point);
+    $("#mobile-plan-copy").textContent = !state.liveGpsView && mapViewMode() === "putting"
+      ? `Target · ${formatPuttDistance(targetFromBall * 3)} from ball · ${formatPuttDistance(targetToPin * 3)} to cup`
+      : `Target · ${Math.round(targetFromBall)} yd from ball · ${Math.round(targetToPin)} yd to pin`;
+  } else {
+    $("#mobile-plan-copy").textContent = "Tap the map to place the target line, then roll down through the shot controls.";
+  }
+}
+
 function updateShotDesk() {
   if (landingTargetActive()) syncLandingTargetPower();
   else state.shortGamePlan = null;
@@ -9491,20 +9675,12 @@ function updateShotDesk() {
   $("#mobile-next-hole").setAttribute("aria-label", `Go to hole ${nextGpsHoleIndex(state.holeIndex) + 1}`);
   $("#mobile-round-current strong").textContent = challengeActive()
     ? `Challenge hole ${challengeSlot() + 1} of 3`
-    : `Hole ${state.holeIndex + 1} of 18`;
+    : `Hole ${state.holeIndex + 1} of ${activeCourseHoleCount()}`;
   $("#mobile-round-current small").textContent = `Round ${fmtScore(played)} · open card`;
   $("#mobile-hole-label").textContent = `Hole ${state.holeIndex + 1}`;
   $("#mobile-hole-facts").textContent = `P${card().Par} · ${teeYards()}`;
   $("#mobile-shot-sheet").dataset.planTitle = `Shot ${state.shots.length + 1} · Pin ${displayDistance(remaining)}`;
-  if (state.target) {
-    const targetFromBall = distance(state.ball, state.target);
-    const targetToPin = distance(state.target, pin().center_point);
-    $("#mobile-plan-copy").textContent = putting
-      ? `Target · ${formatPuttDistance(targetFromBall * 3)} from ball · ${formatPuttDistance(targetToPin * 3)} to cup`
-      : `Target · ${Math.round(targetFromBall)} yd from ball · ${Math.round(targetToPin)} yd to pin`;
-  } else {
-    $("#mobile-plan-copy").textContent = "Tap the map to place the target line, then roll down through the shot controls.";
-  }
+  updateMobileTargetDistance();
   $("#mobile-sheet-lie").textContent = currentLieType();
   $("#mobile-sheet-expected").textContent = projection.expectedLabel;
   $("#mobile-sheet-to-pin-label").textContent = projection.toPinHeading;
@@ -9581,7 +9757,7 @@ function updateGameFinishedControls() {
     button.setAttribute("aria-pressed", String(finalized));
     button.title = ready
       ? finalized ? "This game is complete. Open the finished-round report." : "Confirm the completed game and open its report."
-      : "Complete all 18 holes to finish the game.";
+      : `Complete all ${activeCourseHoleCount()} holes to finish the game.`;
   }
 }
 
@@ -9595,7 +9771,7 @@ function finishGame() {
 }
 
 function gpsRoundStorageKey() {
-  return playerStorageKey(`${state.courseId}-on-course-gps-round`);
+  return playerStorageKey(`${state.courseId}-${gpsPracticeActive ? "practice" : "on-course"}-gps-round`);
 }
 
 function loadGpsRound() {
@@ -9617,7 +9793,9 @@ function loadGpsRound() {
   } catch (error) {
     console.warn("Ignored invalid on-course GPS round.", error);
   }
-  const created = createGpsRound(state.courseId);
+  const created = createGpsRound(state.courseId, activeCourseHoleCount());
+  if (gpsPracticeActive) created.practice = true;
+  else created.local_only = true;
   localStorage.setItem(gpsRoundStorageKey(), JSON.stringify(created));
   return created;
 }
@@ -9627,7 +9805,7 @@ function persistGpsRound() {
   gpsRound.revision = (Number.isInteger(gpsRound.revision) ? gpsRound.revision : 0) + 1;
   gpsRound.updated_at = new Date().toISOString();
   localStorage.setItem(gpsRoundStorageKey(), JSON.stringify(gpsRound));
-  setGpsSyncDisplay("Saved on phone", "local");
+  setGpsSyncDisplay(gpsPracticeActive ? "Practice · on phone only" : "Saved on phone", "local");
   scheduleGpsRoundSync();
 }
 
@@ -9639,8 +9817,12 @@ function setGpsSyncDisplay(text, tone = "local") {
   status.dataset.tone = tone;
 }
 
+function gpsRoundUploadRequested() {
+  return Boolean(gpsRound?.upload_after_game && gpsRoundComplete(gpsRound));
+}
+
 async function syncGpsRound() {
-  if (!state.player || !gpsRound) return { saved: false, unavailable: true };
+  if (!state.player || !gpsRound || gpsPracticeActive || gpsRound.practice || !gpsRoundComplete(gpsRound)) return { saved: false, unavailable: true };
   if (navigator.onLine === false) {
     setGpsSyncDisplay("Offline · on phone", "error");
     return { saved: false, offline: true };
@@ -9648,9 +9830,16 @@ async function syncGpsRound() {
   const snapshot = typeof structuredClone === "function"
     ? structuredClone(gpsRound)
     : JSON.parse(JSON.stringify(gpsRound));
-  setGpsSyncDisplay("Syncing…", "syncing");
+  setGpsSyncDisplay("Uploading completed round…", "syncing");
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
   try {
+    await ensurePlayActivity("GPS", gpsRound.round_id, gpsRound, { signal: controller.signal });
+    snapshot.license_activity_id = gpsRound.license_activity_id;
+    snapshot.license_activity_kind = gpsRound.license_activity_kind;
+    localStorage.setItem(gpsRoundStorageKey(), JSON.stringify(gpsRound));
     const result = await playerApi("/api/player/gps-round", {
+      signal: controller.signal,
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ round: snapshot })
@@ -9663,7 +9852,7 @@ async function syncGpsRound() {
     if (gpsRound?.round_id === snapshot.round_id && gpsRound.revision === snapshot.revision) {
       setGpsSyncDisplay(result.complete ? "Round synced" : "Synced", "synced");
     } else {
-      setGpsSyncDisplay("Saved on phone", "local");
+      setGpsSyncDisplay(gpsPracticeActive ? "Practice · on phone only" : "Saved on phone", "local");
       scheduleGpsRoundSync(100);
     }
     return result;
@@ -9676,17 +9865,13 @@ async function syncGpsRound() {
       "error"
     );
     return { saved: false, error };
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
-function scheduleGpsRoundSync(delay = 700) {
-  if (!state.player || !gpsRound) return;
-  window.clearTimeout(gpsSyncTimer);
-  gpsSyncTimer = window.setTimeout(() => {
-    gpsSyncPromise = gpsSyncPromise
-      .catch(() => {})
-      .then(syncGpsRound);
-  }, delay);
+function scheduleGpsRoundSync() {
+  // Kept for existing callers: active on-course play never uploads in background.
 }
 
 function gpsHoleState() {
@@ -9755,6 +9940,7 @@ function setGpsTargetPickFromPointer(event) {
   picker.point = coursePoint(screenPoint[0], screenPoint[1]);
   hideMapDistancePreview();
   renderMap();
+  updateMobileTargetDistance();
   updateCourseMapModeUI();
   return true;
 }
@@ -9786,7 +9972,7 @@ function returnFromGpsTargetPicker({ save = false } = {}) {
   state.liveGpsFollowHole = true;
   window.clearTimeout(liveGpsPollTimer);
   updateCourseMapModeUI();
-  openGpsMode();
+  enterGpsMode();
   if (selectedCopy) showMobileShotToast("Target selected", selectedCopy);
 }
 
@@ -10021,7 +10207,7 @@ function updateCourseMapModeUI() {
         ? "Target placed. Tap elsewhere to move it, or use this target."
         : "Tap the map where you intend to aim."
       : currentPoint
-        ? "Touch the map to measure; drag to move the point."
+        ? "Tap to measure · pinch to zoom · drag enlarged map"
         : "Record GPS first, then touch the map to measure.";
     $("#live-map-measure-record").hidden = choosingTarget || Boolean(currentPoint);
     $("#live-map-measure-voice").hidden = choosingTarget;
@@ -10182,12 +10368,19 @@ async function fetchLatestGpsRoundForCourse() {
 
 function scheduleLiveGpsPoll(delay = LIVE_GPS_POLL_MS) {
   window.clearTimeout(liveGpsPollTimer);
-  if (!state.liveGpsView || state.gpsReplay || state.gpsTargetPicking) return;
+  if (gpsRound?.local_only || state.liveGpsRound?.local_only || gpsPracticeActive || !state.liveGpsView || state.gpsReplay || state.gpsTargetPicking || document.body.classList.contains("gps-mode-open")) return;
   liveGpsPollTimer = window.setTimeout(() => void refreshLiveGpsRound({ silent: true }), delay);
 }
 
 async function refreshLiveGpsRound({ followHole = state.liveGpsFollowHole, silent = false } = {}) {
   if (!state.liveGpsView) return;
+  if (gpsPracticeActive || gpsRound?.local_only || state.liveGpsRound?.local_only) {
+    state.liveGpsRound = gpsRound || state.liveGpsRound || loadGpsRound();
+    state.liveGpsStatus = gpsPracticeActive ? "Practice round · simulated locations · not saved to your account." : "Local on-course game · using positions saved on this phone.";
+    state.liveGpsLoading = false;
+    updateAll();
+    return;
+  }
   if (state.gpsReplay) {
     state.liveGpsRound = state.gpsReplay.round;
     updateAll();
@@ -10200,6 +10393,12 @@ async function refreshLiveGpsRound({ followHole = state.liveGpsFollowHole, silen
   updateCourseMapModeUI();
   try {
     candidate = newerGpsRound(candidate, await fetchLatestGpsRoundForCourse());
+    // A request started before GPS opened must not replace its local round.
+    if (gpsRound?.local_only) {
+      state.liveGpsRound = gpsRound;
+      updateAll();
+      return;
+    }
     state.liveGpsRound = newerGpsRound(state.liveGpsRound, candidate);
     state.liveGpsStatus = state.liveGpsRound
       ? "Showing actual on-course GPS positions."
@@ -10213,7 +10412,7 @@ async function refreshLiveGpsRound({ followHole = state.liveGpsFollowHole, silen
     state.liveGpsLoading = false;
     state.liveGpsLastRefresh = new Date().toISOString();
   }
-  if (followHole && state.liveGpsRound) {
+  if (followHole && state.liveGpsRound && !document.body.classList.contains("gps-mode-open") && !state.gpsTargetPicking) {
     const latestHole = gpsRoundLatestHoleIndex(state.liveGpsRound);
     if (latestHole !== state.holeIndex) {
       state.holeIndex = latestHole;
@@ -10494,10 +10693,11 @@ function renderGpsMode() {
   const currentLie = currentFix?.lie || (holeState.tee ? "Tee" : null);
   const onGreen = currentLie === "Green";
   const score = gpsHoleScore(holeState);
+  const playingStroke = score + 1 + (holeState.awaiting_ball_location ? 1 : 0);
   let pinGps = null;
   let calibrationError = null;
-  if (calibration) {
-    try { pinGps = gpsCoursePointToGps(calibration, pin().center_point); }
+  if (calibration || gpsPracticeActive) {
+    try { pinGps = gpsPracticeActive ? practiceGpsFix(pin().center_point, "Green") : gpsCoursePointToGps(calibration, pin().center_point); }
     catch (error) { calibrationError = error; }
   }
   const remainingYards = previewing && currentPoint
@@ -10508,7 +10708,7 @@ function renderGpsMode() {
   const availableClubs = state.profile.clubs
     .map((club, index) => ({ ...club, index }))
     .filter(club => club.name !== "Putter");
-  const teeSetupVisible = !holeState.tee && !holeState.finished;
+  const teeSetupVisible = !holeState.shots.length && !holeState.awaiting_ball_location && !onGreen && !holeState.finished;
   if (teeSetupVisible && !holeState.pending_strategy) {
     const match = recommendGpsClub(state.profile.clubs, remainingYards, { lie: "Tee" });
     if (match) {
@@ -10533,7 +10733,10 @@ function renderGpsMode() {
     `<option value="${club.index}">${escapeHtml(club.name)} · ${Math.round(club.carry)} yd</option>`
   ).join("");
 
-  $("#gps-page-view").value = state.gpsPageView;
+  const pendingUploads = loadFinishedGpsQueue().length;
+  $("#gps-upload-status").textContent = pendingUploads ? `${pendingUploads} finished game${pendingUploads === 1 ? "" : "s"} waiting to upload. Keep this browser’s data until upload succeeds.` : "No finished games waiting to upload.";
+  $("#gps-practice-restart").hidden = !gpsPracticeActive;
+  $("#gps-page-view").value = gpsPracticeActive && state.gpsPageView === "actual" ? "practice" : state.gpsPageView;
   $("#gps-preview-note").hidden = !previewing;
 
   $("#gps-course-name").textContent = state.course.shortName;
@@ -10542,15 +10745,15 @@ function renderGpsMode() {
   $("#gps-previous-hole").disabled = state.holeIndex === 0;
   const gpsNextHole = $("#gps-next-hole");
   gpsNextHole.disabled = false;
-  gpsNextHole.setAttribute("aria-label", state.holeIndex === 17
+  gpsNextHole.setAttribute("aria-label", state.holeIndex === activeCourseHoleCount() - 1
     ? "Go to hole 1"
     : `Go to hole ${state.holeIndex + 2}`);
   $("#gps-round-total").textContent = previewing ? "Preview" : `${gpsRoundScore(gpsRound)} shots`;
-  const showPlayMetrics = Boolean(holeState.tee && !holeState.finished);
+  const showPlayMetrics = Boolean(!teeSetupVisible && !holeState.finished);
   $("#gps-shot-metrics").hidden = !showPlayMetrics;
   $("#gps-primary-yardage").hidden = showPlayMetrics;
   $("#gps-primary-metric-label").textContent = "Playing stroke";
-  $("#gps-playing-stroke-number").textContent = String(score + 1);
+  $("#gps-playing-stroke-number").textContent = String(playingStroke);
   $("#gps-secondary-metric-label").textContent = onGreen ? "Playing putt" : "Yards to pin";
   $("#gps-secondary-metric-number").textContent = onGreen
     ? String(holeState.putts + 1)
@@ -10558,7 +10761,7 @@ function renderGpsMode() {
   $("#gps-shot-label").textContent = holeState.finished
     ? "Hole complete"
     : onGreen ? "On the green"
-      : holeState.tee ? `Playing stroke ${score + 1}` : "Start the hole";
+      : !teeSetupVisible ? `Ball location · Playing stroke ${playingStroke}` : "Tee shot";
   $("#gps-distance-to-pin").textContent = onGreen && !holeState.finished
     ? String(score + 1)
     : Math.max(0, Math.round(remainingYards));
@@ -10582,28 +10785,35 @@ function renderGpsMode() {
   $(".gps-yardage-board").hidden = reviewingHole;
   locationActions.hidden = reviewingHole || onGreen;
   $("#gps-mode-status").hidden = reviewingHole;
-  locationButton.disabled = previewing || !pinGps || holeState.finished;
-  const showOnGreenAction = Boolean(holeState.tee && !onGreen && !holeState.finished);
+  const locationRecorded = Boolean(holeState.tee && !holeState.awaiting_ball_location);
+  locationButton.disabled = previewing || !pinGps || holeState.finished || locationRecorded;
+  const showOnGreenAction = Boolean(holeState.tee && !teeSetupVisible && !onGreen && !holeState.finished);
   onGreenButton.hidden = !showOnGreenAction;
   onGreenButton.disabled = previewing || !pinGps;
-  locationActions.classList.toggle("has-on-green", showOnGreenAction);
-  $("#gps-location-title").textContent = holeState.tee ? "Ball location" : "Tee location";
+  $("#gps-next-shot-actions").hidden = reviewingHole || onGreen;
+  $("#gps-next-shot").disabled = previewing || Boolean(holeState.awaiting_ball_location);
+  locationActions.classList.remove("has-on-green");
+  $("#gps-location-title").textContent = teeSetupVisible ? "Tee Location" : `Ball Location for stroke ${playingStroke}`;
   $("#gps-location-help").textContent = holeState.tee
-    ? "At your ball? Tap to complete the last shot"
+    ? holeState.awaiting_ball_location ? "Stand at your ball, then tap to record GPS" : "Location recorded ✓"
     : "Choose your club above, then tap";
   if (previewing) {
     const pageLabel = { tee: "Tee setup", shot: "Shot page", green: "Green page", complete: "Hole Review" }[state.gpsPageView];
     setGpsStatus(`${pageLabel} preview. Controls are read-only and your GPS round will not change.`);
-  } else if (!calibration || calibrationError) {
+  } else if ((!calibration && !gpsPracticeActive) || calibrationError) {
     setGpsStatus(`Hole ${state.holeIndex + 1} has no GPS calibration. Add its three points in Course Mapper, then reinstall the course.`, "error");
   } else if (holeState.finished) {
     setGpsStatus("Hole saved. Use Next hole when your group moves on.");
   } else if (!holeState.tee) {
     setGpsStatus("Select your club first, then Tee location starts the hole without adding a stroke.");
+  } else if (teeSetupVisible) {
+    setGpsStatus("Tee location recorded. Play your tee shot, then tap Next Shot to open stroke 2.");
   } else if (onGreen) {
     setGpsStatus("On green. Tap +1 Putt for every putt that stays out, then Holed Out for the final putt.");
   } else {
-    setGpsStatus("Ball Location records the next lie. On Green records the shot and opens putting.");
+    setGpsStatus(holeState.awaiting_ball_location
+      ? `Record Ball Location for stroke ${playingStroke}. On Green records arrival and opens putting.`
+      : `Choose details for stroke ${playingStroke}, then tap Next Shot after playing. On Green opens putting.`);
   }
 
   const lastShot = holeState.shots.at(-1);
@@ -10615,7 +10825,7 @@ function renderGpsMode() {
       : "No caddie plan recorded";
   }
 
-  $("#gps-lie-controls").hidden = !currentFix || onGreen || holeState.finished;
+  $("#gps-lie-controls").hidden = teeSetupVisible || !currentFix || onGreen || holeState.finished;
   const ballConditions = gpsBallConditions(currentFix, currentLie);
   $$('[data-gps-lie]').forEach(button => {
     const active = button.dataset.gpsLie === currentLie;
@@ -10629,7 +10839,7 @@ function renderGpsMode() {
   });
   $("#gps-rough-depth").hidden = currentLie !== "Rough" && currentLie !== "Heavy rough";
   $("#gps-condition-summary").textContent = gpsConditionSummary(ballConditions, currentLie);
-  const showGpsShotPlanner = Boolean(holeState.tee && !onGreen && !holeState.finished);
+  const showGpsShotPlanner = Boolean(holeState.tee && !teeSetupVisible && !onGreen && !holeState.finished);
   $("#gps-mode-screen").classList.toggle("gps-shot-page", showGpsShotPlanner);
   const choices = holeState.finished ? [] : gpsStrategyChoices(currentPoint, currentLie, ballConditions);
   if (!holeState.pending_strategy && showGpsShotPlanner) {
@@ -10708,7 +10918,7 @@ function renderGpsMode() {
     const reviewButton = $("#gps-review-next");
     reviewButton.disabled = gpsCompletingRound;
     reviewButton.innerHTML = reviewAction.kind === "complete"
-      ? `${gpsCompletingRound ? "Completing…" : "Complete round"} <span aria-hidden="true">✓</span>`
+      ? `${gpsPracticeActive ? "Complete practice" : gpsCompletingRound ? "Completing…" : "Complete round"} <span aria-hidden="true">✓</span>`
       : `Hole ${reviewAction.holeIndex + 1} <span aria-hidden="true">→</span>`;
     reviewButton.setAttribute("aria-label", reviewAction.kind === "complete"
       ? "Complete and save this on-course round"
@@ -10844,8 +11054,8 @@ function renderGpsHoleAiSummary(container, holeState, holeIndex, review) {
   if (section.hidden) return;
   const key = gpsHoleAiKey(holeState, holeIndex);
   section.dataset.gpsAiKey = key;
-  if (gpsPagePreviewActive()) {
-    updateGpsHoleAiSections(key, { state: "preview", status: "Preview", copy: "AI Comment appears after this hole is completed on the course." });
+  if (gpsPagePreviewActive() || gpsPracticeActive || gpsRound?.local_only) {
+    updateGpsHoleAiSections(key, { state: "preview", status: "Local play", copy: "Online AI comments are deferred during on-course play. Recorded scores and review remain available." });
     return;
   }
   const cached = gpsHoleAiCache.get(key);
@@ -10879,6 +11089,8 @@ function renderGpsHoleReview(container, holeState, holeIndex) {
       ? `No · reached in ${review.green_reached_in}`
       : "No";
   container.dataset.gpsReviewHole = String(holeIndex);
+  const finishButton = container.querySelector("[data-gps-finish-game]");
+  if (finishButton) finishButton.disabled = gpsPagePreviewActive() || gpsCompletingRound;
   container.querySelector("[data-gps-review-shots]").innerHTML = gpsReviewShotMarkup(review, holeIndex);
   container.querySelector("[data-gps-review-gir]").textContent = girText;
   container.querySelector("[data-gps-review-putts]").textContent = String(review.putts);
@@ -11015,7 +11227,7 @@ function viewGpsHoleTrace(holeIndex) {
     : state.liveGpsRound?.course_id === state.courseId
       ? state.liveGpsRound
       : peekLocalGpsRound();
-  const reviewedHoleIndex = bounded(Math.round(Number(holeIndex) || 0), 0, 17);
+  const reviewedHoleIndex = bounded(Math.round(Number(holeIndex) || 0), 0, activeCourseHoleCount() - 1);
   if (!sourceRound?.holes?.[reviewedHoleIndex]) return;
   const dialog = $("#gps-hole-review-dialog");
   if (dialog.open) dialog.close();
@@ -11034,14 +11246,124 @@ function viewGpsHoleTrace(holeIndex) {
   void refreshLiveGpsRound({ followHole: false, silent: true });
 }
 
+function practiceGpsFix(point, lie) {
+  const fix = gpsPreviewFix(point, lie);
+  if (!Number.isFinite(fix.lat) || !Number.isFinite(fix.lng)) {
+    fix.lat = point[1] / 111320;
+    fix.lng = point[0] / 111320;
+  }
+  return fix;
+}
+
+function simulatedGpsLocation(forcedLie) {
+  const current = gpsHoleState();
+  if (!current.tee) return practiceGpsFix(teePoint(), "Tee");
+  const preview = gpsPreviewHoleState("green");
+  const point = forcedLie === "Green" || current.shots.length > 0
+    ? preview.shots[1].end.course_point : preview.shots[0].end.course_point;
+  return practiceGpsFix(point, forcedLie || (current.shots.length > 0 ? "Green" : "Fairway"));
+}
+
+function toggleGpsPractice(restart = false) {
+  window.clearTimeout(gpsSyncTimer);
+  window.clearTimeout(liveGpsPollTimer);
+  stopGpsReplayPlayback();
+  state.gpsReplay = null;
+  gpsPracticeActive = restart || !gpsPracticeActive;
+  // Restart creates a new session directly, rather than reloading saved state.
+  gpsRound = restart ? createGpsRound(state.courseId, activeCourseHoleCount()) : loadGpsRound();
+  if (gpsPracticeActive && (restart || gpsRound.ended_early || gpsRoundComplete(gpsRound))) {
+    gpsRound = createGpsRound(state.courseId, activeCourseHoleCount());
+    gpsRound.practice = true;
+    localStorage.setItem(gpsRoundStorageKey(), JSON.stringify(gpsRound));
+  }
+  gpsCompletingRound = false;
+  state.liveGpsLoading = false;
+  state.gpsTargetPicking = null;
+  state.liveGpsRound = gpsPracticeActive ? gpsRound : null;
+  state.holeIndex = gpsPracticeActive ? firstUnfinishedGpsHoleIndex(gpsRound) : gpsRoundLatestHoleIndex(gpsRound);
+  if (state.holeIndex < 0) state.holeIndex = 0;
+  state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
+  state.gpsPageView = "actual";
+  state.gpsCaddieExpanded = false;
+  renderGpsMode();
+}
+
+function gpsRoundHasRecordedProgress(round) {
+  return Boolean(round?.holes?.some(hole => hole.tee || hole.shots?.length || hole.putts || hole.finished));
+}
+
+function saveAndFinishPreviousGpsGames() {
+  const previous = loadGpsRound();
+  if (!previous.practice && gpsRoundHasRecordedProgress(previous)) {
+    const finished = structuredClone(previous);
+    finished.ended_early = !finished.holes.every(hole => hole.finished);
+    finished.ended_at = new Date().toISOString();
+    finished.updated_at = finished.ended_at;
+    finished.revision = (Number(finished.revision) || 0) + 1;
+    const queue = loadFinishedGpsQueue().filter(round => round.round_id !== finished.round_id);
+    queue.push(finished);
+    localStorage.setItem(finishedGpsQueueKey(), JSON.stringify(queue));
+    localStorage.removeItem(gpsRoundStorageKey());
+    gpsRound = null;
+  }
+  openGpsMode();
+  $("#gps-upload-status").textContent = "Saved on this phone. Uploading when connected…";
+  void uploadFinishedGpsGames().then(() => {
+    if ($("#gps-start-dialog").open) {
+      $("#gps-upload-finished").hidden = loadFinishedGpsQueue().length === 0;
+    }
+  });
+}
+
 function openGpsMode() {
+  const saved = loadGpsRound();
+  const hasProgress = gpsRoundHasRecordedProgress(saved);
+  const dialog = $("#gps-start-dialog");
+  $("#gps-start-summary").textContent = hasProgress
+    ? `${state.course.name}: ${gpsRoundScore(saved)} strokes recorded on this phone. ${gpsRoundComplete(saved) ? "This round is complete and can be uploaded." : "Continue your unfinished round or start a fresh round."}`
+    : `${state.course.name}: no unfinished round is saved on this phone.`;
+  $("#gps-start-continue").disabled = !hasProgress;
+  $("#gps-start-continue").textContent = gpsRoundComplete(saved) ? "Continue / upload" : "Continue…";
+  const pending = loadFinishedGpsQueue().length;
+  $("#gps-upload-finished").hidden = !(pending || (!saved.practice && hasProgress));
+  $("#gps-upload-status").textContent = pending ? `${pending} previous game(s) saved on this phone, waiting to upload.` : "";
+  if (!dialog.open) dialog.showModal();
+}
+
+function startNewGpsRound() {
+  const previous = loadGpsRound();
+  // Archive before replacing: a failed storage write must leave the active round intact.
+  if (previous.holes.some(hole => hole.tee || hole.shots?.length || hole.putts || hole.finished || hole.pending_strategy)) {
+    localStorage.setItem(playerStorageKey(`gps-round-archive-${previous.round_id}`), JSON.stringify(previous));
+  }
+  const fresh = createGpsRound(state.courseId, activeCourseHoleCount());
+  if (gpsPracticeActive) fresh.practice = true;
+  else fresh.local_only = true;
+  localStorage.setItem(gpsRoundStorageKey(), JSON.stringify(fresh));
+  gpsRound = fresh;
+  window.clearTimeout(gpsSyncTimer);
+  window.clearTimeout(liveGpsPollTimer);
+  state.liveGpsRound = null;
+  state.gpsReplay = null;
+  state.holeIndex = 0;
+  state.pinIndex = rotatingPinIndex(0, hole().geometries.green_complex.pin_zones.length);
+  enterGpsMode();
+}
+
+function enterGpsMode() {
+  window.clearTimeout(liveGpsPollTimer);
   gpsRound = loadGpsRound();
+  if (!gpsPracticeActive) {
+    gpsRound.local_only = true;
+    localStorage.setItem(gpsRoundStorageKey(), JSON.stringify(gpsRound));
+  }
   const latestHoleIndex = gpsRoundLatestHoleIndex(gpsRound);
   if (latestHoleIndex !== state.holeIndex) {
     state.holeIndex = latestHoleIndex;
     state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
   }
-  setGpsSyncDisplay("Saved on phone", "local");
+  setGpsSyncDisplay(gpsPracticeActive ? "Practice · on phone only" : "Saved on phone", "local");
   state.gpsPageView = "actual";
   state.gpsCaddieExpanded = false;
   $("#gps-mode-screen").hidden = false;
@@ -11061,50 +11383,105 @@ function closeGpsMode(destination = "simulator") {
   setCourseMapMode(destination);
 }
 
-async function finalizeGpsRound() {
+function finishedGpsQueueKey() {
+  return playerStorageKey("finished-gps-upload-queue");
+}
+
+function loadFinishedGpsQueue() {
+  const value = JSON.parse(localStorage.getItem(finishedGpsQueueKey()) || "[]");
+  if (!Array.isArray(value)) throw new Error("Saved game upload queue is invalid; it has been preserved.");
+  return value;
+}
+
+function uploadFinishedGpsGames() {
+  if (gpsFinishedUploadPromise) return gpsFinishedUploadPromise;
+  if (!state.player || navigator.onLine === false) {
+    setGpsSyncDisplay("Finished games saved on phone", "local");
+    return Promise.resolve();
+  }
+  const queueKey = finishedGpsQueueKey();
+  const uploadingPlayerId = state.player.id;
+  const reportUpload = message => {
+    const status = $("#gps-upload-status");
+    if (status) status.textContent = message;
+  };
+  gpsFinishedUploadPromise = (async () => {
+    for (const round of loadFinishedGpsQueue()) {
+      if (state.player?.id !== uploadingPlayerId) return;
+      if (round.practice || !gpsRoundComplete(round)) continue;
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 15000);
+      try {
+        setGpsSyncDisplay("Uploading finished games…", "syncing");
+        reportUpload("Uploading finished games…");
+        const result = await playerApi("/api/player/gps-round", {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ round }), signal: controller.signal
+        });
+        if (!result.saved || !result.complete || result.conflict) throw new Error("Upload was not confirmed");
+        const current = JSON.parse(localStorage.getItem(queueKey) || "[]");
+        localStorage.setItem(queueKey, JSON.stringify(current.filter(item => item.round_id !== round.round_id || item.revision !== round.revision)));
+      } catch (error) {
+        setGpsSyncDisplay("Upload pending · saved on phone", "error");
+        reportUpload("Upload pending. Your finished games remain on this phone. Try again with a better connection.");
+        return;
+      } finally { window.clearTimeout(timeout); }
+    }
+    setGpsSyncDisplay("Finished games uploaded", "synced");
+    reportUpload("Finished games uploaded.");
+  })().finally(() => { gpsFinishedUploadPromise = null; });
+  return gpsFinishedUploadPromise;
+}
+
+function finishGpsGame() {
+  if (gpsPagePreviewActive() || gpsCompletingRound || !gpsRound) return;
+  // End the round without inventing scores or completing unplayed holes.
+  gpsRound.ended_early = !gpsRound.holes.every(item => item.finished);
+  gpsRound.ended_at = new Date().toISOString();
+  persistGpsRound();
+  const dialog = $("#gps-hole-review-dialog");
+  if (dialog.open) dialog.close();
+  void finalizeGpsRound({ exitGame: true });
+}
+
+async function finalizeGpsRound({ exitGame = false } = {}) {
   if (!gpsRoundComplete(gpsRound) || gpsCompletingRound) return;
-  gpsCompletingRound = true;
-  window.clearTimeout(gpsSyncTimer);
-  setGpsStatus("Saving the completed round to your account…");
-  renderGpsMode();
-  gpsSyncPromise = gpsSyncPromise.catch(() => {}).then(syncGpsRound);
-  const result = await gpsSyncPromise;
-  if (!result?.saved || !result.complete) {
-    gpsCompletingRound = false;
-    renderGpsMode();
-    setGpsStatus(
-      result?.offline
-        ? "Round complete and saved on this phone. Connect to the server, then tap Complete round again."
-        : result?.conflict
-          ? "A newer server copy exists. Reopen GPS mode before completing this round."
-          : "Round complete on this phone, but the server could not save it. Tap Complete round to retry.",
-      "error"
-    );
+  if (gpsRound.practice) {
+    persistGpsRound();
+    const practiceScore = gpsRoundScore(gpsRound);
+    const practiceEndedEarly = gpsRound.ended_early;
+    if (exitGame) {
+      gpsPracticeActive = false;
+      gpsRound = null;
+      state.liveGpsRound = null;
+    }
+    closeGpsMode(exitGame ? "simulator" : "live");
+    showMobileShotToast(practiceEndedEarly ? "Practice ended" : "18-hole practice complete", `${practiceScore} simulated strokes. Your real rounds are unchanged.`);
     return;
   }
-
-  const completedRound = typeof structuredClone === "function"
-    ? structuredClone(gpsRound)
-    : JSON.parse(JSON.stringify(gpsRound));
+  // Queue before clearing the active slot, so even failed uploads remain durable.
+  const completedRound = JSON.parse(JSON.stringify(gpsRound));
+  const queue = loadFinishedGpsQueue();
+  const nextQueue = queue.filter(item => item.round_id !== completedRound.round_id);
+  nextQueue.push(completedRound);
+  localStorage.setItem(finishedGpsQueueKey(), JSON.stringify(nextQueue));
   localStorage.removeItem(gpsRoundStorageKey());
   gpsRound = null;
   gpsCompletingRound = false;
   $("#gps-mode-screen").hidden = true;
   document.body.classList.remove("gps-mode-open");
+  state.liveGpsView = !exitGame;
   syncGameModeSelector();
-  state.liveGpsView = true;
   state.liveGpsFollowHole = false;
   state.liveGpsRound = completedRound;
   window.clearTimeout(liveGpsPollTimer);
   resetHole();
-  showMobileShotToast(
-    "On-course round complete",
-    `${gpsRoundScore(completedRound)} strokes saved to your account. GPS mode is ready for a new round.`
-  );
+  showMobileShotToast("Game finished · saved on phone", "Uploading recorded strokes when connected. If reception is poor, use Save and finish previous games later.");
+  void uploadFinishedGpsGames();
 }
 
 function gpsChangeHole(index) {
-  state.holeIndex = Math.max(0, Math.min(17, index));
+  state.holeIndex = Math.max(0, Math.min(activeCourseHoleCount() - 1, index));
   state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
   state.gpsCaddieExpanded = false;
   $(".gps-mode-content")?.scrollTo?.({ top: 0 });
@@ -11126,6 +11503,7 @@ function continueFromGpsHoleReview() {
 }
 
 function readCurrentPosition() {
+  if (window.isSecureContext === false) return Promise.reject(new Error("Real GPS requires HTTPS. This HTTP page supports Practice mode with simulated locations."));
   if (!navigator.geolocation) return Promise.reject(new Error("This browser does not provide GPS location"));
   return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(
     position => resolve({
@@ -11135,7 +11513,7 @@ function readCurrentPosition() {
       recorded_at: new Date(position.timestamp || Date.now()).toISOString()
     }),
     error => reject(new Error({
-      1: "Location permission is off. Allow location access for golfgame.jetta.com in your browser settings.",
+      1: `Location access was blocked. Allow location for ${window.location.hostname} and for your browser in phone settings.`,
       2: "Your phone could not determine its location. Move into open sky and try again.",
       3: "GPS took too long. Move into open sky and try again."
     }[error.code] || "GPS location could not be recorded")),
@@ -11143,18 +11521,44 @@ function readCurrentPosition() {
   ));
 }
 
+function nextGpsShotPage() {
+  if (gpsPagePreviewActive()) return;
+  const holeState = gpsHoleState();
+  if (holeState.finished || gpsCurrentFix(holeState)?.lie === "Green") return;
+  if (!holeState.awaiting_ball_location) {
+    holeState.outgoing_strategy = structuredClone(holeState.pending_strategy);
+    holeState.pending_strategy = null;
+    holeState.awaiting_ball_location = true;
+    persistGpsRound();
+  }
+  renderGpsMode();
+  $("#gps-location-button").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 async function captureGpsLocation({ forcedLie = null } = {}) {
   if (gpsPagePreviewActive()) return;
   const calibration = gpsCalibration();
-  if (!calibration) return;
+  if (!calibration && !gpsPracticeActive) return;
+  gpsRound ||= loadGpsRound();
+  const captureRound = gpsRound;
+  const captureHoleIndex = state.holeIndex;
+  const captureCourseId = state.courseId;
+  const captureIsCurrent = () => gpsRound === captureRound && state.holeIndex === captureHoleIndex && state.courseId === captureCourseId && document.body.classList.contains("gps-mode-open");
   try {
-    gpsRound ||= loadGpsRound();
-    await ensurePlayActivity("GPS", gpsRound.round_id, gpsRound);
+    if (gpsRound.ended_early) {
+      setGpsStatus("This game has ended. Use Finish Game to retry saving, or start a new round.", "error");
+      return;
+    }
+    if (!gpsPracticeActive && !gpsRound.license_activity_id) {
+      await ensurePlayActivity("GPS", gpsRound.round_id, gpsRound);
+      if (captureIsCurrent()) persistGpsRound();
+    }
   } catch (error) {
     setGpsStatus(error.message, "error");
     showAccessRequired();
     return;
   }
+  if (!captureIsCurrent()) return;
   const existingHoleState = gpsHoleState();
   if (gpsCurrentFix(existingHoleState)?.lie === "Green") {
     renderGpsMode();
@@ -11169,16 +11573,30 @@ async function captureGpsLocation({ forcedLie = null } = {}) {
     ? "Marking your position on the green… keep the phone still for a moment."
     : "Finding your position… keep the phone still for a moment.");
   try {
-    const fix = await readCurrentPosition();
-    fix.course_point = gpsToCoursePoint(calibration, fix);
+    const fix = gpsPracticeActive ? simulatedGpsLocation(forcedLie) : await readCurrentPosition();
+    if (!captureIsCurrent()) {
+      renderGpsMode();
+      setGpsStatus("Hole changed while GPS was locating. Tap Tee location or Ball location again on the current hole.", "error");
+      return;
+    }
+    if (!gpsPracticeActive) fix.course_point = gpsToCoursePoint(calibration, fix);
     fix.detected_lie = lieAt(fix.course_point).type;
-    fix.lie = forcedLie || fix.detected_lie;
+    fix.lie = forcedLie || (gpsPracticeActive ? fix.lie : fix.detected_lie);
     if (forcedLie) fix.lie_source = "player_on_green";
     fix.conditions = normalizeGpsBallConditions(null, fix.lie);
     const holeState = gpsHoleState();
     if (!holeState.tee) {
       holeState.tee = fix;
       holeState.pin_course_point ||= [...pin().center_point];
+    } else if (!holeState.awaiting_ball_location && forcedLie !== "Green") {
+      if (holeState.shots.length) {
+        const lastShot = holeState.shots.at(-1);
+        lastShot.end = fix;
+        lastShot.distance_yards = gpsDistanceYards(lastShot.start, fix);
+        lastShot.canonicalAssessment = gpsReplayShotEvidence({ shot: lastShot, holeNumber: state.holeIndex + 1,
+          shotIndex: holeState.shots.length - 1, pinPoint: holeState.pin_course_point || pin().center_point }).canonicalAssessment;
+      }
+      else holeState.tee = fix;
     } else {
       const start = gpsCurrentFix(holeState);
       const gpsShot = {
@@ -11186,7 +11604,7 @@ async function captureGpsLocation({ forcedLie = null } = {}) {
         start,
         end: fix,
         distance_yards: gpsDistanceYards(start, fix),
-        strategy: holeState.pending_strategy,
+        strategy: holeState.outgoing_strategy || holeState.pending_strategy,
         recorded_at: fix.recorded_at
       };
       gpsShot.evidence_snapshot = createGpsShotEvidenceSnapshot(start, gpsShot.strategy, fix.recorded_at);
@@ -11197,8 +11615,10 @@ async function captureGpsLocation({ forcedLie = null } = {}) {
         pinPoint: holeState.pin_course_point || pin().center_point
       }).canonicalAssessment;
       holeState.shots.push(gpsShot);
-      holeState.pending_strategy = null;
+      if (!holeState.awaiting_ball_location || forcedLie === "Green") holeState.pending_strategy = null;
+      holeState.outgoing_strategy = null;
     }
+    holeState.awaiting_ball_location = false;
     state.gpsCaddieExpanded = false;
     persistGpsRound();
     indicator.dataset.state = fix.accuracy_meters > 18 ? "error" : "ready";
@@ -11221,14 +11641,14 @@ function finishGpsHoleFromGreen() {
   if (!holeOutGpsHole(holeState)) return;
   const completedScore = gpsHoleScore(holeState);
   persistGpsRound();
-  if (completedHoleIndex === 17) {
+  if (completedHoleIndex === activeCourseHoleCount() - 1) {
     renderGpsMode();
     const unfinishedHoleIndex = gpsRoundReviewAction(gpsRound, completedHoleIndex).holeIndex;
     const complete = gpsRoundComplete(gpsRound);
     showMobileShotToast(
-      "Hole 18 complete",
+      `Hole ${activeCourseHoleCount()} complete`,
       complete
-        ? `${completedScore} strokes recorded. Tap Complete round to save it to your account.`
+        ? `${completedScore} strokes recorded. ${gpsPracticeActive ? "Tap Complete practice to finish your test round." : "Tap Complete round to save it to your account."}`
         : `${completedScore} strokes recorded. Finish hole ${unfinishedHoleIndex + 1} before completing the round.`
     );
     return;
@@ -11360,7 +11780,7 @@ function selectGpsTeeClub() {
 function changeHole(index) {
   clearPendingAutoPlay();
   closeCompetitionComparison({ continueRound: true });
-  state.holeIndex = Math.max(0, Math.min(17, index));
+  state.holeIndex = Math.max(0, Math.min(activeCourseHoleCount() - 1, index));
   if (state.competition) {
     state.competition.current_hole = state.holeIndex + 1;
     cacheActiveCompetition();
@@ -11380,7 +11800,7 @@ function replayRecordedShot(holeIndex, shotIndex) {
   clearPendingAutoPlay();
   clearPuttAnimation();
   clearFlightAnimation();
-  state.holeIndex = bounded(holeIndex, 0, 17);
+  state.holeIndex = bounded(holeIndex, 0, activeCourseHoleCount() - 1);
   state.pinIndex = rotatingPinIndex(state.holeIndex, hole().geometries.green_complex.pin_zones.length);
   resetHole();
 
@@ -11721,7 +12141,7 @@ function replayPageMapMarkup(shot) {
 
 function renderReplayPage() {
   if (!replayPageState) return;
-  const holes = Array.from({ length: 18 }, (_, index) => replayPageShots(index));
+  const holes = Array.from({ length: activeCourseHoleCount() }, (_, index) => replayPageShots(index));
   const holeIndex = replayPageState.holeIndex;
   const shots = holes[holeIndex];
   replayPageState.shotIndex = bounded(replayPageState.shotIndex, 0, Math.max(0, shots.length - 1));
@@ -11901,7 +12321,9 @@ async function resetGame() {
   state.pinIndex = rotatingPinIndex(0, hole().geometries.green_complex.pin_zones.length);
   state.selectedClub = 0;
   window.clearTimeout(gpsSyncTimer);
-  gpsRound = createGpsRound(state.courseId);
+  gpsRound = createGpsRound(state.courseId, activeCourseHoleCount());
+  if (gpsPracticeActive) gpsRound.practice = true;
+  else gpsRound.local_only = true;
   persistGpsRound();
   resetHole();
   updateAll();
@@ -12089,10 +12511,10 @@ function renderScorecard() {
         }).join("")}<td class="total">${data.reduce((sum, _, i) => sum + (state.scores[i + offset] || 0), 0) || "—"}</td></tr>
       </tbody>
     </table>`;
-  $("#scorecard-grid").innerHTML = scoreTallyMarkup() + section(front, 0, "Out") + section(back, 9, "In");
+  $("#scorecard-grid").innerHTML = scoreTallyMarkup() + section(front, 0, "Out") + (back.length ? section(back, 9, "In") : "");
 }
 
-function setPostRoundExportReady(ready, message = "AI wording and shot evidence are ready to download.") {
+function setPostRoundExportReady(ready, message = "Your report and recorded evidence are ready to download.") {
   $$('[data-post-round-export]').forEach(button => { button.disabled = !ready; });
   const status = $("#post-round-export-status");
   if (status) status.textContent = message;
@@ -12103,14 +12525,14 @@ function downloadPostRoundJson() {
   const exported = { ...report, exported_at: new Date().toISOString(), source_round: currentRoundSave({ includePostRoundReport: false }) };
   const file = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
   downloadRoundFile(file, postRoundReportFilename(exported, "json"));
-  setPostRoundExportReady(true, "Analysis JSON downloaded with the AI Caddie wording and complete round data.");
+  setPostRoundExportReady(true, "Analysis JSON downloaded with your report and complete round data.");
 }
 
 function downloadPostRoundPdf() {
   const report = currentPostRoundReport({ freezeCompleted: false });
   const file = new Blob([buildPostRoundPdf(report)], { type: "application/pdf" });
   downloadRoundFile(file, postRoundReportFilename(report, "pdf"));
-  setPostRoundExportReady(true, "PDF report downloaded with the AI Caddie wording shown above.");
+  setPostRoundExportReady(true, "PDF downloaded with the report shown above.");
 }
 
 function openRoundReviewLegacy() {
@@ -12351,7 +12773,18 @@ function scorecardReportMarkup(report) {
   </details>`;
 }
 
+function renderCoachingPostRoundReport(report) {
+  $("#round-review-dialog .eyebrow").textContent = report.round.status === "completed" ? "Round complete" : "Round so far";
+  $("#round-review-dialog h2").textContent = "Your round review";
+  $("#round-review-summary").textContent = `${report.round.course_name} · ${report.round.tee} tee · ${report.round.score} (${relativeScoreLabel(report.round.relative_to_par)})`;
+  const keyHoleDetails = report.meaningful_holes.map(hole => `<details class="review-hole blended-hole" id="report-hole-${hole.hole}"><summary>Hole ${hole.hole} · Recorded shots</summary>${hole.shots.map(shot => postRoundShotMarkup(shot)).join("")}</details>`).join("");
+  const details = `<details class="blended-report-section report-appendix"><summary>Detailed shot evidence · ${report.detailed_shots.length} recorded shots</summary>${report.detailed_shots.map(shot => postRoundShotMarkup(shot, { replay: false })).join("")}</details>`;
+  $("#round-review-list").innerHTML = `<section class="blended-learning-section">${coachingReportHtml(report)}</section>${scorecardReportMarkup(report)}${keyHoleDetails}${details}<section class="post-round-export"><p id="post-round-export-status">Your report and recorded evidence are ready to download.</p><div class="post-round-export-actions"><button class="primary-action" type="button" data-post-round-export="pdf">Download PDF</button><button class="secondary-action" type="button" data-post-round-export="json">Download analysis JSON</button></div></section><div class="review-actions"><button class="primary-action desktop-replay-only" type="button" data-review-replay>Open shot replay</button><button class="secondary-action" type="button" data-review-new-round>Start new round</button><button class="secondary-action" type="button" data-review-back>Back to game</button></div>`;
+  bindPostRoundReportActions();
+}
+
 function renderBlendedPostRoundReport(report) {
+  if (report.coaching_review) { renderCoachingPostRoundReport(report); return; }
   const completed = report.round.status === "completed";
   const narrative = report.narrative;
   const ungradedDecisions = report.summary.ungraded_decisions ?? Math.max(0, report.summary.scored_decisions - report.summary.graded_decisions);
@@ -12397,6 +12830,10 @@ function renderBlendedPostRoundReport(report) {
   const appendix = `<details class="blended-report-section report-appendix"><summary><span><small>09</small><b>Detailed shot evidence</b></span><em>${report.detailed_shots.length} recorded shots</em></summary><div class="appendix-shot-list">${report.detailed_shots.map(shot => postRoundShotMarkup(shot, { replay: false })).join("") || `<p class="report-empty">No shot evidence has been recorded.</p>`}</div><footer>Report ${escapeHtml(report.report_builder_version)} · Assessment ${escapeHtml(report.provenance.assessment_version)} · Strategy ${escapeHtml(report.provenance.strategy_evaluator_version)}</footer></details>`;
   const exports = `<section class="post-round-export" aria-labelledby="post-round-export-title"><div><span class="eyebrow">Take the report with you</span><strong id="post-round-export-title">One analysis, two useful formats</strong><p id="post-round-export-status" aria-live="polite">${narrative.status === "pending" ? "Finishing the AI Caddie wording before export…" : "AI wording and canonical evidence are ready to download."}</p></div><div class="post-round-export-actions"><button class="primary-action" type="button" data-post-round-export="pdf" ${narrative.status === "pending" ? "disabled" : ""}>Download PDF</button><button class="secondary-action" type="button" data-post-round-export="json" ${narrative.status === "pending" ? "disabled" : ""}>Download analysis JSON</button></div></section>`;
   $("#round-review-list").innerHTML = `${story}${remember}${momentsMarkup}${patterns}${focus}${scorecardReportMarkup(report)}${holes}${appendix}${exports}<div class="review-actions"><button class="primary-action desktop-replay-only" type="button" data-review-replay>Open shot replay</button><button class="secondary-action" type="button" data-review-new-round>Start new round</button><button class="secondary-action" type="button" data-review-back>Back to game</button></div>`;
+  bindPostRoundReportActions();
+}
+
+function bindPostRoundReportActions() {
   $('[data-post-round-export="pdf"]').addEventListener("click", downloadPostRoundPdf);
   $('[data-post-round-export="json"]').addEventListener("click", downloadPostRoundJson);
   $$('[data-report-hole]').forEach(button => button.addEventListener("click", () => {
@@ -12458,6 +12895,7 @@ function postRoundAiPayload(report) {
 }
 
 async function requestPostRoundNarrative(report) {
+  if (report.coaching_review) { renderBlendedPostRoundReport(report); setPostRoundExportReady(true, "Your report and recorded evidence are ready to download."); return; }
   const pending = structuredClone(report);
   pending.narrative.status = "pending";
   renderBlendedPostRoundReport(pending);
@@ -12478,7 +12916,7 @@ function openRoundReview() {
   if (!report) return;
   renderBlendedPostRoundReport(report);
   $("#round-review-dialog").showModal();
-  if (report.narrative.status !== "available") {
+  if (!report.coaching_review && report.narrative.status !== "available") {
     void requestPostRoundNarrative(report).catch(error => {
       console.warn("The post-round AI narrative could not be completed.", error);
       renderBlendedPostRoundReport(report);
@@ -13028,7 +13466,7 @@ function renderRoundHistory(rounds) {
   if (!rounds.length) {
     list.innerHTML = `<div class="round-history-empty">
       <strong>Your first finished round will appear here.</strong>
-      <span>Complete all 18 holes. The game will preserve the result automatically—no export or extra save button is required.</span>
+      <span>Complete all ${activeCourseHoleCount()} holes. The game will preserve the result automatically—no export or extra save button is required.</span>
     </div>`;
     return;
   }
@@ -13042,7 +13480,7 @@ function renderRoundHistory(rounds) {
       : "Awaiting scored shots";
     return `<article class="history-round" data-round-id="${escapeHtml(round.id)}">
       <time class="history-round-date" datetime="${escapeHtml(round.completed_at)}"><strong>${escapeHtml(date.day)}</strong><span>${escapeHtml(date.year)}</span></time>
-      <div class="history-round-course"><strong>${escapeHtml(round.course_name || round.course_id)}</strong><span>${escapeHtml(round.tee || "White")} tee · 18 holes</span></div>
+      <div class="history-round-course"><strong>${escapeHtml(round.course_name || round.course_id)}</strong><span>${escapeHtml(round.tee || "White")} tee · ${round.hole_count || 18} holes</span></div>
       <div class="history-round-stat history-round-strokes"><span>Strokes</span><strong>${Number.isInteger(round.total_strokes) ? round.total_strokes : "—"}</strong><small>${parCopy}</small></div>
       <div class="history-round-stat history-round-relative"><span>To par</span><strong>${relative}</strong><small>Round score</small></div>
       <div class="history-round-stat history-round-management"><span>Course management</span><strong>${management}</strong><small>${managementCopy}</small></div>
@@ -13113,7 +13551,7 @@ async function openCompletedRoundReplay(roundId, button) {
     };
     const replay = await replayHoleLoader.loadHole(roundId, firstHole, { priority: "user" });
     if (state.courseId !== replayCourseId) await loadData(replayCourseId);
-    const holes = Array.from({ length: 18 }, () => []);
+    const holes = Array.from({ length: activeCourseHoleCount() }, () => []);
     holes[firstHole - 1] = serverReplayShots(replay);
     $("#round-history-dialog").close();
     enterReplayPage({
@@ -13162,7 +13600,7 @@ function renderGpsReplayLibrary(rounds) {
   if (!visibleRounds.length) {
     list.innerHTML = `<div class="round-history-empty">
       <strong>Your first saved GPS round will appear here.</strong>
-      <span>Record a shot in On-course GPS mode and wait for “Round synced.”</span>
+      <span>Finish your on-course round and tap Complete round to upload it.</span>
     </div>`;
     return;
   }
@@ -13173,7 +13611,7 @@ function renderGpsReplayLibrary(rounds) {
     const complete = Boolean(round.is_complete);
     const holesRecorded = Math.max(0, Number(round.holes_recorded) || 0);
     const roundStatus = complete
-      ? `<b data-round-status="complete">Complete</b> · 18-hole GPS record`
+      ? `<b data-round-status="complete">Complete</b> · ${round.hole_count || 18}-hole GPS record`
       : `<b data-round-status="progress">In progress</b> · ${holesRecorded} hole${holesRecorded === 1 ? "" : "s"} recorded`;
     return `<article class="gps-replay-round" data-round-state="${complete ? "complete" : "progress"}">
       <time datetime="${escapeHtml(round.completed_at || round.updated_at || "")}"><strong>${escapeHtml(date.day)}</strong><span>${escapeHtml(date.year)}</span></time>
@@ -13248,7 +13686,7 @@ function renderLeaderboard(leaders) {
   if (!leaders.length) {
     list.innerHTML = `<li class="round-history-empty">
       <strong>The board is waiting for its first scored round.</strong>
-      <span>Finish all 18 holes with a Course Management score to enter the ranking.</span>
+      <span>Finish all holes with a Course Management score to enter the ranking.</span>
     </li>`;
     return;
   }
@@ -13701,10 +14139,11 @@ async function playerApi(path, options = {}) {
   return payload;
 }
 
-async function ensurePlayActivity(activityKind, clientActivityId, holder) {
+async function ensurePlayActivity(activityKind, clientActivityId, holder, options = {}) {
   if (!holder || typeof holder !== "object") throw new Error("The play session could not be prepared.");
   if (holder.license_activity_id) return holder.license_activity_id;
   const payload = await playerApi("/api/player/play-activities", {
+    ...options,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ activity_kind: activityKind, client_activity_id: clientActivityId })
@@ -13727,6 +14166,10 @@ async function initializeAuthentication() {
   const response = await fetch("/api/auth/config", { cache: "no-store" });
   if (!response.ok) throw new Error("The player login configuration could not be loaded.");
   authConfig = await response.json();
+  if (authConfig.environment === "development") {
+    document.title = "Jetta Golf — Development .47";
+    document.querySelector(".brand small").textContent = "Development .47";
+  }
   if (authConfig.provider !== "supabase") return;
   supabaseAuth = createSupabaseAuth(authConfig);
   const redirect = supabaseAuth.consumeRedirect();
@@ -14088,7 +14531,7 @@ function bindEvents() {
   $("#competition-comparison-close").addEventListener("click", () => closeCompetitionComparison());
   $("#competition-comparison-grip").addEventListener("click", () => closeCompetitionComparison());
   window.addEventListener("online", () => {
-    if (gpsRound) scheduleGpsRoundSync(0);
+    if (!gpsRound || gpsRoundComplete(gpsRound)) void uploadFinishedGpsGames();
     if (state.liveGpsView) void refreshLiveGpsRound({ silent: true });
   });
   window.addEventListener("offline", () => {
@@ -14362,7 +14805,7 @@ function bindEvents() {
     schedulePlayerRoundSync(0);
   });
   $$(".tee-switch button").forEach(button => button.addEventListener("click", () => {
-    if (academyActive()) return;
+    if (academyActive() || !availableScorecardTees(card()).includes(button.dataset.tee)) return;
     state.tee = button.dataset.tee;
     if (state.roundState) {
       state.roundState = { ...state.roundState, tee: state.tee };
@@ -14414,6 +14857,10 @@ function bindEvents() {
   window.addEventListener("resize", keepMobileMapPlanInView);
   window.visualViewport?.addEventListener("resize", positionLiveRoundPanel);
   window.addEventListener("resize", refreshMapAfterViewportWidthChange);
+  window.visualViewport?.addEventListener("resize", refreshMapAfterViewportWidthChange);
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(refreshMapAfterViewportWidthChange).observe($("#course-map"));
+  }
   window.addEventListener("resize", positionLiveRoundPanel);
   $("#desktop-power-slider").addEventListener("input", event => {
     setSwingPowerFromMobile(event.target.value);
@@ -14505,6 +14952,10 @@ function bindEvents() {
   window.addEventListener("pointerup", onTargetPointerUp);
   window.addEventListener("pointercancel", onTargetPointerUp);
   $("#course-map").addEventListener("contextmenu", preventLiveMapNativeGesture);
+  $("#course-map").addEventListener("pointerdown", onLiveMapTouchDown, { capture: true, passive: false });
+  window.addEventListener("pointermove", onLiveMapTouchMove, { capture: true, passive: false });
+  window.addEventListener("pointerup", onLiveMapTouchEnd, { capture: true, passive: false });
+  window.addEventListener("pointercancel", onLiveMapTouchEnd, { capture: true, passive: false });
   $("#course-map").addEventListener("selectstart", preventLiveMapNativeGesture);
   $("#course-map").addEventListener("dragstart", preventLiveMapNativeGesture);
   window.addEventListener("pointermove", onLiveMapMeasurePointerMove, { passive: false });
@@ -14521,6 +14972,43 @@ function bindEvents() {
     renderRoundNavigation();
     $("#round-nav-dialog").showModal();
   });
+  $("#gps-start-new").addEventListener("click", () => {
+    $("#gps-confirm-course").innerHTML = visibleCourses().map(course =>
+      `<option value="${escapeHtml(course.id)}" ${course.id === state.courseId ? "selected" : ""}>${escapeHtml(courseOptionLabel(course))}</option>`).join("");
+    $("#gps-confirm-course-status").textContent = "";
+    $("#gps-start-dialog").close();
+    $("#gps-course-confirm-dialog").showModal();
+  });
+  $("#gps-confirm-course-start").addEventListener("click", async event => {
+    const button = event.currentTarget;
+    const courseId = $("#gps-confirm-course").value;
+    button.disabled = true;
+    try {
+      if (courseId !== state.courseId) {
+        if (academyActive() || challengeActive() || competitionActive()) {
+          throw new Error("Leave the current lesson or match before changing courses.");
+        }
+        window.clearTimeout(liveGpsPollTimer);
+        stopGpsReplayPlayback();
+        state.liveGpsView = false;
+        state.liveGpsRound = null;
+        state.gpsReplay = null;
+        await loadData(courseId);
+        localStorage.setItem(playerStorageKey("course"), courseId);
+      }
+      startNewGpsRound();
+      $("#gps-course-confirm-dialog").close();
+    } catch (error) {
+      $("#gps-confirm-course-status").textContent = `Could not start the round: ${error.message}`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+  $("#gps-start-continue").addEventListener("click", () => {
+    $("#gps-start-dialog").close();
+    enterGpsMode();
+  });
+  $("#gps-start-dialog").addEventListener("close", syncGameModeSelector);
   $("#gps-mode-button").addEventListener("click", openGpsMode);
   $$('[data-course-map-mode]').forEach(button => button.addEventListener("click", () => setCourseMapMode(button.dataset.courseMapMode)));
   $("#live-round-refresh").addEventListener("click", () => {
@@ -14541,6 +15029,7 @@ function bindEvents() {
   $("#live-round-open-gps").addEventListener("click", openGpsMode);
   $("#live-map-measure-record").addEventListener("click", openGpsMode);
   $("#live-map-measure-voice").addEventListener("click", speakLiveMapInstruction);
+  $("#live-map-reset").addEventListener("click", resetLiveMapCamera);
   $("#live-map-target-use").addEventListener("click", () => returnFromGpsTargetPicker({ save: true }));
   $("#live-map-target-cancel").addEventListener("click", () => returnFromGpsTargetPicker({ save: false }));
   $("#gps-exit").addEventListener("click", () => closeGpsMode("simulator"));
@@ -14548,12 +15037,26 @@ function bindEvents() {
   $("#gps-previous-hole").addEventListener("click", () => gpsChangeHole(state.holeIndex - 1));
   $("#gps-next-hole").addEventListener("click", advanceGpsHole);
   $("#gps-page-view").addEventListener("change", event => {
+    if (event.target.value === "practice" && !gpsPracticeActive) {
+      toggleGpsPractice();
+      return;
+    }
+    if (event.target.value === "actual" && gpsPracticeActive) {
+      toggleGpsPractice();
+      return;
+    }
     state.gpsPageView = GPS_PAGE_VIEWS.has(event.target.value) ? event.target.value : "actual";
     state.gpsCaddieExpanded = false;
     $(".gps-mode-content")?.scrollTo?.({ top: 0 });
     renderGpsMode();
   });
+  $("#gps-upload-finished").addEventListener("click", () => {
+    try { saveAndFinishPreviousGpsGames(); }
+    catch (error) { $("#gps-upload-status").textContent = `Could not finish the previous game: ${error.message}`; }
+  });
+  $("#gps-practice-restart").addEventListener("click", () => toggleGpsPractice(true));
   $("#gps-location-button").addEventListener("click", () => void captureGpsLocation());
+  $("#gps-next-shot").addEventListener("click", nextGpsShotPage);
   $("#gps-on-green").addEventListener("click", () => void captureGpsLocation({ forcedLie: "Green" }));
   $("#gps-undo").addEventListener("click", () => {
     if (gpsPagePreviewActive()) return;
@@ -14582,6 +15085,7 @@ function bindEvents() {
     }
   }));
   $$('[data-gps-review-delete-putt]').forEach(button => button.addEventListener("click", () => deleteGpsReviewPutt(button)));
+  $$('[data-gps-finish-game]').forEach(button => button.addEventListener("click", finishGpsGame));
   $("#gps-review-next").addEventListener("click", continueFromGpsHoleReview);
   $("#gps-add-putt").addEventListener("click", () => {
     if (gpsPagePreviewActive()) return;
@@ -14706,6 +15210,7 @@ function bindEvents() {
   $("#round-review-button").addEventListener("click", openRoundReview);
   $("#game-finished-button").addEventListener("click", finishGame);
   $("#reset-game-button").addEventListener("click", () => $("#reset-game-dialog").showModal());
+  $("#sidebar-reset-game-button").addEventListener("click", () => $("#reset-game-dialog").showModal());
   $("#declare-unplayable").addEventListener("click", declareLastShotUnplayable);
   $("#reset-game-dialog").addEventListener("close", () => {
     if ($("#reset-game-dialog").returnValue === "confirm") {

@@ -119,3 +119,11 @@ test("portable save rejects unsupported and malformed files", () => {
   save.course_id = "cranbury";
   assert.throws(() => parseRoundSave(JSON.stringify(save)), /course does not match/);
 });
+
+
+test("nine-hole saves retain hole 9 and reject hole 10", () => {
+  const round = createRoundState({ courseId: "nine-links", roundSeed: 7, holeCount: 9 });
+  const args = { roundState: round, currentHoleIndex: 8, pinIndex: 0, playerProfile: PROFILE };
+  assert.equal(parseRoundSave(JSON.stringify(createRoundSave(args))).round_state.holes.length, 9);
+  assert.throws(() => createRoundSave({ ...args, currentHoleIndex: 9 }));
+});
