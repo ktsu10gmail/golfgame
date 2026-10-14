@@ -1,4 +1,4 @@
-import { gamePreviewBounds, gamePreviewProjector, renderGameMapPreview } from './game_map_preview.mjs?v=20261008-prototype1';
+import { gamePreviewBounds, gamePreviewProjector, renderGameMapPreview } from './game_map_preview.mjs?v=20261009-start-ball1';
 
 function seededRandom(seed) {
   let value = 2166136261;
@@ -113,7 +113,7 @@ export function renderIllustratedHolePrototype(hole) {
     .illustrated-hole .preview-green{fill:#4fb344;stroke:none}
     .illustrated-hole .preview-green-fringe{stroke:#a1c96e;stroke-width:9}
     .illustrated-hole .preview-water{fill:url(#illustrated-water);stroke:#84925f;stroke-width:4}
-    .illustrated-hole .preview-sand{fill:#e5d6af;stroke:#a39770;stroke-width:5}
+    .illustrated-hole .preview-sand{fill:#e5d6af;stroke:none}
     .illustrated-hole .preview-cart-path{fill:#aea990;stroke:#d1cbb4;stroke-width:1.5}
     .illustrated-hole .preview-route{stroke:#f5f5d4;stroke-width:2.5;stroke-dasharray:9 10;fill:none}
     .illustrated-hole .preview-tee{stroke-width:1.5}
@@ -123,7 +123,8 @@ export function renderIllustratedHolePrototype(hole) {
   svg = svg.replace('class="game-map-preview-svg"', 'class="game-map-preview-svg illustrated-hole" data-style="one-hole-prototype"').replace('<defs>', `<defs>${definitions}`);
   const project = gamePreviewProjector(gamePreviewBounds(hole));
   const points = [...(hole.geometries.fairway_segments || []).flatMap(item => item.polygon), ...hole.geometries.green_complex.polygon,
-    ...(hole.centerline_waypoints || []).map(item => item.point)].map(project);
+    ...(hole.centerline_waypoints || []).map(item => item.point),
+    ...(Array.isArray(hole.hole_metadata?.default_start_point) ? [hole.hole_metadata.default_start_point] : [])].map(project);
   const left = Math.max(0, Math.min(...points.map(point => point[0])) - 155);
   const right = Math.min(1000, Math.max(...points.map(point => point[0])) + 155);
   const width = Math.max(480, right - left);

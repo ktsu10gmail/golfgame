@@ -32,7 +32,7 @@ def receive(root, payload):
         (backup/'manifest.json').write_text(json.dumps({'course_id':payload['course_id'],'fingerprint':fingerprint(payload),'version':payload.get('exported_at')}))
         try:
             importer.install_package(payload,force=True)
-            for n in range(1,19):
+            for n in range(1,len(payload['holes'])+1):
                 if json.loads((destination/f'hole{n}.json').read_text())!=payload['holes'][str(n)]:raise ValueError('Installed geometry verification failed')
             if (destination/'scorecard.csv').read_text()!=payload['scorecard_csv']:raise ValueError('Installed scorecard verification failed')
             for n,(extension,content) in images.items():
@@ -45,7 +45,7 @@ def receive(root, payload):
             elif catalog.exists():catalog.unlink()
             raise
         return {'installed':True,'verified':True,'course_id':payload['course_id'],'course_name':payload['course_name'],
-            'map_updated_at':payload.get('exported_at'),'holes':18,'backup':str(backup),'fingerprint':fingerprint(payload)}
+            'map_updated_at':payload.get('exported_at'),'holes':len(payload['holes']),'backup':str(backup),'fingerprint':fingerprint(payload)}
 
 
 def _install_target(root,payload,target):

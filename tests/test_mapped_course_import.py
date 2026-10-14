@@ -57,14 +57,33 @@ def package() -> dict:
         "course_id": "mapped-links",
         "course_name": "Mapped Links",
         "exported_at": "2026-07-30T12:00:00Z",
-        "scorecard_csv": "Hole,Par\n1,4\n",
+        "scorecard_csv": "Hole,Par\n" + "".join(f"{number},4\n" for number in range(1, 19)),
         "holes": holes,
     }
 
 
 class MappedCourseImporterTests(unittest.TestCase):
+    def test_install_nine_holes_and_load_course(self):
+        from packages.golf_domain.course_adapter import load_course
+        payload = package()
+        payload["holes"] = {key: value for key, value in payload["holes"].items() if int(key) <= 9}
+        payload["hole_count"] = 9
+        payload["scorecard_csv"] = "Hole,Par\n" + "".join(f"{number},4\n" for number in range(1, 10))
+        IMPORTER.validate_package(payload)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(IMPORTER, "DATA_DIR", root), patch.object(IMPORTER, "CATALOG_PATH", root / "mapped_courses.json"):
+                destination = IMPORTER.install_package(payload, force=False)
+                self.assertFalse((destination / "hole10.json").exists())
+                self.assertEqual(len(load_course(destination)), 9)
+                self.assertEqual(json.loads((root / "mapped_courses.json").read_text())[0]["holeCount"], 9)
+        payload["hole_count"] = 18
+        with self.assertRaisesRegex(ValueError, "all 18"):
+            IMPORTER.validate_package(payload)
+
     def test_default_rough_allows_install_without_rough_polygons(self):
         payload = package()
+        payload["course_location"] = {"country": "TW", "city": "Tamsui"}
         for hole in payload["holes"].values():
             hole["geometries"]["rough_zones"] = []
         self.assertEqual(IMPORTER.validate_package(payload), payload)
@@ -90,7 +109,7 @@ class MappedCourseImporterTests(unittest.TestCase):
             del payload["holes"]["18"]
             path.write_text(json.dumps(payload), encoding="utf-8")
 
-            with self.assertRaisesRegex(ValueError, "missing 18"):
+            with self.assertRaisesRegex(ValueError, "9 or 18"):
                 IMPORTER.load_package(path)
 
     def test_install_writes_holes_scorecard_and_catalog(self) -> None:
@@ -109,7 +128,7 @@ class MappedCourseImporterTests(unittest.TestCase):
             self.assertTrue((destination / "hole18.json").exists())
             self.assertEqual(
                 (destination / "scorecard.csv").read_text(encoding="utf-8"),
-                "Hole,Par\n1,4\n",
+                "Hole,Par\n" + "".join(f"{number},4\n" for number in range(1, 19)),
             )
             installed_catalog = json.loads(catalog.read_text(encoding="utf-8"))
             self.assertEqual(installed_catalog[0]["id"], "mapped-links")
@@ -175,6 +194,17 @@ class MappedCourseImporterTests(unittest.TestCase):
             self.assertTrue(installed["illustrations"])
             self.assertEqual(installed["illustrationPath"], "data/mapped-links/illustrations")
             self.assertEqual(installed["illustrationExtension"], "jpg")
+
+    def test_marker_only_package_accepts_no_tee_surface_but_requires_start(self):
+        payload = package()
+        for hole in payload['holes'].values():
+            hole['geometries']['tee_boxes'] = []
+            hole['hole_metadata']['tee_surface_mode'] = 'markers-only'
+            hole['hole_metadata']['default_start_point'] = [0, 0]
+        IMPORTER.validate_package(payload)
+        payload['holes']['1']['hole_metadata']['default_start_point'] = None
+        with self.assertRaisesRegex(ValueError, 'default_start_point'):
+            IMPORTER.validate_package(payload)
 
     def test_package_rejects_invalid_editor_artwork(self) -> None:
         payload = package()

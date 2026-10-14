@@ -1,0 +1,5134 @@
+{
+  "schema_version": "2.0",
+  "report_version": "2.0",
+  "report_builder_version": "post-round-report-v2.1",
+  "round": {
+    "round_id": "osm-way-298761113:2190019361",
+    "course_id": "osm-way-298761113",
+    "course_name": "\u81fa\u7063\u9ad8\u723e\u592b\u4ff1\u6a02\u90e8\u7403\u5834",
+    "tee": "White",
+    "holes_completed": 18,
+    "score": 81,
+    "par": 71,
+    "relative_to_par": 10,
+    "status": "completed"
+  },
+  "summary": {
+    "strategy_score": 87,
+    "strategy_score_scale": 100,
+    "strategy_score_basis": "weighted_average_of_scored_shots",
+    "scored_decisions": 74,
+    "sound_decisions": 74,
+    "graded_decisions": 74,
+    "ungraded_decisions": 0,
+    "decision_quality_percent": 100,
+    "on_plan_executions": 59,
+    "graded_executions": 74,
+    "execution_quality_percent": 80,
+    "strongest_category": "target_selection",
+    "strongest_category_label": "Target Selection",
+    "practice_priority": "club_selection",
+    "practice_priority_label": "Club Selection"
+  },
+  "scorecard": [
+    {
+      "hole": 1,
+      "par": 4,
+      "distance_yards": 388,
+      "handicap": 1,
+      "score": 5,
+      "relative_to_par": 1,
+      "result": "Bogey"
+    },
+    {
+      "hole": 2,
+      "par": 3,
+      "distance_yards": 132,
+      "handicap": 2,
+      "score": 3,
+      "relative_to_par": 0,
+      "result": "Par"
+    },
+    {
+      "hole": 3,
+      "par": 4,
+      "distance_yards": 410,
+      "handicap": 3,
+      "score": 5,
+      "relative_to_par": 1,
+      "result": "Bogey"
+    },
+    {
+      "hole": 4,
+      "par": 4,
+      "distance_yards": 388,
+      "handicap": 4,
+      "score": 4,
+      "relative_to_par": 0,
+      "result": "Par"
+    },
+    {
+      "hole": 5,
+      "par": 4,
+      "distance_yards": 314,
+      "handicap": 5,
+      "score": 4,
+      "relative_to_par": 0,
+      "result": "Par"
+    },
+    {
+      "hole": 6,
+      "par": 5,
+      "distance_yards": 554,
+      "handicap": 6,
+      "score": 5,
+      "relative_to_par": 0,
+      "result": "Par"
+    },
+    {
+      "hole": 7,
+      "par": 4,
+      "distance_yards": 450,
+      "handicap": 7,
+      "score": 5,
+      "relative_to_par": 1,
+      "result": "Bogey"
+    },
+    {
+      "hole": 8,
+      "par": 3,
+      "distance_yards": 162,
+      "handicap": 8,
+      "score": 3,
+      "relative_to_par": 0,
+      "result": "Par"
+    },
+    {
+      "hole": 9,
+      "par": 4,
+      "distance_yards": 446,
+      "handicap": 9,
+      "score": 6,
+      "relative_to_par": 2,
+      "result": "Double bogey"
+    },
+    {
+      "hole": 10,
+      "par": 3,
+      "distance_yards": 206,
+      "handicap": 10,
+      "score": 3,
+      "relative_to_par": 0,
+      "result": "Par"
+    },
+    {
+      "hole": 11,
+      "par": 4,
+      "distance_yards": 343,
+      "handicap": 11,
+      "score": 5,
+      "relative_to_par": 1,
+      "result": "Bogey"
+    },
+    {
+      "hole": 12,
+      "par": 4,
+      "distance_yards": 364,
+      "handicap": 12,
+      "score": 4,
+      "relative_to_par": 0,
+      "result": "Par"
+    },
+    {
+      "hole": 13,
+      "par": 5,
+      "distance_yards": 484,
+      "handicap": 13,
+      "score": 5,
+      "relative_to_par": 0,
+      "result": "Par"
+    },
+    {
+      "hole": 14,
+      "par": 4,
+      "distance_yards": 415,
+      "handicap": 14,
+      "score": 5,
+      "relative_to_par": 1,
+      "result": "Bogey"
+    },
+    {
+      "hole": 15,
+      "par": 5,
+      "distance_yards": 480,
+      "handicap": 15,
+      "score": 5,
+      "relative_to_par": 0,
+      "result": "Par"
+    },
+    {
+      "hole": 16,
+      "par": 4,
+      "distance_yards": 364,
+      "handicap": 16,
+      "score": 5,
+      "relative_to_par": 1,
+      "result": "Bogey"
+    },
+    {
+      "hole": 17,
+      "par": 3,
+      "distance_yards": 181,
+      "handicap": 17,
+      "score": 5,
+      "relative_to_par": 2,
+      "result": "Double bogey"
+    },
+    {
+      "hole": 18,
+      "par": 4,
+      "distance_yards": 355,
+      "handicap": 18,
+      "score": 4,
+      "relative_to_par": 0,
+      "result": "Par"
+    }
+  ],
+  "detailed_shots": [
+    {
+      "shot_id": "h1:s1",
+      "hole_number": 1,
+      "stroke_number": 1,
+      "club": "3 Wood",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 249,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 27.89,
+          "lateral_miss_yards": 17.54,
+          "depth_miss_yards": -21.68,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h1:s1:assessment",
+        "shot:h1:s1:result",
+        "shot:h1:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h1:s2",
+      "hole_number": 1,
+      "stroke_number": 2,
+      "club": "3 Wood",
+      "shot_type": "layup_positioning",
+      "shot_type_label": "Layup Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "SIDEHILL_COMPENSATION_CORRECT",
+          "SMART_LAYUP"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 62,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 18.92,
+          "lateral_miss_yards": -11.29,
+          "depth_miss_yards": 15.18,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 87,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "sidehill_compensation_correct",
+          "smart_layup"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h1:s2:assessment",
+        "shot:h1:s2:result",
+        "shot:h1:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h1:s3",
+      "hole_number": 1,
+      "stroke_number": 3,
+      "club": "Gap Wedge",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_MISSING"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 10,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 6.99,
+          "lateral_miss_yards": 4.82,
+          "depth_miss_yards": 5.07,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 87,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected",
+          "sidehill_compensation_missing"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h1:s3:assessment",
+        "shot:h1:s3:result",
+        "shot:h1:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h1:s4",
+      "hole_number": 1,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ACCEPTABLE_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 78,
+        "reason_codes": [
+          "MANAGEABLE_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 1.51,
+          "lateral_miss_yards": -1.03,
+          "depth_miss_yards": 1.1,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 80,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h1:s4:assessment",
+        "shot:h1:s4:result",
+        "shot:h1:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h1:s5",
+      "hole_number": 1,
+      "stroke_number": 5,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0,
+          "lateral_miss_yards": 0,
+          "depth_miss_yards": 0,
+          "lateral_direction": "CENTER",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h1:s5:assessment",
+        "shot:h1:s5:result",
+        "shot:h1:s5:strategy"
+      ]
+    },
+    {
+      "shot_id": "h2:s1",
+      "hole_number": 2,
+      "stroke_number": 1,
+      "club": "8 Iron",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "LIE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 21,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 11.59,
+          "lateral_miss_yards": -3.73,
+          "depth_miss_yards": -10.97,
+          "lateral_direction": "LEFT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 86,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "lie_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h2:s1:assessment",
+        "shot:h2:s1:result",
+        "shot:h2:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h2:s2",
+      "hole_number": 2,
+      "stroke_number": 2,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_MISSED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "TAP_IN_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 1.03,
+          "lateral_miss_yards": -1.03,
+          "depth_miss_yards": 0.02,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 77,
+        "label": "acceptable",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_missed"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h2:s2:assessment",
+        "shot:h2:s2:result",
+        "shot:h2:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h3:s1",
+      "hole_number": 3,
+      "stroke_number": 1,
+      "club": "3 Wood",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 263,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 13.23,
+          "lateral_miss_yards": 8.35,
+          "depth_miss_yards": -10.26,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h3:s1:assessment",
+        "shot:h3:s1:result",
+        "shot:h3:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h3:s2",
+      "hole_number": 3,
+      "stroke_number": 2,
+      "club": "5 Hybrid",
+      "shot_type": "layup_positioning",
+      "shot_type_label": "Layup Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "SMART_LAYUP"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 89,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 20.04,
+          "lateral_miss_yards": 11.66,
+          "depth_miss_yards": 16.3,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 86,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "smart_layup"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h3:s2:assessment",
+        "shot:h3:s2:result",
+        "shot:h3:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h3:s3",
+      "hole_number": 3,
+      "stroke_number": 3,
+      "club": "Pitching Wedge",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_CORRECT"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 7,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 2.61,
+          "lateral_miss_yards": -2.61,
+          "depth_miss_yards": 0,
+          "lateral_direction": "LEFT",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected",
+          "sidehill_compensation_correct"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h3:s3:assessment",
+        "shot:h3:s3:result",
+        "shot:h3:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h3:s4",
+      "hole_number": 3,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ACCEPTABLE_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 78,
+        "reason_codes": [
+          "MANAGEABLE_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 1.42,
+          "lateral_miss_yards": 0.09,
+          "depth_miss_yards": -1.41,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h3:s4:assessment",
+        "shot:h3:s4:result",
+        "shot:h3:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h3:s5",
+      "hole_number": 3,
+      "stroke_number": 5,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0,
+          "lateral_miss_yards": 0,
+          "depth_miss_yards": 0,
+          "lateral_direction": "CENTER",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h3:s5:assessment",
+        "shot:h3:s5:result",
+        "shot:h3:s5:strategy"
+      ]
+    },
+    {
+      "shot_id": "h4:s1",
+      "hole_number": 4,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 263,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 74.58,
+          "lateral_miss_yards": -1.23,
+          "depth_miss_yards": -74.57,
+          "lateral_direction": "LEFT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h4:s1:assessment",
+        "shot:h4:s1:result",
+        "shot:h4:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h4:s2",
+      "hole_number": 4,
+      "stroke_number": 2,
+      "club": "3 Wood",
+      "shot_type": "layup_positioning",
+      "shot_type_label": "Layup Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "SMART_LAYUP"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 62,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 22.04,
+          "lateral_miss_yards": 5.02,
+          "depth_miss_yards": 21.46,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 86,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "smart_layup"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h4:s2:assessment",
+        "shot:h4:s2:result",
+        "shot:h4:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h4:s3",
+      "hole_number": 4,
+      "stroke_number": 3,
+      "club": "Gap Wedge",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 3,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 0.99,
+          "lateral_miss_yards": -0.84,
+          "depth_miss_yards": 0.52,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 88,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h4:s3:assessment",
+        "shot:h4:s3:result",
+        "shot:h4:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h4:s4",
+      "hole_number": 4,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0.03,
+          "lateral_miss_yards": 0.03,
+          "depth_miss_yards": 0,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h4:s4:assessment",
+        "shot:h4:s4:result",
+        "shot:h4:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h5:s1",
+      "hole_number": 5,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 102,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 32.45,
+          "lateral_miss_yards": 25.92,
+          "depth_miss_yards": 19.52,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h5:s1:assessment",
+        "shot:h5:s1:result",
+        "shot:h5:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h5:s2",
+      "hole_number": 5,
+      "stroke_number": 2,
+      "club": "Pitching Wedge",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_CORRECT"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 10,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 8.42,
+          "lateral_miss_yards": -5.9,
+          "depth_miss_yards": 6,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected",
+          "sidehill_compensation_correct"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h5:s2:assessment",
+        "shot:h5:s2:result",
+        "shot:h5:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h5:s3",
+      "hole_number": 5,
+      "stroke_number": 3,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "TAP_IN_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0.65,
+          "lateral_miss_yards": 0.31,
+          "depth_miss_yards": -0.57,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 86,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h5:s3:assessment",
+        "shot:h5:s3:result",
+        "shot:h5:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h6:s1",
+      "hole_number": 6,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 324,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 34.51,
+          "lateral_miss_yards": 17.82,
+          "depth_miss_yards": 29.55,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h6:s1:assessment",
+        "shot:h6:s1:result",
+        "shot:h6:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h6:s2",
+      "hole_number": 6,
+      "stroke_number": 2,
+      "club": "Driver",
+      "shot_type": "layup_positioning",
+      "shot_type_label": "Layup Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "SIDEHILL_COMPENSATION_MISSING",
+          "SMART_LAYUP"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 58,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN",
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "RECORDED_RESULT",
+        "display": "RECORDED RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Light rough",
+        "penalty_strokes": 0,
+        "remaining_yards": 130,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 22.29,
+          "lateral_miss_yards": -19.1,
+          "depth_miss_yards": 11.5,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "sidehill_compensation_missing",
+          "smart_layup"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h6:s2:assessment",
+        "shot:h6:s2:result",
+        "shot:h6:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h6:s3",
+      "hole_number": 6,
+      "stroke_number": 3,
+      "club": "7 Iron",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_CORRECT"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Light rough",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 5,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 5.11,
+          "lateral_miss_yards": 0.38,
+          "depth_miss_yards": -5.09,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected",
+          "sidehill_compensation_correct"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h6:s3:assessment",
+        "shot:h6:s3:result",
+        "shot:h6:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h6:s4",
+      "hole_number": 6,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "TAP_IN_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0.47,
+          "lateral_miss_yards": -0.1,
+          "depth_miss_yards": 0.46,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 89,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h6:s4:assessment",
+        "shot:h6:s4:result",
+        "shot:h6:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h7:s1",
+      "hole_number": 7,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "CORRECT_CLUB_FOR_CARRY",
+          "GOOD_MISS_PLAN",
+          "HAZARD_RESPECTED",
+          "LIE_RESPECTED",
+          "SAFE_TARGET_SELECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 249,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 7.34,
+          "lateral_miss_yards": 5.32,
+          "depth_miss_yards": 5.06,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 89,
+        "label": "sound",
+        "preferred_miss": "dry_side",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "correct_club_for_carry",
+          "good_miss_plan",
+          "hazard_respected",
+          "lie_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h7:s1:assessment",
+        "shot:h7:s1:result",
+        "shot:h7:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h7:s2",
+      "hole_number": 7,
+      "stroke_number": 2,
+      "club": "Driver",
+      "shot_type": "layup_positioning",
+      "shot_type_label": "Layup Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "SIDEHILL_COMPENSATION_CORRECT",
+          "SMART_LAYUP"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 68,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN"
+        ]
+      },
+      "result": {
+        "label": "RECORDED_RESULT",
+        "display": "RECORDED RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Light rough",
+        "penalty_strokes": 0,
+        "remaining_yards": 49,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 22.38,
+          "lateral_miss_yards": 21.31,
+          "depth_miss_yards": 6.84,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 87,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "sidehill_compensation_correct",
+          "smart_layup"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h7:s2:assessment",
+        "shot:h7:s2:result",
+        "shot:h7:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h7:s3",
+      "hole_number": 7,
+      "stroke_number": 3,
+      "club": "Sand Wedge",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_WRONG_DIRECTION"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Light rough",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 6,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 2.83,
+          "lateral_miss_yards": -2.68,
+          "depth_miss_yards": 0.91,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 87,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected",
+          "sidehill_compensation_wrong_direction"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h7:s3:assessment",
+        "shot:h7:s3:result",
+        "shot:h7:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h7:s4",
+      "hole_number": 7,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ACCEPTABLE_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 78,
+        "reason_codes": [
+          "MANAGEABLE_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 1.11,
+          "lateral_miss_yards": -0.23,
+          "depth_miss_yards": 1.08,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 89,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h7:s4:assessment",
+        "shot:h7:s4:result",
+        "shot:h7:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h7:s5",
+      "hole_number": 7,
+      "stroke_number": 5,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0,
+          "lateral_miss_yards": 0,
+          "depth_miss_yards": 0,
+          "lateral_direction": "CENTER",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h7:s5:assessment",
+        "shot:h7:s5:result",
+        "shot:h7:s5:strategy"
+      ]
+    },
+    {
+      "shot_id": "h8:s1",
+      "hole_number": 8,
+      "stroke_number": 1,
+      "club": "6 Iron",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "LIE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 4,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 14.34,
+          "lateral_miss_yards": -2.78,
+          "depth_miss_yards": 14.07,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 86,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "lie_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h8:s1:assessment",
+        "shot:h8:s1:result",
+        "shot:h8:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h8:s2",
+      "hole_number": 8,
+      "stroke_number": 2,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "TAP_IN_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0.65,
+          "lateral_miss_yards": -0.06,
+          "depth_miss_yards": 0.65,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h8:s2:assessment",
+        "shot:h8:s2:result",
+        "shot:h8:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h9:s1",
+      "hole_number": 9,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "CORRECT_CLUB_FOR_CARRY",
+          "GOOD_MISS_PLAN",
+          "HAZARD_RESPECTED",
+          "LIE_RESPECTED",
+          "SAFE_TARGET_SELECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 218,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 30.3,
+          "lateral_miss_yards": -5.39,
+          "depth_miss_yards": 29.82,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 89,
+        "label": "sound",
+        "preferred_miss": "dry_side",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "correct_club_for_carry",
+          "good_miss_plan",
+          "hazard_respected",
+          "lie_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h9:s1:assessment",
+        "shot:h9:s1:result",
+        "shot:h9:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h9:s2",
+      "hole_number": 9,
+      "stroke_number": 2,
+      "club": "Driver",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": []
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 60,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN",
+          "MISSED_START_LINE"
+        ]
+      },
+      "result": {
+        "label": "RECORDED_RESULT",
+        "display": "RECORDED RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Light rough",
+        "penalty_strokes": 0,
+        "remaining_yards": 27,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 36.27,
+          "lateral_miss_yards": 31.68,
+          "depth_miss_yards": 17.66,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": true,
+        "reasons": []
+      },
+      "evidence_refs": [
+        "shot:h9:s2:assessment",
+        "shot:h9:s2:result",
+        "shot:h9:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h9:s3",
+      "hole_number": 9,
+      "stroke_number": 3,
+      "club": "Lob Wedge",
+      "shot_type": "chip_pitch_standard",
+      "shot_type_label": "Chip Pitch Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "RULE_OF_12_CANDIDATE"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 58,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN",
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "RECORDED_RESULT",
+        "display": "RECORDED RESULT",
+        "start_lie": "Light rough",
+        "finish_lie": "Light rough",
+        "penalty_strokes": 0,
+        "remaining_yards": 27,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 3.35,
+          "lateral_miss_yards": -1.19,
+          "depth_miss_yards": 3.13,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 88,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h9:s3:assessment",
+        "shot:h9:s3:result",
+        "shot:h9:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h9:s4",
+      "hole_number": 9,
+      "stroke_number": 4,
+      "club": "Lob Wedge",
+      "shot_type": "chip_pitch_standard",
+      "shot_type_label": "Chip Pitch Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "RULE_OF_12_CANDIDATE"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 68,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Light rough",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 8,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 2.55,
+          "lateral_miss_yards": -0.1,
+          "depth_miss_yards": -2.54,
+          "lateral_direction": "LEFT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 88,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h9:s4:assessment",
+        "shot:h9:s4:result",
+        "shot:h9:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h9:s5",
+      "hole_number": 9,
+      "stroke_number": 5,
+      "club": "Sand Wedge",
+      "shot_type": "chip_pitch_standard",
+      "shot_type_label": "Chip Pitch Standard",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "RULE_OF_12_CANDIDATE",
+          "BETTER_EXPECTED_STROKES"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 0.14,
+          "lateral_miss_yards": 0.14,
+          "depth_miss_yards": 0.04,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 88,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h9:s5:assessment",
+        "shot:h9:s5:result",
+        "shot:h9:s5:strategy"
+      ]
+    },
+    {
+      "shot_id": "h9:s6",
+      "hole_number": 9,
+      "stroke_number": 6,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0,
+          "lateral_miss_yards": 0,
+          "depth_miss_yards": 0,
+          "lateral_direction": "CENTER",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h9:s6:assessment",
+        "shot:h9:s6:result",
+        "shot:h9:s6:strategy"
+      ]
+    },
+    {
+      "shot_id": "h10:s1",
+      "hole_number": 10,
+      "stroke_number": 1,
+      "club": "6 Iron",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "LIE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 62,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN",
+          "MISSED_START_LINE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Rough",
+        "penalty_strokes": 0,
+        "remaining_yards": 57,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 20.78,
+          "lateral_miss_yards": -20.5,
+          "depth_miss_yards": 3.38,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 86,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "lie_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h10:s1:assessment",
+        "shot:h10:s1:result",
+        "shot:h10:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h10:s2",
+      "hole_number": 10,
+      "stroke_number": 2,
+      "club": "8 Iron",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "LIE_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_CORRECT"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Rough",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 2,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 4.27,
+          "lateral_miss_yards": 3.4,
+          "depth_miss_yards": 2.59,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "lie_respected",
+          "safe_target_selected",
+          "sidehill_compensation_correct"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h10:s2:assessment",
+        "shot:h10:s2:result",
+        "shot:h10:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h10:s3",
+      "hole_number": 10,
+      "stroke_number": 3,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0,
+          "lateral_miss_yards": 0,
+          "depth_miss_yards": 0,
+          "lateral_direction": "CENTER",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h10:s3:assessment",
+        "shot:h10:s3:result",
+        "shot:h10:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h11:s1",
+      "hole_number": 11,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 157,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 11.25,
+          "lateral_miss_yards": 5.48,
+          "depth_miss_yards": -9.82,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h11:s1:assessment",
+        "shot:h11:s1:result",
+        "shot:h11:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h11:s2",
+      "hole_number": 11,
+      "stroke_number": 2,
+      "club": "5 Hybrid",
+      "shot_type": "approach_forced_carry",
+      "shot_type_label": "Approach Forced Carry",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "CORRECT_CLUB_FOR_CARRY",
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_CORRECT"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 68,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 27,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 22.28,
+          "lateral_miss_yards": 8.55,
+          "depth_miss_yards": 20.58,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "dry_side",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "correct_club_for_carry",
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected",
+          "sidehill_compensation_correct"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h11:s2:assessment",
+        "shot:h11:s2:result",
+        "shot:h11:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h11:s3",
+      "hole_number": 11,
+      "stroke_number": 3,
+      "club": "Sand Wedge",
+      "shot_type": "chip_pitch_standard",
+      "shot_type_label": "Chip Pitch Standard",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "RULE_OF_12_CANDIDATE",
+          "BETTER_EXPECTED_STROKES"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 68,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 5,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 0.31,
+          "lateral_miss_yards": -0.17,
+          "depth_miss_yards": -0.26,
+          "lateral_direction": "LEFT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": true,
+        "reasons": []
+      },
+      "evidence_refs": [
+        "shot:h11:s3:assessment",
+        "shot:h11:s3:result",
+        "shot:h11:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h11:s4",
+      "hole_number": 11,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ACCEPTABLE_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 78,
+        "reason_codes": [
+          "MANAGEABLE_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 1.12,
+          "lateral_miss_yards": -0.17,
+          "depth_miss_yards": -1.1,
+          "lateral_direction": "LEFT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 88,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h11:s4:assessment",
+        "shot:h11:s4:result",
+        "shot:h11:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h11:s5",
+      "hole_number": 11,
+      "stroke_number": 5,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0,
+          "lateral_miss_yards": 0,
+          "depth_miss_yards": 0,
+          "lateral_direction": "CENTER",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h11:s5:assessment",
+        "shot:h11:s5:result",
+        "shot:h11:s5:strategy"
+      ]
+    },
+    {
+      "shot_id": "h12:s1",
+      "hole_number": 12,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "CORRECT_CLUB_FOR_CARRY",
+          "GOOD_MISS_PLAN",
+          "HAZARD_RESPECTED",
+          "LIE_RESPECTED",
+          "SAFE_TARGET_SELECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 170,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 15.5,
+          "lateral_miss_yards": 14.41,
+          "depth_miss_yards": 5.71,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 89,
+        "label": "sound",
+        "preferred_miss": "dry_side",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "correct_club_for_carry",
+          "good_miss_plan",
+          "hazard_respected",
+          "lie_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h12:s1:assessment",
+        "shot:h12:s1:result",
+        "shot:h12:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h12:s2",
+      "hole_number": 12,
+      "stroke_number": 2,
+      "club": "6 Iron",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "SIDEHILL_COMPENSATION_CORRECT"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 12,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 11.85,
+          "lateral_miss_yards": 1.65,
+          "depth_miss_yards": 11.73,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 86,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "sidehill_compensation_correct"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h12:s2:assessment",
+        "shot:h12:s2:result",
+        "shot:h12:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h12:s3",
+      "hole_number": 12,
+      "stroke_number": 3,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 65,
+        "reason_codes": [
+          "PUTT_FINISHED_OUTSIDE_TARGET_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 3,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 2.98,
+          "lateral_miss_yards": -0.07,
+          "depth_miss_yards": 2.98,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 91,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h12:s3:assessment",
+        "shot:h12:s3:result",
+        "shot:h12:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h12:s4",
+      "hole_number": 12,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0.06,
+          "lateral_miss_yards": 0.06,
+          "depth_miss_yards": 0,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h12:s4:assessment",
+        "shot:h12:s4:result",
+        "shot:h12:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h13:s1",
+      "hole_number": 13,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "LIE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 284,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 30.62,
+          "lateral_miss_yards": -12.28,
+          "depth_miss_yards": 28.05,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 86,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "lie_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h13:s1:assessment",
+        "shot:h13:s1:result",
+        "shot:h13:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h13:s2",
+      "hole_number": 13,
+      "stroke_number": 2,
+      "club": "3 Wood",
+      "shot_type": "layup_positioning",
+      "shot_type_label": "Layup Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "SIDEHILL_COMPENSATION_CORRECT",
+          "SMART_LAYUP"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 104,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 6.02,
+          "lateral_miss_yards": 6.02,
+          "depth_miss_yards": 0.16,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 87,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "sidehill_compensation_correct",
+          "smart_layup"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h13:s2:assessment",
+        "shot:h13:s2:result",
+        "shot:h13:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h13:s3",
+      "hole_number": 13,
+      "stroke_number": 3,
+      "club": "Pitching Wedge",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_WRONG_DIRECTION"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 6,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 7.03,
+          "lateral_miss_yards": -3.92,
+          "depth_miss_yards": 5.83,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 87,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected",
+          "sidehill_compensation_wrong_direction"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h13:s3:assessment",
+        "shot:h13:s3:result",
+        "shot:h13:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h13:s4",
+      "hole_number": 13,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "TAP_IN_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0.47,
+          "lateral_miss_yards": -0.09,
+          "depth_miss_yards": 0.47,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 88,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h13:s4:assessment",
+        "shot:h13:s4:result",
+        "shot:h13:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h14:s1",
+      "hole_number": 14,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 58,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN",
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "RECORDED_RESULT",
+        "display": "RECORDED RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Light rough",
+        "penalty_strokes": 0,
+        "remaining_yards": 219,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 15.73,
+          "lateral_miss_yards": 15.36,
+          "depth_miss_yards": -3.4,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h14:s1:assessment",
+        "shot:h14:s1:result",
+        "shot:h14:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h14:s2",
+      "hole_number": 14,
+      "stroke_number": 2,
+      "club": "4 Hybrid",
+      "shot_type": "layup_positioning",
+      "shot_type_label": "Layup Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "SIDEHILL_COMPENSATION_CORRECT",
+          "SMART_LAYUP"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Light rough",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 70,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 3.14,
+          "lateral_miss_yards": 1.98,
+          "depth_miss_yards": 2.44,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 87,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "sidehill_compensation_correct",
+          "smart_layup"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h14:s2:assessment",
+        "shot:h14:s2:result",
+        "shot:h14:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h14:s3",
+      "hole_number": 14,
+      "stroke_number": 3,
+      "club": "Gap Wedge",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 7,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 4.1,
+          "lateral_miss_yards": -1.2,
+          "depth_miss_yards": 3.92,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 88,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h14:s3:assessment",
+        "shot:h14:s3:result",
+        "shot:h14:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h14:s4",
+      "hole_number": 14,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "TAP_IN_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0.3,
+          "lateral_miss_yards": 0.3,
+          "depth_miss_yards": -0.02,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 86,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h14:s4:assessment",
+        "shot:h14:s4:result",
+        "shot:h14:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h15:s1",
+      "hole_number": 15,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 58,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN",
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "RECORDED_RESULT",
+        "display": "RECORDED RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Light rough",
+        "penalty_strokes": 0,
+        "remaining_yards": 358,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 80.26,
+          "lateral_miss_yards": 18.04,
+          "depth_miss_yards": -78.21,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h15:s1:assessment",
+        "shot:h15:s1:result",
+        "shot:h15:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h15:s2",
+      "hole_number": 15,
+      "stroke_number": 2,
+      "club": "3 Wood",
+      "shot_type": "layup_positioning",
+      "shot_type_label": "Layup Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "SIDEHILL_COMPENSATION_CORRECT",
+          "SMART_LAYUP"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Light rough",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 195,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 7.61,
+          "lateral_miss_yards": 0.45,
+          "depth_miss_yards": 7.59,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 87,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "sidehill_compensation_correct",
+          "smart_layup"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h15:s2:assessment",
+        "shot:h15:s2:result",
+        "shot:h15:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h15:s3",
+      "hole_number": 15,
+      "stroke_number": 3,
+      "club": "3 Wood",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": []
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 60,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN",
+          "MISSED_START_LINE"
+        ]
+      },
+      "result": {
+        "label": "MIXED_RESULT",
+        "display": "MIXED RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Rough",
+        "penalty_strokes": 0,
+        "remaining_yards": 46,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 48,
+          "lateral_miss_yards": 44.93,
+          "depth_miss_yards": 16.89,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": true,
+        "reasons": []
+      },
+      "evidence_refs": [
+        "shot:h15:s3:assessment",
+        "shot:h15:s3:result",
+        "shot:h15:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h15:s4",
+      "hole_number": 15,
+      "stroke_number": 4,
+      "club": "Sand Wedge",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "LIE_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_CORRECT"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Rough",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 0.87,
+          "lateral_miss_yards": 0.87,
+          "depth_miss_yards": 0.04,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "lie_respected",
+          "safe_target_selected",
+          "sidehill_compensation_correct"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h15:s4:assessment",
+        "shot:h15:s4:result",
+        "shot:h15:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h16:s1",
+      "hole_number": 16,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 154,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 14.43,
+          "lateral_miss_yards": 9.15,
+          "depth_miss_yards": 11.16,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h16:s1:assessment",
+        "shot:h16:s1:result",
+        "shot:h16:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h16:s2",
+      "hole_number": 16,
+      "stroke_number": 2,
+      "club": "6 Iron",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_CORRECT"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 68,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 10,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 4.29,
+          "lateral_miss_yards": 2.85,
+          "depth_miss_yards": -3.2,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected",
+          "sidehill_compensation_correct"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h16:s2:assessment",
+        "shot:h16:s2:result",
+        "shot:h16:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h16:s3",
+      "hole_number": 16,
+      "stroke_number": 3,
+      "club": "Sand Wedge",
+      "shot_type": "chip_pitch_standard",
+      "shot_type_label": "Chip Pitch Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "RULE_OF_12_CANDIDATE"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 68,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 7,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 0.59,
+          "lateral_miss_yards": -0.02,
+          "depth_miss_yards": 0.59,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 88,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h16:s3:assessment",
+        "shot:h16:s3:result",
+        "shot:h16:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h16:s4",
+      "hole_number": 16,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ACCEPTABLE_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 78,
+        "reason_codes": [
+          "MANAGEABLE_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0.81,
+          "lateral_miss_yards": -0.27,
+          "depth_miss_yards": 0.76,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 81,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h16:s4:assessment",
+        "shot:h16:s4:result",
+        "shot:h16:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h16:s5",
+      "hole_number": 16,
+      "stroke_number": 5,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0,
+          "lateral_miss_yards": 0,
+          "depth_miss_yards": 0,
+          "lateral_direction": "CENTER",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h16:s5:assessment",
+        "shot:h16:s5:result",
+        "shot:h16:s5:strategy"
+      ]
+    },
+    {
+      "shot_id": "h17:s1",
+      "hole_number": 17,
+      "stroke_number": 1,
+      "club": "4 Hybrid",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "LIE_RESPECTED",
+          "SAFE_TARGET_SELECTED"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 68,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN"
+        ]
+      },
+      "result": {
+        "label": "MIXED_RESULT",
+        "display": "MIXED RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Rough",
+        "penalty_strokes": 0,
+        "remaining_yards": 14,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 17.11,
+          "lateral_miss_yards": -13.11,
+          "depth_miss_yards": 10.99,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 89,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "lie_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h17:s1:assessment",
+        "shot:h17:s1:result",
+        "shot:h17:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h17:s2",
+      "hole_number": 17,
+      "stroke_number": 2,
+      "club": "Lob Wedge",
+      "shot_type": "chip_pitch_standard",
+      "shot_type_label": "Chip Pitch Standard",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "LIE_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "RULE_OF_12_CANDIDATE"
+        ]
+      },
+      "execution": {
+        "label": "MISSED_EXECUTION",
+        "display": "Missed Plan",
+        "graded": true,
+        "on_plan": false,
+        "score": 68,
+        "reason_codes": [
+          "RESULT_MISSED_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Rough",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 7,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 0.86,
+          "lateral_miss_yards": -0.75,
+          "depth_miss_yards": 0.42,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 89,
+        "label": "sound",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "lie_respected",
+          "safe_target_selected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h17:s2:assessment",
+        "shot:h17:s2:result",
+        "shot:h17:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h17:s3",
+      "hole_number": 17,
+      "stroke_number": 3,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ACCEPTABLE_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 78,
+        "reason_codes": [
+          "MANAGEABLE_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 1.2,
+          "lateral_miss_yards": -0.02,
+          "depth_miss_yards": -1.2,
+          "lateral_direction": "LEFT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h17:s3:assessment",
+        "shot:h17:s3:result",
+        "shot:h17:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h17:s4",
+      "hole_number": 17,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ACCEPTABLE_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 78,
+        "reason_codes": [
+          "MANAGEABLE_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 1,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0.7,
+          "lateral_miss_yards": 0.02,
+          "depth_miss_yards": 0.7,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h17:s4:assessment",
+        "shot:h17:s4:result",
+        "shot:h17:s4:strategy"
+      ]
+    },
+    {
+      "shot_id": "h17:s5",
+      "hole_number": 17,
+      "stroke_number": 5,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0,
+          "lateral_miss_yards": 0,
+          "depth_miss_yards": 0,
+          "lateral_direction": "CENTER",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h17:s5:assessment",
+        "shot:h17:s5:result",
+        "shot:h17:s5:strategy"
+      ]
+    },
+    {
+      "shot_id": "h18:s1",
+      "hole_number": 18,
+      "stroke_number": 1,
+      "club": "Driver",
+      "shot_type": "tee_positioning",
+      "shot_type_label": "Tee Positioning",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 70,
+        "reason_codes": [
+          "DISTANCE_SHORT_OF_PLAN"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Tee",
+        "finish_lie": "Fairway",
+        "penalty_strokes": 0,
+        "remaining_yards": 149,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "DIRECTION_TARGET",
+          "distance_from_target_yards": 13.59,
+          "lateral_miss_yards": 12.17,
+          "depth_miss_yards": 6.05,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 85,
+        "label": "sound",
+        "preferred_miss": "widest_landing_zone",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h18:s1:assessment",
+        "shot:h18:s1:result",
+        "shot:h18:s1:strategy"
+      ]
+    },
+    {
+      "shot_id": "h18:s2",
+      "hole_number": 18,
+      "stroke_number": 2,
+      "club": "7 Iron",
+      "shot_type": "approach_standard",
+      "shot_type_label": "Approach Standard",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "GOOD_MISS_PLAN",
+          "GREEN_CENTER_BIAS_CORRECT",
+          "HAZARD_RESPECTED",
+          "SAFE_TARGET_SELECTED",
+          "SIDEHILL_COMPENSATION_CORRECT"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 90,
+        "reason_codes": [
+          "MATCHED_INTENDED_WINDOW"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Fairway",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 6,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "LANDING_TARGET",
+          "distance_from_target_yards": 8.23,
+          "lateral_miss_yards": -7.95,
+          "depth_miss_yards": 2.16,
+          "lateral_direction": "LEFT",
+          "depth_direction": "LONG",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "center_green",
+        "preferred_miss_inferred": true,
+        "reasons": [
+          "good_miss_plan",
+          "green_center_bias_correct",
+          "hazard_respected",
+          "safe_target_selected",
+          "sidehill_compensation_correct"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h18:s2:assessment",
+        "shot:h18:s2:result",
+        "shot:h18:s2:strategy"
+      ]
+    },
+    {
+      "shot_id": "h18:s3",
+      "hole_number": 18,
+      "stroke_number": 3,
+      "club": "Putter",
+      "shot_type": "putt_lag",
+      "shot_type_label": "Putt Lag",
+      "decision": {
+        "label": "COMPETITIVE_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_MISSED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ACCEPTABLE_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 78,
+        "reason_codes": [
+          "MANAGEABLE_LEAVE"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 2,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 1.73,
+          "lateral_miss_yards": 0.06,
+          "depth_miss_yards": -1.72,
+          "lateral_direction": "RIGHT",
+          "depth_direction": "SHORT",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 89,
+        "label": "sound",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_missed",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h18:s3:assessment",
+        "shot:h18:s3:result",
+        "shot:h18:s3:strategy"
+      ]
+    },
+    {
+      "shot_id": "h18:s4",
+      "hole_number": 18,
+      "stroke_number": 4,
+      "club": "Putter",
+      "shot_type": "putt_make_attempt",
+      "shot_type_label": "Putt Make Attempt",
+      "decision": {
+        "label": "PREFERRED_PLAN",
+        "display": "Sound Decision",
+        "graded": true,
+        "sound": true,
+        "reason_codes": [
+          "PUTTING_LINE_RESPECTED",
+          "PUTTING_PACE_RESPECTED"
+        ]
+      },
+      "execution": {
+        "label": "ON_PLAN_EXECUTION",
+        "display": "On Plan",
+        "graded": true,
+        "on_plan": true,
+        "score": 95,
+        "reason_codes": [
+          "PUTT_HOLED"
+        ]
+      },
+      "result": {
+        "label": "GOOD_RESULT",
+        "display": "GOOD RESULT",
+        "start_lie": "Green",
+        "finish_lie": "Green",
+        "penalty_strokes": 0,
+        "remaining_yards": 0,
+        "outcome_vs_target": {
+          "available": true,
+          "target_kind": "PUTTING_LINE",
+          "distance_from_target_yards": 0,
+          "lateral_miss_yards": 0,
+          "depth_miss_yards": 0,
+          "lateral_direction": "CENTER",
+          "depth_direction": "AT_DISTANCE",
+          "reason_codes": []
+        }
+      },
+      "strategy": {
+        "score": 90,
+        "label": "excellent",
+        "preferred_miss": "none_declared",
+        "preferred_miss_inferred": false,
+        "reasons": [
+          "putting_line_respected",
+          "putting_pace_respected"
+        ]
+      },
+      "evidence_refs": [
+        "shot:h18:s4:assessment",
+        "shot:h18:s4:result",
+        "shot:h18:s4:strategy"
+      ]
+    }
+  ],
+  "learning_summary": {
+    "three_things_to_remember": [
+      {
+        "type": "strength",
+        "label": "Strength",
+        "text": "Target Selection was your strongest category.",
+        "evidence_refs": [
+          "summary:strongest_category"
+        ]
+      },
+      {
+        "type": "round_characteristic",
+        "label": "Decision making",
+        "text": "74 of 74 graded plans met the current model's sound-plan criteria.",
+        "evidence_refs": [
+          "summary:decision_quality"
+        ]
+      },
+      {
+        "type": "focus",
+        "label": "Focus",
+        "text": "Club Selection is the first practice priority.",
+        "evidence_refs": [
+          "summary:practice_priority"
+        ]
+      }
+    ],
+    "learning_moments": [
+      {
+        "moment_id": "h12:s3:strong_decision_bad_execution",
+        "hole_number": 12,
+        "stroke_number": 3,
+        "type": "strong_decision_bad_execution",
+        "title": "The plan was better than the result",
+        "importance_score": 92,
+        "importance_reasons": [
+          "strong_strategy_bad_execution",
+          "putting_read_failure",
+          "putting_pace_failure",
+          "exceptionally_good_decision"
+        ],
+        "decision": "Sound Decision",
+        "execution": "Missed Plan",
+        "result": "Green",
+        "shot_type": "Putt Lag",
+        "takeaway": "Keep the sound plan separate from the missed execution.",
+        "evidence_refs": [
+          "shot:h12:s3:assessment",
+          "shot:h12:s3:result",
+          "shot:h12:s3:strategy"
+        ]
+      },
+      {
+        "moment_id": "h11:s2:strong_decision_bad_execution",
+        "hole_number": 11,
+        "stroke_number": 2,
+        "type": "strong_decision_bad_execution",
+        "title": "The plan was better than the result",
+        "importance_score": 70,
+        "importance_reasons": [
+          "strong_strategy_bad_execution",
+          "good_adjustment",
+          "exceptionally_good_decision"
+        ],
+        "decision": "Sound Decision",
+        "execution": "Missed Plan",
+        "result": "Fairway",
+        "shot_type": "Approach Forced Carry",
+        "takeaway": "Keep the sound plan separate from the missed execution.",
+        "evidence_refs": [
+          "shot:h11:s2:assessment",
+          "shot:h11:s2:result",
+          "shot:h11:s2:strategy"
+        ]
+      },
+      {
+        "moment_id": "h16:s2:strong_decision_bad_execution",
+        "hole_number": 16,
+        "stroke_number": 2,
+        "type": "strong_decision_bad_execution",
+        "title": "The plan was better than the result",
+        "importance_score": 70,
+        "importance_reasons": [
+          "strong_strategy_bad_execution",
+          "good_adjustment",
+          "exceptionally_good_decision"
+        ],
+        "decision": "Sound Decision",
+        "execution": "Missed Plan",
+        "result": "Fairway",
+        "shot_type": "Approach Standard",
+        "takeaway": "Keep the sound plan separate from the missed execution.",
+        "evidence_refs": [
+          "shot:h16:s2:assessment",
+          "shot:h16:s2:result",
+          "shot:h16:s2:strategy"
+        ]
+      },
+      {
+        "moment_id": "h9:s6:notable_decision",
+        "hole_number": 9,
+        "stroke_number": 6,
+        "type": "notable_decision",
+        "title": "A useful decision to remember",
+        "importance_score": 68,
+        "importance_reasons": [
+          "putting_read_failure",
+          "putting_pace_failure",
+          "exceptionally_good_decision",
+          "double_bogey_associated_event"
+        ],
+        "decision": "Sound Decision",
+        "execution": "On Plan",
+        "result": "Green",
+        "shot_type": "Putt Make Attempt",
+        "takeaway": "Use the recorded evidence when this situation appears again.",
+        "evidence_refs": [
+          "shot:h9:s6:assessment",
+          "shot:h9:s6:result",
+          "shot:h9:s6:strategy"
+        ]
+      },
+      {
+        "moment_id": "h17:s3:notable_decision",
+        "hole_number": 17,
+        "stroke_number": 3,
+        "type": "notable_decision",
+        "title": "A useful decision to remember",
+        "importance_score": 68,
+        "importance_reasons": [
+          "putting_read_failure",
+          "putting_pace_failure",
+          "exceptionally_good_decision",
+          "double_bogey_associated_event"
+        ],
+        "decision": "Sound Decision",
+        "execution": "On Plan",
+        "result": "Green",
+        "shot_type": "Putt Lag",
+        "takeaway": "Use the recorded evidence when this situation appears again.",
+        "evidence_refs": [
+          "shot:h17:s3:assessment",
+          "shot:h17:s3:result",
+          "shot:h17:s3:strategy"
+        ]
+      }
+    ],
+    "next_round_focus": [
+      {
+        "type": "priority",
+        "title": "Club Selection",
+        "action": "Match the club and swing to the intended carry window.",
+        "evidence_refs": [
+          "summary:practice_priority"
+        ]
+      },
+      {
+        "type": "keep_doing",
+        "title": "Keep Target Selection",
+        "action": "Continue using the planning process that made target selection a strength.",
+        "evidence_refs": [
+          "summary:strongest_category"
+        ]
+      }
+    ]
+  },
+  "patterns": [],
+  "narrative": {
+    "status": "deterministic_fallback",
+    "generated_at": null,
+    "provider": null,
+    "model": null,
+    "prompt_version": "post-round-narrative-v2",
+    "schema_version": "2.0",
+    "report_version": "2.0",
+    "input_hash": null,
+    "round_story": {
+      "text": "Across the completed round, 74 of 74 graded plans met the current model's sound-plan criteria. Execution finished on plan for 59 of 74 graded shots. The lowest-scoring planning category was Club Selection.",
+      "evidence_refs": [
+        "summary:decision_quality",
+        "summary:execution_quality",
+        "summary:practice_priority"
+      ]
+    },
+    "learning_moment_explanations": {},
+    "next_round_focus_explanations": {}
+  },
+  "source_round": {
+    "round_state": {
+      "holes": [
+        {
+          "hole_number": 1,
+          "events": []
+        },
+        {
+          "hole_number": 2,
+          "events": [
+            {
+              "event_type": "shot_committed",
+              "completion_type": "gimme",
+              "stroke_count_delta": 2
+            }
+          ]
+        },
+        {
+          "hole_number": 3,
+          "events": []
+        },
+        {
+          "hole_number": 4,
+          "events": []
+        },
+        {
+          "hole_number": 5,
+          "events": [
+            {
+              "event_type": "shot_committed",
+              "completion_type": "gimme",
+              "stroke_count_delta": 2
+            }
+          ]
+        },
+        {
+          "hole_number": 6,
+          "events": [
+            {
+              "event_type": "shot_committed",
+              "completion_type": "gimme",
+              "stroke_count_delta": 2
+            }
+          ]
+        },
+        {
+          "hole_number": 7,
+          "events": []
+        },
+        {
+          "hole_number": 8,
+          "events": [
+            {
+              "event_type": "shot_committed",
+              "completion_type": "gimme",
+              "stroke_count_delta": 2
+            }
+          ]
+        },
+        {
+          "hole_number": 9,
+          "events": []
+        },
+        {
+          "hole_number": 10,
+          "events": []
+        },
+        {
+          "hole_number": 11,
+          "events": []
+        },
+        {
+          "hole_number": 12,
+          "events": []
+        },
+        {
+          "hole_number": 13,
+          "events": [
+            {
+              "event_type": "shot_committed",
+              "completion_type": "gimme",
+              "stroke_count_delta": 2
+            }
+          ]
+        },
+        {
+          "hole_number": 14,
+          "events": [
+            {
+              "event_type": "shot_committed",
+              "completion_type": "gimme",
+              "stroke_count_delta": 2
+            }
+          ]
+        },
+        {
+          "hole_number": 15,
+          "events": [
+            {
+              "event_type": "shot_committed",
+              "completion_type": "gimme",
+              "stroke_count_delta": 2
+            }
+          ]
+        },
+        {
+          "hole_number": 16,
+          "events": []
+        },
+        {
+          "hole_number": 17,
+          "events": []
+        },
+        {
+          "hole_number": 18,
+          "events": []
+        }
+      ]
+    }
+  }
+}

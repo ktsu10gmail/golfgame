@@ -119,3 +119,20 @@ export function imageViewportForWorldBounds(worldBounds, targetProjector, option
     height: bottomRight[1] - topLeft[1]
   };
 }
+
+// Fit the playable hole without allowing distant/course-wide scenery to zoom it out.
+export function mobileFullHoleBounds({ route, corePoints, featurePolygons = [], corridorWidth = 70 }) {
+  const valid = point => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite);
+  const path = route.filter(valid);
+  const nearby = featurePolygons.flat().filter(valid).filter(point =>
+    path.slice(1).some((end, index) => segmentDistance(point, path[index], end).distance <= corridorWidth)
+  );
+  const points = [...path, ...corePoints.filter(valid), ...nearby];
+  if (!points.length) throw new Error("mobile hole fit requires playable geometry");
+  const xs = points.map(point => point[0]), ys = points.map(point => point[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const xPad = Math.max(22, (maxX - minX) * .12);
+  const yPad = Math.max(18, (maxY - minY) * .045);
+  return { minX: minX - xPad, maxX: maxX + xPad, minY: minY - yPad, maxY: maxY + yPad };
+}

@@ -521,6 +521,8 @@ def normalize_openstreetmap_course(
     layout_assessment = {
         'unsupported': unsupported, 'ambiguous': ambiguous,
         'source_route_count': len(all_routes),
+        'declared_hole_count': int(facility_tags.get('golf:holes', facility_tags.get('holes', '')))
+            if str(facility_tags.get('golf:holes', facility_tags.get('holes', ''))).isdigit() else None,
         'reason': 'Layout exceeds the current 27-hole editor limit' if unsupported else
                   'Repeated route numbering needs explicit layout grouping' if ambiguous else '',
     }
@@ -698,6 +700,7 @@ def normalize_openstreetmap_course(
     course_name = facility_tags.get("name") or requested_name.strip() or "OpenStreetMap golf course"
     project = {
         "version": MAPPER_PROJECT_VERSION,
+        "course_location": {"country": facility_tags.get("addr:country", ""), "state": facility_tags.get("addr:state", "") or requested_state.strip(), "city": facility_tags.get("addr:city", "") or requested_city.strip()},
         "course_name": course_name,
         "course_id": osm_game_course_id(external_id),
         "address": ", ".join(value for value in (requested_city.strip(), requested_state.strip()) if value),

@@ -390,3 +390,16 @@ test("buildRoundBrowserState reflects replay reset and full round reset recovery
   assert.equal(resetState.round_history[0].length, 0);
   assert.equal(resetState.round_history[1].length, 0);
 });
+
+
+test("nine-hole rounds preserve their size through reset and finish hole nine", () => {
+  let round = createRoundState({ courseId: "nine-links", roundSeed: 7, holeCount: 9 });
+  for (let index = 0; index < 9; index++) {
+    round = appendHoleEvent(round, index, { event_type: "shot_committed", stroke_index: 1,
+      stroke_count_delta: 1, hole_finished: true, completion_type: "holed", score: 1,
+      resolved_ball: [0, 0], resolved_lie: "Green", remaining_distance_yards: 0 });
+  }
+  assert.deepEqual(buildRoundBrowserState(round).scores, Array(9).fill(1));
+  assert.equal(resetRoundState(round).holes.length, 9);
+  assert.throws(() => appendHoleEvent(round, 9, {}));
+});

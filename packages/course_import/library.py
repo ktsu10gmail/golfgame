@@ -13,6 +13,7 @@ import sqlite3
 import subprocess
 import threading
 import time
+import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,10 +28,42 @@ def encoded(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
+def library_name_normalize(value):
+    folded = unicodedata.normalize('NFKC', str(value)).casefold()
+    return ' '.join(''.join(c if c.isalnum() else ' ' for c in folded).split())
+
+
+def library_directory_id(name, state, city, country='US'):
+    if all(ord(c) < 128 for c in name + state + city):
+        return _directory_id(name, state, city)
+    identity = '|'.join((country, library_name_normalize(name), library_name_normalize(state), library_name_normalize(city)))
+    return 'course_' + hashlib.sha256(identity.encode('utf-8')).hexdigest()[:24]
+
+
 def course_name_key(name):
     # Remove generic facility words, never directional/layout identifiers.
     generic = {'the','golf','course','club','country'}
-    return ' '.join(word for word in _normalize(name).split() if word not in generic)
+    return ' '.join(word for word in library_name_normalize(name).split() if word not in generic)
+
+
+def hole_summary(project):
+    """Keep source counts separate from the editor's padded hole slots."""
+    source = project.get('external_course_source') or {}
+    assessment = source.get('layout_assessment') or {}
+    declared = assessment.get('declared_hole_count')
+    if not isinstance(declared, int) or isinstance(declared, bool) or declared <= 0:
+        declared = None
+    routes = assessment.get('source_route_count')
+    if not isinstance(routes, int) or isinstance(routes, bool) or routes < 0:
+        routes = (project.get('import_preview') or {}).get('counts', {}).get('hole_routes')
+    if not isinstance(routes, int) or isinstance(routes, bool) or routes < 0:
+        routes = sum(bool(h.get('route_points')) for h in (project.get('holes') or {}).values())
+    label = f'{declared} holes (OSM)' if declared else f'{routes} mapped — total unknown' if routes else 'Unknown'
+    if assessment.get('ambiguous'):
+        label += ' · layout grouping needs review'
+    elif assessment.get('unsupported'):
+        label += ' · exceeds editor limit'
+    return {'declared': declared, 'mapped': routes, 'label': label}
 
 
 class CourseLibrary:
@@ -96,6 +129,9 @@ class CourseLibrary:
                     ON library_source_updates(course_id)
                     WHERE status IN ('Queued','Importing','Retry pending','Review ready');
             """)
+            columns = {row['name'] for row in db.execute('PRAGMA table_info(library_courses)')}
+            if 'country' not in columns:
+                db.execute("ALTER TABLE library_courses ADD COLUMN country TEXT NOT NULL DEFAULT 'US'")
         os.chmod(self.database, 0o600)
 
     def connect(self):
@@ -158,11 +194,15 @@ class CourseLibrary:
                 lat, lon = float(row["Latitude"]), float(row["Longitude"])
                 if not math.isfinite(lat) or not math.isfinite(lon) or not -90 <= lat <= 90 or not -180 <= lon <= 180:
                     raise ValueError("Invalid coordinates")
-                identity = str(row.get("Course ID") or '').strip() or _directory_id(name, state, city)
+                country = str(row.get('Country') or 'US').strip().upper()
+                if not re.fullmatch(r'[A-Z]{2}', country):
+                    raise ValueError('Country must be a two-letter code, such as US or TW')
+                identity = str(row.get("Course ID") or '').strip() or library_directory_id(name, state, city, country)
                 if not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', identity):
                     raise ValueError("Course ID must use letters, digits, underscores or hyphens")
                 values = {"name": name, "state": state, "city": city, "latitude": lat, "longitude": lon}
                 fingerprint = hashlib.sha256(encoded(values).encode()).hexdigest()
+                values['country'] = country
                 if identity in seen:
                     raise ValueError("Duplicate Course ID in upload")
                 seen.add(identity)
@@ -174,13 +214,14 @@ class CourseLibrary:
                 old = db.execute("SELECT * FROM library_courses WHERE id=?", (identity,)).fetchone()
                 if not old:
                     # A rename without a permanent CSV ID must not silently create another build.
-                    nearby = db.execute("SELECT id FROM library_courses WHERE latitude=? AND longitude=? AND state=?",
-                                        (values['latitude'], values['longitude'], values['state'])).fetchall()
-                    if len(nearby) == 1:
+                    nearby = db.execute("SELECT id FROM library_courses WHERE latitude=? AND longitude=? AND country=?",
+                                        (values['latitude'], values['longitude'], values['country'])).fetchall()
+                    if nearby:
                         # Co-located nines/courses can legitimately share coordinates. Retain
                         # each input identity but require review before duplicate work.
                         values['possible_duplicate'] = nearby[0]['id']
                 if old and old['fingerprint'] == fingerprint:
+                    db.execute('UPDATE library_courses SET country=? WHERE id=?', (values['country'], identity))
                     if old['proposed']:
                         # The latest sheet explicitly retains the original identity/location.
                         db.execute("UPDATE library_courses SET proposed=NULL,notes='',status=CASE WHEN revision=0 AND duplicate_of IS NULL AND provider_id IS NULL THEN 'New' ELSE status END WHERE id=?", (identity,))
@@ -196,9 +237,9 @@ class CourseLibrary:
                     result['review'] += 1
                     continue
                 db.execute("""INSERT INTO library_courses
-                    (id,name,state,city,latitude,longitude,fingerprint,updated)
-                    VALUES (?,?,?,?,?,?,?,?)""", (identity, values['name'], values['state'], values['city'],
-                         values['latitude'], values['longitude'], fingerprint, self.clock()))
+                    (id,name,state,city,latitude,longitude,fingerprint,updated,country)
+                    VALUES (?,?,?,?,?,?,?,?,?)""", (identity, values['name'], values['state'], values['city'],
+                         values['latitude'], values['longitude'], fingerprint, self.clock(), values['country']))
                 if values.get('possible_duplicate'):
                     db.execute("UPDATE library_courses SET status='Needs review',duplicate_of=?,notes='Shared coordinates: review whether separate course/layout or renamed row' WHERE id=?",
                                (values['possible_duplicate'],identity))
@@ -214,15 +255,15 @@ class CourseLibrary:
         os.chmod(report_path,0o600)
         return result
 
-    def listing(self, query='', state='', status='', offset=0, limit=50):
+    def listing(self, query='', state='', status='', offset=0, limit=50, country=''):
         limit, offset = max(1, min(int(limit), 100)), max(0, int(offset))
         # Treat wildcard characters literally in search.
         query = str(query)[:200].replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
         filters, args = [], []
         if query:
-            filters.append("(name LIKE ? ESCAPE '\\' OR city LIKE ? ESCAPE '\\')")
-            args.extend([f'%{query}%'] * 2)
-        for key, value in [('state', state), ('status', status)]:
+            filters.append("(name LIKE ? ESCAPE '\\' OR city LIKE ? ESCAPE '\\' OR country LIKE ? ESCAPE '\\')")
+            args.extend([f'%{query}%'] * 3)
+        for key, value in [('state', state), ('status', status), ('country', str(country).strip().upper())]:
             if value:
                 filters.append(f'{key}=?')
                 args.append(value)
@@ -235,6 +276,7 @@ class CourseLibrary:
             running = db.execute("SELECT value FROM library_settings WHERE key='running'").fetchone()[0] == '1'
             source_running=db.execute("SELECT value FROM library_settings WHERE key='source_running'").fetchone()[0]=='1'
             installed = [dict(r) for r in db.execute('SELECT * FROM library_installs')]
+            projects = {item['id']: row['project'] for item in items if item['revision'] for row in db.execute('SELECT project FROM library_revisions WHERE course_id=? AND revision=?', (item['id'], item['revision']))}
             updates=[dict(r) for r in db.execute('''SELECT id,course_id,status,attempts,next_retry,notes,updated
                 FROM library_source_updates WHERE rowid IN
                     (SELECT max(rowid) FROM library_source_updates GROUP BY course_id)''')]
@@ -245,6 +287,7 @@ class CourseLibrary:
             catalog = None
         flags = set(self.course_flags()['flags'])
         for item in items:
+            item['hole_summary'] = hole_summary(json.loads(projects[item['id']])) if item['id'] in projects else {'declared': None, 'mapped': None, 'label': 'Unknown'}
             item['flag_identity'] = 'openstreetmap:' + item['provider_id'] if item['provider_id'] else 'library:' + item['id']
             item['no_good'] = item['flag_identity'] in flags
             item['source_update']=next((r for r in reversed(updates) if r['course_id']==item['id']),None)
@@ -311,6 +354,7 @@ class CourseLibrary:
                 original_id = original_id[:48].rstrip('-') + '-' + hashlib.sha256(identity.encode()).hexdigest()[:10]
             project['course_id'] = row['original_course_id'] or original_id
             revision = row['revision'] + 1
+            project['course_location'] = {'country': row['country'], 'state': row['state'], 'city': row['city']}
             project['library_context'] = {'id': identity, 'revision': revision}
             layout = project.get('external_course_source', {}).get('layout_assessment', {})
             blocked = layout.get('unsupported') or layout.get('ambiguous')
@@ -552,9 +596,10 @@ class CourseLibrary:
                 db.execute('UPDATE library_courses SET original_course_id=? WHERE id=?',(installed_id,identity))
             if accept_input and row['proposed']:
                 values = json.loads(row['proposed'])
-                db.execute('UPDATE library_courses SET name=?,city=?,state=?,latitude=?,longitude=?,fingerprint=?,proposed=NULL WHERE id=?',
+                db.execute('UPDATE library_courses SET name=?,city=?,state=?,latitude=?,longitude=?,country=?,fingerprint=?,proposed=NULL WHERE id=?',
                            (values['name'],values['city'],values['state'],values['latitude'],values['longitude'],
-                            hashlib.sha256(encoded(values).encode()).hexdigest(),identity))
+                            values.get('country', row['country']),
+                            hashlib.sha256(encoded({k:v for k,v in values.items() if k != 'country'}).encode()).hexdigest(),identity))
             if external_id:
                 if not re.fullmatch(r'(node|way|relation)/[1-9][0-9]{0,18}',external_id):
                     raise ValueError('Use a valid OSM facility ID (way/123, node/123 or relation/123)')
@@ -612,7 +657,7 @@ class CourseLibrary:
             if not provider_id:
                 result = self.osm.search({'latitude': row['latitude'], 'longitude': row['longitude'], 'radius_meters': 3000})
                 # Exact normalized identity only. Do not guess a vaguely similar facility.
-                matches = [r for r in result['results'] if _normalize(r['name']) == _normalize(row['name'])]
+                matches = [r for r in result['results'] if library_name_normalize(r['name']) == library_name_normalize(row['name'])]
                 if not matches and course_name_key(row['name']):
                     matches = [r for r in result['results'] if course_name_key(r['name']) == course_name_key(row['name'])]
                 if len(matches) != 1:
@@ -717,19 +762,19 @@ class CourseLibrary:
 
     def report(self):
         with self.connect() as db:
-            rows = db.execute("SELECT c.id,c.name,c.state,c.city,c.status,c.updated,r.path,c.notes FROM library_courses c LEFT JOIN library_revisions r ON c.id=r.course_id AND c.revision=r.revision ORDER BY c.id").fetchall()
+            rows = db.execute("SELECT c.id,c.name,c.country,c.state,c.city,c.status,c.updated,r.path,c.notes FROM library_courses c LEFT JOIN library_revisions r ON c.id=r.course_id AND c.revision=r.revision ORDER BY c.id").fetchall()
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(['Course ID','Course Name','State','City','Status','Updated At (UTC)','Project Path','Notes'])
+        writer.writerow(['Course ID','Course Name','Country','State','City','Status','Updated At (UTC)','Project Path','Notes'])
         for row in rows:
             values=list(row)
-            values[5]=datetime.fromtimestamp(values[5],UTC).isoformat()
+            values[6]=datetime.fromtimestamp(values[6],UTC).isoformat()
             # Neutralize spreadsheet formulas in untrusted names/notes.
             writer.writerow(["'" + v if isinstance(v,str) and v.startswith(('=','+','-','@')) else v for v in values])
         try:
             validation = json.loads((self.base/'reports/intake-validation.json').read_text())
             for error in validation.get('errors',[]):
-                writer.writerow(['',f"CSV row {error['row']}",'','','Invalid input','','',error['error']])
+                writer.writerow(['',f"CSV row {error['row']}",'','','','Invalid input','','',error['error']])
         except (OSError,ValueError,KeyError):
             pass
         text = output.getvalue()

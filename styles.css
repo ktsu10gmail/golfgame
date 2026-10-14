@@ -5530,3 +5530,137 @@ body.challenge-active:not(.green-view-open) .map-toolbar { top: 122px; }
 }
 
 .terrain-first-cut { fill: #6c9655; stroke: none; }
+
+/* Desktop header: consistent controls and a quiet hierarchy. */
+@media (min-width: 761px) {
+  .topbar {
+    height: 80px;
+    padding: 10px 22px;
+    gap: 20px;
+    border: 1px solid rgba(23,55,43,.1);
+    border-radius: 12px;
+    background: #f9fbf7;
+    box-shadow: 0 3px 12px rgba(24,45,33,.05);
+    align-items: center;
+  }
+  .brand { min-width: 0; gap: 12px; }
+  .brand-mark { width: 40px; height: 40px; border-radius: 11px; box-shadow: none; }
+  .brand strong { display: block; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; line-height: 1.4; }
+  .brand small { margin-top: 3px; font-size: 9px; letter-spacing: .1em; color: #758377; }
+  .play-context { align-items: start; gap: 12px; }
+  .course-picker { position: relative; }
+  .course-picker label, .game-mode-picker label { margin: 0 0 5px; font-size: 9px; font-weight: 650; letter-spacing: .08em; color: #69786d; }
+  .play-context .course-select, .game-mode-picker select {
+    height: 38px; min-height: 38px;
+    padding: 7px 28px 7px 12px;
+    border: 1px solid #d5dfd5;
+    border-radius: 7px;
+    background-color: #fff;
+    color: #213d2d;
+    font-size: 12px; font-weight: 600;
+  }
+  .course-source-attribution { position: absolute; top: 100%; left: 0; margin-top: 2px; font-size: 8px; line-height: 1.1; color: #758377; white-space: nowrap; }
+  .round-status { padding: 0 16px; border-left: 1px solid #dde5db; gap: 12px; font-size: 12px; white-space: nowrap; }
+  .round-status strong { font-weight: 750; color: #214936; }
+  .status-rule { display: none; }
+  .topbar-actions .account-button, .utility-menu > summary {
+    min-height: 38px; border-radius: 7px; border-color: #d5dfd5;
+    background: #fff; font-size: 11px; box-shadow: none;
+  }
+  .play-context select:focus-visible, .topbar-actions button:focus-visible, .utility-menu > summary:focus-visible { outline: 2px solid #3f7854; outline-offset: 3px; }
+}
+
+@media (min-width: 1181px) {
+  .topbar { grid-template-columns: minmax(340px, 1fr) minmax(470px, auto) auto auto; gap: 16px; }
+  .play-context { grid-template-columns: minmax(270px, 330px) 174px; }
+  .brand > span:last-child { display: block; min-width: 0; }
+  .brand strong { max-width: none; }
+  .brand-course-location { display: block; margin-top: 2px; color: #586f60; font-size: 11px; line-height: 1.3; }
+  .brand-course-location[hidden] { display: none; }
+}
+
+/* Give location-rich course labels priority in the desktop header. */
+@media (min-width: 1181px) {
+  .topbar { grid-template-columns: minmax(220px, .65fr) minmax(0, 1.5fr) auto auto; gap: 14px; }
+  .play-context { min-width: 0; grid-template-columns: minmax(340px, 1fr) 150px; gap: 10px; }
+  .play-context .course-select { width: 100%; max-width: none; }
+  .brand strong { max-width: 300px; }
+}
+@media (min-width: 761px) and (max-width: 1180px) {
+  .play-context { grid-template-columns: minmax(240px, 1fr) 150px; }
+}
+
+/* Unavailable scorecard tees remain visible with a clear disabled appearance. */
+.tee-switch button:disabled {
+  color: #929991;
+  background: rgba(120, 128, 120, .08);
+  opacity: .48;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+/* Keep mobile Live instructions in their own row below the hole map. */
+@media (max-width: 760px) {
+  body.live-round-view .course-stage {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  body.live-round-view .course-map {
+    position: relative;
+    inset: auto;
+    grid-row: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+  body.live-round-view .live-map-measure-hint {
+    position: relative;
+    inset: auto;
+    grid-row: 2;
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+    pointer-events: auto;
+  }
+  body.live-round-view #live-map-measure-copy {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+  body.live-round-view .live-map-measure-hint button {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+}
+
+/* Distance labels use measured bounds and leave room for touch input. */
+.distance-badge {
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
+  white-space: normal;
+  text-align: center;
+  transform: none;
+}
+
+.gps-practice-controls { padding: 6px 12px; background: #eef4e9; }
+.gps-practice-controls button { min-height: 36px; padding: 6px 10px; margin-right: 6px; border: 1px solid #66826a; border-radius: 7px; color: #244d33; background: white; font: inherit; font-size: .65rem; }
+.gps-practice-controls p { margin: 6px 0; font-size: .62rem; line-height: 1.4; }
+
+@media (max-width: 760px) {
+  .gps-mode-screen:not([hidden]) { grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; }
+}
+
+.gps-review-header-actions { flex-wrap: wrap; justify-content: flex-end; }
+
+.gps-location-button:disabled {
+  background: #e1e5df;
+  color: #858c84;
+  border-color: #cbd1c9;
+  opacity: .55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.sidebar-reset-game-button { display: block; width: 100%; margin-top: 12px; }

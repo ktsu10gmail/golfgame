@@ -1,4 +1,5 @@
-import { renderIllustratedHolePrototype } from "./packages/editor/illustrated_hole_prototype.mjs?v=20261008-alta-hole3";
+import { runBatchInstall } from "./packages/editor/batch_install.mjs?v=20261014-1";
+import { renderIllustratedHolePrototype } from "./packages/editor/illustrated_hole_prototype.mjs?v=20261009-start-ball1";
 import {
   buildGameCoursePackages,
   buildGameHoleJson,
@@ -8,10 +9,12 @@ import {
   prepareCourseTeeBoxes,
   placeStartTeeBox,
   selectStartTee,
+  selectCourseStartTee,
   applyOsmStartTeeDefault,
   buildHoleGpsCalibration,
   buildAutoDraft,
   alignSecondaryTees,
+  resizeHoleTeeBoxes,
   buildTreeBrushPolygon,
   createUprightGpsViewTransform,
   createMapperProject,
@@ -38,15 +41,33 @@ import {
   scaleGpsPointAround,
   uprightHoleViewTarget,
   validateMapperProject
-} from "./packages/editor/course_mapper.mjs?v=20261009-primary-green1";
+} from "./packages/editor/course_mapper.mjs?v=20261013-par3-fairways1";
 import { createUndoHistory } from "./packages/editor/undo_history.mjs?v=20260801-1";
+import { createGeometryAssist } from "./packages/editor/geometry_assist.mjs?v=20261012-naip02-edit1";
 import { unionSimplePolygons } from "./packages/editor/polygon_union.mjs?v=20260812-1";
-import { renderGameMapPreview } from "./packages/editor/game_map_preview.mjs?v=20261008-prototype1";
+import { renderGameMapPreview } from "./packages/editor/game_map_preview.mjs?v=20261009-start-ball1";
 import { ensureHazardFreePinZones, mappedGreenHole } from "./packages/simulation/browser_green_generator.mjs?v=20261007-mapped-green1";
-import { buildCorridorMask, buildPolygonMask, detectTreeRegions } from "./packages/editor/hazard_detection.mjs?v=20260815-17";
+import { buildCorridorMask, buildPolygonMask, detectTreeRegions, detectMagicWandRegion, smoothWandOutline } from "./packages/editor/hazard_detection.mjs?v=20261009-wand-smooth1";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
+let geometryAssistViewer;
+
+async function openGeometryAssist(course) {
+  const dialog = $("#geometry-assist-dialog");
+  if (!geometryAssistViewer) {
+    geometryAssistViewer = createGeometryAssist({ L: globalThis.L, container: "geometry-assist-map",
+      controls: $("#geometry-assist-controls"), status: $("#geometry-assist-status"), metadata: $("#geometry-assist-metadata"),
+      save: payload => libraryRequest("save", payload), onSaved: () => refreshCourseLibrary() });
+    $("#geometry-assist-close").addEventListener("click", () => { if (geometryAssistViewer.canClose()) dialog.close(); });
+    dialog.addEventListener("cancel", event => { if (!geometryAssistViewer.canClose()) event.preventDefault(); });
+    dialog.addEventListener("close", () => geometryAssistViewer.close());
+  }
+  $("#geometry-assist-title").textContent = `Geometry Assist · ${course.name}`;
+  dialog.showModal();
+  try { await geometryAssistViewer.open(course, libraryRequest); }
+  catch (error) { $("#geometry-assist-status").textContent = error.message; }
+}
 const REQUESTED_PRESET_ID = new URLSearchParams(window.location.search).get("course");
 const AUTOSAVE_KEY = REQUESTED_PRESET_ID
   ? `golf-course-mapper-autosave-${REQUESTED_PRESET_ID}`
@@ -92,6 +113,7 @@ const FEATURE_COLORS = {
 };
 
 const TOOL_LABELS = {
+  magic_wand: "Magic Wand · click a surface on the local image",
   ...Object.fromEntries(Object.entries(FEATURE_STYLE).map(([tool, style]) => [tool, `Place ${style.name.toLowerCase()}`])),
   marker_blue_tee: "Mark blue tee / starting ball",
   marker_white_tee: "Mark white tee / starting ball",
@@ -115,6 +137,12 @@ const rotatedArtworkCache = new Map();
 let activeTool = null;
 let previewPrototypeHole = null;
 let autoDraftSetupPending = false;
+const editorFeatureLayers = new Map();
+function editorFeatureLayerKey(feature) { return `${project.course_id}:${currentHoleNumber}:${feature.id}`; }
+function editorFeaturePane(feature, normalPane) {
+  const order = editorFeatureLayers.get(editorFeatureLayerKey(feature));
+  return order === "back" ? "editBackPane" : order === "front" ? "editFrontPane" : normalPane;
+}
 let selectedFeatureId = null;
 let selectedFeatureIds = new Set();
 let selectedPlayPoint = null;
@@ -981,21 +1009,7 @@ function saveHoleForm(recordChange = false, autosaveLabel = "Autosaved") {
   if (recordChange && changed) recordUndo(`Hole ${currentHoleNumber} card change`, `hole-card-${currentHoleNumber}`);
   Object.assign(hole, next);
   const teeAlignment = changed ? alignSecondaryTees(hole) : { aligned: [] };
-  const fairwayTool = $('[data-tool="fairway"]');
-  if (fairwayTool) {
-    fairwayTool.disabled = hole.par === 3;
-    fairwayTool.title = hole.par === 3 ? "Par-3 holes do not use fairway shapes" : "";
-  }
-  if (hole.par === 3) {
-    const fairwayCount = hole.features.filter(feature => feature.type === "fairway").length;
-    if (fairwayCount) {
-      hole.features = hole.features.filter(feature => feature.type !== "fairway");
-      selectedFeatureIds = new Set([...selectedFeatureIds].filter(id => hole.features.some(feature => feature.id === id)));
-      if (selectedFeatureId && !selectedFeatureIds.has(selectedFeatureId)) selectedFeatureId = [...selectedFeatureIds].at(-1) || null;
-      renderMappedHole();
-      setStatus(`Removed ${fairwayCount} fairway shape${fairwayCount === 1 ? "" : "s"} from this par-3 hole.`, "success");
-    }
-  }
+
   if (teeAlignment.aligned.length) renderMappedHole();
   if (changed) renderMeasurements();
   return persistProject(autosaveLabel);
@@ -1005,11 +1019,7 @@ function renderHoleForm() {
   applyOsmStartTeeDefault(project);
   const hole = currentHole();
   $("#start-tee").value = hole.tee_alignment_anchor || "white";
-  const fairwayTool = $('[data-tool="fairway"]');
-  if (fairwayTool) {
-    fairwayTool.disabled = Number(hole.par) === 3;
-    fairwayTool.title = Number(hole.par) === 3 ? "Par-3 holes do not use fairway shapes" : "";
-  }
+
   $("#hole-par").value = String(hole.par);
   $("#hole-handicap").value = String(hole.handicap);
   $("#yards-blue").value = hole.yardages.blue || "";
@@ -1035,7 +1045,11 @@ function gpsInputValue(point) {
 }
 
 function renderGpsCalibration() {
+  $("#course-country").value = project.course_location?.country || "";
+  $("#course-state").value = project.course_location?.state || "";
+  $("#course-city").value = project.course_location?.city || "";
   const hole = currentHole();
+  $("#gps-alignment-mode").value = hole.gps_alignment_mode === "manual" ? "manual" : "default";
   const automatic = hasDeterministicWgs84Geometry(hole, project);
   const controls = hole.gps_control_points || {};
   const bunkers = hole.features.filter(feature => feature.type === "bunker");
@@ -1102,7 +1116,7 @@ function saveGpsCalibration({ quiet = false } = {}) {
       bunker_feature_id: form.bunkerFeatureId,
       calibrated_at: new Date().toISOString()
     };
-    const calibration = buildHoleGpsCalibration({ ...currentHole(), gps_control_points: controls });
+    const calibration = buildHoleGpsCalibration({ ...currentHole(), gps_control_points: controls }, { project });
     const previous = currentHole().gps_control_points;
     const same = previous && JSON.stringify({ ...previous, calibrated_at: null }) === JSON.stringify({ ...controls, calibrated_at: null });
     if (!same) recordUndo(`save Hole ${currentHoleNumber} GPS calibration`);
@@ -1130,7 +1144,7 @@ function prepareGpsCalibrationForHandoff() {
     }
   }
   const form = gpsCalibrationFormState();
-  if (!form.any) return true;
+  if (!form.any && currentHole().gps_alignment_mode !== "manual") return true;
   if (!form.complete) {
     setStatus(`Hole ${currentHoleNumber} GPS calibration is incomplete. Complete all three points before installation.`, "error");
     return false;
@@ -1350,8 +1364,8 @@ function editorHoleLabel(holeNumber) {
 
 function renderHoleSwitcherOptions() {
   const nineOnly = project.course_structure === MAPPER_COURSE_STRUCTURES.NINE;
-  $("#install-game").disabled = nineOnly;
-  $("#install-game").title = nineOnly ? "Nine-hole courses can be saved and exported. Game installation currently requires 18 holes." : "";
+  $("#install-game").disabled = false;
+  $("#install-game").title = "Install this course in the selected game destination";
   if (project.course_structure === MAPPER_COURSE_STRUCTURES.THREE_NINES) {
     $("#hole-number").innerHTML = projectNineLoops().map(loop => `
       <optgroup label="${escapeHtml(loop.name)} nine">
@@ -1481,6 +1495,7 @@ function gpsPolygonAreaMeters(points) {
 }
 
 function setActiveTool(tool) {
+  if (tool !== "magic_wand") clearWandSelection();
   if (tool === "box_select") {
     boxSelectionType = "trees";
   } else if (activeTool === "box_select") {
@@ -1491,6 +1506,10 @@ function setActiveTool(tool) {
   boxSelectionStart = null;
   clearSurfaceBrushPreview();
   activeTool = tool;
+  const shapePicker = $("#field-shape-tool");
+  if (Array.from(shapePicker.options).some(option => option.value === tool)) shapePicker.value = tool;
+  $("#place-field-shape").classList.toggle("active", Array.from(shapePicker.options).some(option => option.value === tool));
+  $("#tree-brush-width").closest("label").hidden = shapePicker.value !== "tree_brush";
   measurementStart = null;
   $$("[data-tool]").forEach(button => button.classList.toggle("active", button.dataset.tool === tool));
   $("#active-tool-label").textContent = tool === "box_select" && boxSelectionType
@@ -1509,7 +1528,7 @@ function setActiveTool(tool) {
       overlay.pm.disableLayerDrag?.();
       overlay.pm.disable();
       const keepSelected = tool === "box_select" && selectedFeatureIds.has(id);
-      overlay.setStyle({ weight: keepSelected ? 4 : 2 });
+      overlay.setStyle({ weight: currentHole().features.find(feature => feature.id === id)?.type === "bunker" ? 0 : keepSelected ? 4 : 2 });
       overlay.getElement()?.classList.toggle("mapper-feature-selected", keepSelected);
     }
   } else if (selectedFeatureId && featureOverlays.has(selectedFeatureId)) {
@@ -1635,7 +1654,7 @@ function refreshFeatureSelection() {
   clearFeatureDragProxies();
   for (const [id, overlay] of featureOverlays) {
     const selected = selectedFeatureIds.has(id);
-    overlay.setStyle({ weight: selected ? 4 : 2 });
+    overlay.setStyle({ weight: currentHole().features.find(feature => feature.id === id)?.type === "bunker" ? 0 : selected ? 4 : 2 });
     overlay.getElement()?.classList.toggle("mapper-feature-selected", selected);
     applyFeatureInteraction(overlay, selected && selectedFeatureIds.size === 1);
   }
@@ -1737,6 +1756,7 @@ function markerKeyForTool(tool) {
 }
 
 async function placeSurveyPoint(tool, position) {
+  saveHoleForm();
   const markerKey = markerKeyForTool(tool);
   const routeIndex = {
     route_point_1: 0,
@@ -1756,7 +1776,10 @@ async function placeSurveyPoint(tool, position) {
       currentHole().tee_alignment_anchor = markerKey.replace("_tee", "");
       $("#start-tee").value = currentHole().tee_alignment_anchor;
     }
-    alignSecondaryTees(currentHole());
+    const alignment = alignSecondaryTees(currentHole());
+    setStatus(alignment.aligned.length
+      ? `Placed ${markerKey.replaceAll("_", " ")}. Generated ${alignment.aligned.join(" and ")} tee markers from scorecard yardages.`
+      : `Placed ${markerKey.replaceAll("_", " ")}. ${alignment.reason || "Add valid scorecard yardages for the other tees to generate their markers."}`, alignment.aligned.length ? "success" : "neutral");
   } else if (Number.isInteger(routeIndex)) {
     currentHole().route_points[routeIndex] = position;
   }
@@ -1785,11 +1808,37 @@ async function placeSurveyPoint(tool, position) {
   setActiveTool(null);
 }
 
+let wandSelection = null;
+let wandOverlay = null;
+let wandSequence = 0;
+function clearWandSelection() {
+  wandSequence++;
+  wandOverlay?.remove(); wandOverlay = null; wandSelection = null;
+  $("#wand-create").disabled = true;
+}
+async function previewWand(position) {
+  clearWandSelection();
+  const sequence = wandSequence, hole = currentHole();
+  try {
+    const frame = await artworkScanFrame(480);
+    if (sequence !== wandSequence || currentHole() !== hole || activeTool !== "magic_wand") return;
+    const pixel = frame.gpsToPixel(position);
+    const region = detectMagicWandRegion({ ...frame, seedX: pixel.x, seedY: pixel.y, tolerance: Number($("#wand-tolerance").value) });
+    const outline = smoothWandOutline(region.points, Number($("#wand-smoothing").value));
+    const points = outline.map(point => frame.pixelToGps({ x: Math.min(frame.width - 1, point.x), y: Math.min(frame.height - 1, point.y) }));
+    wandSelection = { hole, position, points };
+    wandOverlay = L.polygon(points.map(displayGps), { pane: "surveyPane", color: "#d9673f", weight: 2, dashArray: "5 4", fillOpacity: .25, interactive: false }).addTo(map);
+    $("#wand-create").disabled = false;
+    setStatus(`Magic Wand selected ${region.pixels} pixels. Inspect the outline, adjust tolerance, then Create shape.`, "success");
+  } catch (error) { if (sequence === wandSequence) setStatus(error.message, "error"); }
+}
+
 function handleMapClick(event) {
   if (!activeTool) return;
   if (activeTool === "box_select") return;
   if (surfaceBrushActive()) return;
   const position = gpsLiteral(event.latlng);
+  if (activeTool === "magic_wand") { void previewWand(position); return; }
   if (FEATURE_STYLE[activeTool]) {
     addFeature(activeTool, position);
     return;
@@ -1858,9 +1907,10 @@ function clearFeatureDragProxies() {
 
 function setupDirectFeatureDrag(feature, overlay) {
   const selected = selectedFeatureIds.has(feature?.id);
+  if (feature && editorFeatureLayers.get(editorFeatureLayerKey(feature)) === "back") return;
   if (!feature || activeTool || (selected && (selectedFeatureMode !== "points" || selectedFeatureIds.size > 1)) || featureDragProxies.has(feature.id)) return;
   const proxy = L.polygon(overlay.getLatLngs()[0], {
-    pane: "featureDragPane",
+    pane: editorFeaturePane(feature, "featureDragPane"),
     color: "transparent",
     opacity: 0,
     weight: 0,
@@ -1895,6 +1945,7 @@ function setupDirectFeatureDrag(feature, overlay) {
 }
 
 function selectFeature(featureId, { additive = false } = {}) {
+  if (activeTool) setActiveTool(null);
   selectedPlayPoint = null;
   if (!additive) {
     selectedFeatureIds = new Set([featureId]);
@@ -1937,7 +1988,7 @@ function applyEditorTreeCanopy(overlay) {
 
 function createFeatureOverlay(feature) {
   const color = FEATURE_COLORS[feature.type] || "#d9673f";
-  const pane = feature.type === "cart_path"
+  const normalPane = feature.type === "cart_path"
     ? "cartPathPane"
     : ["trees", "bunker", "water", "penalty_area_unknown"].includes(feature.type)
     ? "topFeaturePane"
@@ -1946,18 +1997,21 @@ function createFeatureOverlay(feature) {
       : feature.type === "fairway"
         ? "fairwayPane"
         : "featurePane";
+  const pane = editorFeaturePane(feature, normalPane);
   const overlay = L.polygon(feature.points.map(displayGps), {
     pane,
+    interactive: editorFeatureLayers.get(editorFeatureLayerKey(feature)) !== "back",
     color: feature.type === "tee_white" ? "#24322a" : color,
     opacity: .95,
-    weight: selectedFeatureIds.has(feature.id) ? 4 : 2,
+    stroke: feature.type !== "bunker",
+    weight: feature.type === "bunker" ? 0 : selectedFeatureIds.has(feature.id) ? 4 : 2,
     fillColor: color,
     fillOpacity: ["out_of_bounds", "hole_outline"].includes(feature.type) ? .12 : .48
   }).addTo(map);
   if (feature.type === "trees") applyEditorTreeCanopy(overlay);
   overlay.on("click", event => {
     L.DomEvent.stopPropagation(event);
-    if (activeTool) handleMapClick({ latlng: event.latlng });
+    if (activeTool && activeTool !== "magic_wand") handleMapClick({ latlng: event.latlng });
     else selectFeature(feature.id, { additive: Boolean(event.originalEvent?.shiftKey) });
   });
   overlay.on("dblclick", event => L.DomEvent.stopPropagation(event));
@@ -1994,6 +2048,8 @@ function clearFeatureOverlays() {
 }
 
 function renderMappedHole() {
+  if (wandSelection && wandSelection.hole !== currentHole()) clearWandSelection();
+  $("#merge-fairways").disabled = currentHole().features.filter(feature => feature.type === "fairway").length < 2;
   clearFeatureOverlays();
   osmReferenceOverlays.forEach(layer => layer.remove());
   osmReferenceOverlays = [];
@@ -2192,6 +2248,7 @@ function markFeatureManual(feature) {
 }
 
 function deleteSelectedFeatures() {
+  if (activeTool) setActiveTool(null);
   const features = selectedFeatures();
   if (!features.length) {
     const feature = selectedFeature();
@@ -2213,6 +2270,25 @@ function deleteSelectedFeatures() {
   renderMappedHole();
   setStatus(`Deleted ${description}. Use Undo to restore ${features.length === 1 ? "it" : "them"}.`, "success");
   return true;
+}
+
+function smoothSelectedOutline() {
+  const feature = selectedFeature();
+  if (!feature || selectedFeatures().length !== 1) {
+    setStatus("Select one shape to smooth its outline.", "error"); return;
+  }
+  setActiveTool(null);
+  const origin = feature.points[0];
+  const contour = feature.points.map(point => {
+    const local = gpsDeltaMeters(origin, point); return { x: local.east, y: local.north };
+  });
+  const smoothed = smoothWandOutline(contour, 1).map(point => offsetGpsPoint(origin, point.x, point.y));
+  recordUndo("smooth selected outline");
+  feature.points = smoothed;
+  delete feature.template_shape;
+  markFeatureManual(feature);
+  persistProject(); renderMappedHole();
+  setStatus("Smoothed the selected outline. Use Undo to restore the original.", "success");
 }
 
 function duplicateSelectedFeature() {
@@ -2272,8 +2348,34 @@ function polygonOverlapGroups(polygons) {
   return groups;
 }
 
+async function mergeHoleFairways() {
+  autoDraftSetupPending = false;
+  setActiveTool(null);
+  const fairways = currentHole().features.filter(feature => feature.type === "fairway");
+  if (fairways.length < 2) {
+    setStatus("Add at least two touching or overlapping fairway shapes to merge.", "neutral");
+    return;
+  }
+  const button = $("#merge-fairways");
+  button.disabled = true;
+  selectedFeatureIds = new Set(fairways.map(feature => feature.id));
+  selectedFeatureId = fairways.at(-1).id;
+  renderSelectedFeature();
+  $("#merge-fairways-result").textContent = `Merging ${fairways.length} fairways…`;
+  try {
+    await mergeSelectedFeatures();
+    $("#merge-fairways-result").textContent = $("#editor-status").textContent;
+  } catch (error) {
+    $("#merge-fairways-result").textContent = `Merge failed: ${error.message}`;
+    throw error;
+  } finally {
+    button.disabled = currentHole().features.filter(feature => feature.type === "fairway").length < 2;
+  }
+}
+
 async function mergeSelectedFeatures() {
   const features = selectedFeatures();
+  const mergeHole = currentHole();
   if (features.length < 2) return;
   const types = new Set(features.map(feature => feature.type));
   if (types.size !== 1) {
@@ -2291,6 +2393,11 @@ async function mergeSelectedFeatures() {
   const mergeTypeLabel = type === "trees" ? "tree" : type.replaceAll("_", " ");
   setStatus(`Combining ${features.length} ${mergeTypeLabel} shapes…`, "neutral");
   await new Promise(resolve => window.requestAnimationFrame(resolve));
+  if (currentHole() !== mergeHole || features.some(feature => !mergeHole.features.includes(feature))) {
+    mergeButton.disabled = false;
+    setStatus("The hole changed; select the shapes again before merging.", "neutral");
+    return;
+  }
   let union;
   try {
     if (type === "trees") {
@@ -2397,6 +2504,7 @@ async function rotateHoleArtwork(degrees) {
 function renderSelectedFeature() {
   const features = selectedFeatures();
   const feature = selectedFeature();
+  $("#smooth-feature-outline").disabled = features.length !== 1;
   $("#fairway-length-controls").hidden = features.length !== 1 || feature?.type !== "fairway" || feature?.template_shape !== "capsule";
   $("#selected-empty").hidden = Boolean(feature);
   $("#selected-controls").hidden = !feature;
@@ -2422,6 +2530,7 @@ function renderSelectedFeature() {
     return;
   }
   $("#feature-label").value = feature.label || "";
+  $("#fairway-length-controls").hidden = feature.type !== "fairway" || feature.template_shape !== "capsule";
   $("#feature-type").value = feature.type;
   $("#feature-points").textContent = String(feature.points.length);
   const area = gpsPolygonAreaMeters(feature.points);
@@ -2554,6 +2663,18 @@ function fitMappedHole() {
   currentHole().features.forEach(feature => points.push(...feature.points));
   Object.values(currentHole().markers).forEach(point => { if (point) points.push(point); });
   points.push(...currentHole().route_points);
+  if (!points.length) {
+    for (const reference of project.external_course_source?.reference_features || []) {
+      for (const point of reference.points || []) {
+        if (Number.isFinite(point.lat) && Number.isFinite(point.lng)) points.push(point);
+      }
+    }
+    if (points.length) {
+      map.fitBounds(L.latLngBounds(points.map(displayGps)), { padding: [40, 40], maxZoom: EDITOR_MAX_ZOOM, animate: false });
+      setStatus('Showing unassigned OSM course geometry. Select the correct hole, then click a dashed shape to assign it.');
+      return;
+    }
+  }
   if (!points.length) {
     setStatus("Place a marker or shape before fitting the hole.", "error");
     return;
@@ -2824,6 +2945,8 @@ function initializeMap() {
     event.stopImmediatePropagation();
   }, true);
   [
+    ["editBackPane", 405],
+    ["editFrontPane", 460],
     ["cartPathPane", 425],
     ["roughPane", 410],
     ["fairwayPane", 420],
@@ -2927,6 +3050,42 @@ function updateScorecardImportChoice() {
   $("#scorecard-import-status").textContent = "";
 }
 
+const libraryInstallSelection = new Map();
+let libraryBatchRunning = false;
+let libraryBatchStop = false;
+let libraryBatchResults = null;
+function updateLibraryInstallSelection() {
+  $("#library-selected-count").textContent = `${libraryInstallSelection.size} selected across pages`;
+}
+async function installSavedLibraryCourse(item, target) {
+  const { project: saved } = await libraryRequest(`project?id=${encodeURIComponent(item.id)}&revision=${item.revision}`);
+  const savedProject = parseMapperProject(JSON.stringify(saved));
+  const unfinished = Array.from({ length: mapperHoleCount(savedProject) }, (_, i) => i + 1)
+    .filter(n => !holeMappingStatus(savedProject, n).ready);
+  if (unfinished.length) throw new Error(`Incomplete holes: ${unfinished.join(", ")}. Open draft and finish these first.`);
+  const payloads = buildGameCoursePackages(savedProject).map(payload => ({ ...payload, artwork_mode: "generated_from_geometry" }));
+  const results = [];
+  for (const payload of payloads) {
+    const response = await editorApiFetch("/api/course-mapper/install", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, install_target: target, library_context: { id: item.id, revision: item.revision } })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.installed || !result.verified || result.install_target !== target) {
+      throw new Error(`${payload.course_name}: ${result.error || "Installation was not verified"}${results.length ? ` (${results.length} routes already installed; remaining routes stopped)` : ""}`);
+    }
+    results.push(result);
+  }
+  if (target === "dev") await libraryRequest("installed", { id: item.id, revision: item.revision, results });
+  return results.map(result => ({ course_id: result.course_id, version: result.map_updated_at }));
+}
+function renderLibraryBatchProgress({ results, current, total }) {
+  const failed = results.filter(item => item.status === "Failed").length;
+  $("#library-batch-status").textContent = `${current ? "Installing" : "Progress"}: ${results.length}/${total} completed · ${results.length - failed} installed · ${failed} failed${current ? ` · ${current.name}` : ""}. Keep this page open until finished.`;
+  $("#library-batch-results").replaceChildren(...results.map(item => {
+    const row = document.createElement("li"); row.textContent = `${item.name} · revision ${item.revision} · ${item.status}${item.message ? `: ${item.message}` : ""}`; return row;
+  }));
+}
 let libraryOffset = 0;
 let libraryTotal = 0;
 let libraryRequestSequence = 0;
@@ -2950,7 +3109,7 @@ function libraryCourseDisplayName(course) {
 async function refreshCourseLibrary() {
   const sequence = ++libraryRequestSequence;
   const query = new URLSearchParams({ q: $("#library-search").value, state: $("#library-state").value,
-    status: $("#library-filter").value, offset: String(libraryOffset) });
+    country: $("#library-country").value, status: $("#library-filter").value, offset: String(libraryOffset) });
   const result = await libraryRequest(`courses?${query}`);
   if (sequence !== libraryRequestSequence) return;
   const fingerprint = JSON.stringify(result);
@@ -2969,8 +3128,14 @@ async function refreshCourseLibrary() {
     const row = document.createElement("div"); row.className = "library-row";
     const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.value = course.id;
     checkbox.setAttribute("aria-label", `Select ${libraryCourseDisplayName(course)}`);
-    checkbox.disabled = course.no_good || !["New", "Failed", "Needs review"].includes(course.status) || Boolean(course.revision || course.proposed || course.duplicate_of);
-    checkbox.checked = !checkbox.disabled && checkedIds.has(course.id);
+    checkbox.disabled = $("#library-selection-mode").value === "install" ? course.no_good || !course.revision : course.no_good || !["New", "Failed", "Needs review"].includes(course.status) || Boolean(course.revision || course.proposed || course.duplicate_of);
+    checkbox.checked = !checkbox.disabled && ($("#library-selection-mode").value === "install" ? libraryInstallSelection.has(course.id) : checkedIds.has(course.id));
+    checkbox.addEventListener("change", () => {
+      if ($("#library-selection-mode").value !== "install") return;
+      if (checkbox.checked) libraryInstallSelection.set(course.id, { id: course.id, name: libraryCourseDisplayName(course), revision: course.revision });
+      else libraryInstallSelection.delete(course.id);
+      updateLibraryInstallSelection();
+    });
     const title = document.createElement("div");
     const name = document.createElement("strong"); name.textContent = libraryCourseDisplayName(course);
     const location = document.createElement("small"); location.textContent = `${course.city}, ${course.state} · Revision ${course.revision}`;
@@ -2999,9 +3164,10 @@ async function refreshCourseLibrary() {
         recordUndo("open library project"); project = loadedProject; currentHoleNumber = 1;
         autoDraftSetupPending = false; referencePanelOpen = Boolean(project.reference_images);
         $("#course-name").value = project.course_name; $("#course-structure").value = project.course_structure;
-        syncNineLoopNameFields(); renderHoleSwitcherOptions(); persistProject(); renderHoleForm();
+        syncNineLoopNameFields(); renderHoleSwitcherOptions(); renderHoleForm();
         if (map && project.map_view?.center) map.setView(displayGps(project.map_view.center), Math.min(project.map_view.zoom || 17, EDITOR_MAX_ZOOM), { animate: false });
         void applyImagerySource({ fit: true });
+        persistProject();
         $("#install-game").textContent = course.installation.startsWith("Installed") || course.installation.startsWith("Update")
           ? "Update installed course" : "Install in game";
         $("#course-library-dialog").close(); setStatus(`Opened ${project.course_name} · saved revision ${project.library_context.revision}.`, "success");
@@ -3023,6 +3189,9 @@ async function refreshCourseLibrary() {
       }
     }
     if (course.revision) {
+      const assist = document.createElement("button"); assist.type = "button"; assist.textContent = "Geometry Assist";
+      assist.addEventListener("click", () => void openGeometryAssist(course));
+      actions.append(assist);
       const scorecard = document.createElement("button"); scorecard.type = "button"; scorecard.textContent = "Import scorecard";
       scorecard.addEventListener("click", async () => {
         try {
@@ -3097,7 +3266,13 @@ async function refreshCourseLibrary() {
       } catch (error) { $("#library-message").textContent = error.message; flag.disabled = false; }
     }
     actions.append(flag);
-    row.append(checkbox, title, mapping, installation, actions); $("#library-rows").append(row);
+    const country = document.createElement("div"); country.className = "library-stage";
+    const countryLabel = document.createElement("small"); countryLabel.textContent = "Country";
+    country.append(countryLabel, document.createTextNode(course.country || "Unknown"));
+    const holes = document.createElement("div"); holes.className = "library-stage";
+    const holesLabel = document.createElement("small"); holesLabel.textContent = "Holes";
+    holes.append(holesLabel, document.createTextNode(course.hole_summary?.label || "Unknown"));
+    row.append(checkbox, title, country, holes, mapping, installation, actions); $("#library-rows").append(row);
   }
   $("#library-page").textContent = libraryTotal ? `Courses ${libraryOffset + 1}–${Math.min(libraryOffset + 25, libraryTotal)} of ${libraryTotal}` : "No matching courses";
   $("#library-prev").disabled = libraryOffset === 0;
@@ -3174,6 +3349,47 @@ async function openLibraryHistory(course) {
 }
 
 function bindCourseLibrary() {
+  try {
+    libraryBatchResults = JSON.parse(localStorage.getItem("mapper-last-batch-install") || "null");
+    if (libraryBatchResults?.results) {
+      renderLibraryBatchProgress({ ...libraryBatchResults, current: null });
+      $("#library-batch-status").textContent = `Last batch · ${libraryBatchResults.target.toUpperCase()} · ${libraryBatchResults.finished_at} · ${libraryBatchResults.results.length}/${libraryBatchResults.total} attempted. See individual results below.`;
+      $("#library-batch-report").disabled = false;
+    }
+  } catch { libraryBatchResults = null; }
+  $("#library-selection-mode").addEventListener("change", () => {
+    const installing = $("#library-selection-mode").value === "install";
+    $("#library-batch-controls").hidden = !installing;
+    $("#library-queue").hidden = installing;
+    $("#library-batch-target option[value='prod']").disabled = !mapperInstallTargetsEnabled;
+    if (!mapperInstallTargetsEnabled) $("#library-batch-target option[value='dev']").textContent = "Local Golfgame";
+    libraryLastFingerprint = ""; $("#library-rows").replaceChildren(); void refreshCourseLibrary().catch(error => { $("#library-message").textContent = error.message; });
+  });
+  $("#library-batch-stop").addEventListener("click", () => { libraryBatchStop = true; $("#library-batch-stop").disabled = true; });
+  $("#library-batch-report").addEventListener("click", () => downloadText(JSON.stringify(libraryBatchResults, null, 2), "course-batch-install-results.json"));
+  $("#library-batch-install").addEventListener("click", async () => {
+    if (libraryBatchRunning) return;
+    const items = [...libraryInstallSelection.values()];
+    if (!items.length) { $("#library-message").textContent = "Select saved courses first."; return; }
+    const target = $("#library-batch-target").value;
+    if (!window.confirm(`Install ${items.length} saved courses in ${target === "prod" ? "Prod (.15)" : "Dev (.47)"}? ${target === "prod" ? "Confirm you have tested each exact revision in Dev. " : ""}Existing selected courses will be updated. Unsaved editor changes are excluded. Keep this page open.`)) return;
+    libraryBatchRunning = true; libraryBatchStop = false;
+    const locked = ["#library-batch-install", "#library-batch-target", "#library-selection-mode", "#library-batch-report"];
+    locked.forEach(id => $(id).disabled = true); $("#library-batch-stop").disabled = false;
+    try {
+      libraryBatchResults = { target, started_at: new Date().toISOString(), ...await runBatchInstall(items, {
+        install: item => installSavedLibraryCourse(item, target), shouldStop: () => libraryBatchStop,
+        onProgress: renderLibraryBatchProgress
+      }) };
+      libraryBatchResults.finished_at = new Date().toISOString();
+      $("#library-batch-status").textContent = `${libraryBatchResults.stopped ? "Stopped" : "Batch complete"} · ${libraryBatchResults.results.filter(item => item.status === "Installed").length} installed · ${libraryBatchResults.results.filter(item => item.status === "Failed").length} failed · ${items.length - libraryBatchResults.results.length} not attempted. Reload the destination game to see installed courses.`;
+      localStorage.setItem("mapper-last-batch-install", JSON.stringify(libraryBatchResults));
+    } finally {
+      libraryBatchRunning = false; locked.forEach(id => $(id).disabled = false); $("#library-batch-stop").disabled = true;
+    }
+  });
+  window.addEventListener("beforeunload", event => { if (libraryBatchRunning) { event.preventDefault(); event.returnValue = ""; } });
+
   const run = async task => { try { await task(); } catch (error) {
     const target = $("#library-source-dialog").open ? "#library-source-message"
       : $("#library-history-dialog").open ? "#library-history-message" : "#library-message";
@@ -3209,6 +3425,7 @@ function bindCourseLibrary() {
     $("#library-source-dialog").close(); await refreshCourseLibrary();
   }); });
   $("#library-search-button").addEventListener("click", () => { libraryOffset = 0; void run(refreshCourseLibrary); });
+  $("#library-country").addEventListener("change", () => { libraryOffset = 0; void run(refreshCourseLibrary); });
   $("#library-prev").addEventListener("click", () => { libraryOffset = Math.max(0, libraryOffset - 25); void run(refreshCourseLibrary); });
   $("#library-next").addEventListener("click", () => { libraryOffset += 25; void run(refreshCourseLibrary); });
   $("#library-upload").addEventListener("click", () => $("#library-csv").click());
@@ -3221,10 +3438,11 @@ function bindCourseLibrary() {
     await refreshCourseLibrary();
   }); });
   $("#library-select-all").addEventListener("click", () => {
-    $$('#library-rows input[type="checkbox"]:not(:disabled)').forEach(input => { input.checked = true; });
+    $$('#library-rows input[type="checkbox"]:not(:disabled)').forEach(input => { input.checked = true; input.dispatchEvent(new Event("change")); });
   });
   $("#library-select-none").addEventListener("click", () => {
     $$('#library-rows input[type="checkbox"]').forEach(input => { input.checked = false; });
+    libraryInstallSelection.clear(); updateLibraryInstallSelection();
   });
   $("#library-queue").addEventListener("click", () => { void run(async () => {
     const ids = [...$("#library-rows").querySelectorAll("input:checked")].map(input => input.value);
@@ -3396,6 +3614,11 @@ function bindEvents() {
       if (deleteSelectedPlayPoint() || deleteSelectedFeatures()) event.preventDefault();
     }
   });
+  for (const id of ["course-country", "course-state", "course-city"]) $("#" + id).addEventListener("change", () => {
+    recordUndo("change course location");
+    project.course_location = { country: $("#course-country").value.trim(), state: $("#course-state").value.trim(), city: $("#course-city").value.trim() };
+    persistProject();
+  });
   $("#course-name").addEventListener("change", event => {
     const nextName = event.target.value.trim() || "New golf course";
     if (nextName !== project.course_name) recordUndo("course name change");
@@ -3423,7 +3646,7 @@ function bindEvents() {
     renderHoleForm();
     setStatus(nextStructure === MAPPER_COURSE_STRUCTURES.THREE_NINES
       ? `${projectNineLoops().map(loop => loop.name).join(", ")} are ready for separate nine-hole scorecards.`
-      : nextStructure === MAPPER_COURSE_STRUCTURES.NINE ? "Course layout set to 9 holes. Save and export are available; game installation currently requires 18 holes." : "Course layout set to a standard 18 holes.", "success");
+      : nextStructure === MAPPER_COURSE_STRUCTURES.NINE ? "Course layout set to 9 holes. Finish all nine holes to install this course in the game." : "Course layout set to a standard 18 holes.", "success");
   });
   $$('[data-nine-loop-id]').forEach(input => input.addEventListener("change", event => {
     const loop = project.nine_loops.find(item => item.id === event.target.dataset.nineLoopId);
@@ -3460,7 +3683,6 @@ function bindEvents() {
         hole.handicap = row.handicap;
         hole.yardages = { blue: row.blue, white: row.white, forward: row.forward };
         alignSecondaryTees(hole);
-        if (row.par === 3) hole.features = hole.features.filter(feature => feature.type !== "fairway");
       });
       persistProject();
       renderHoleForm();
@@ -3479,13 +3701,13 @@ function bindEvents() {
     switchHole(Number(event.target.value));
   });
   $("#start-tee").addEventListener("change", event => {
-    recordUndo("choose start tee");
-    const result = selectStartTee(currentHole(), event.target.value);
+    saveHoleForm();
+    recordUndo("choose start tee for all holes");
+    const tee = event.target.value;
+    const result = selectCourseStartTee(project, tee);
     persistProject();
     renderMappedHole();
-    setStatus(result.aligned.length
-      ? `Using ${event.target.value} as the imported start tee. Generated ${result.aligned.join(" and ")} tee boxes from the scorecard.`
-      : `Using ${event.target.value} as the start tee. Add its box, pin, and scorecard yardages to generate the other tees.`, "success");
+    setStatus(`Default ball start set to ${tee === "forward" ? "Forward / Red" : tee[0].toUpperCase() + tee.slice(1)} for all ${result.holes} holes.`, "success");
   });
   ["#hole-par", "#hole-handicap", "#yards-blue", "#yards-white", "#yards-forward", "#elevation-change", "#layout-type"]
     .forEach(selector => $(selector).addEventListener("change", () => saveHoleForm(true)));
@@ -3499,6 +3721,46 @@ function bindEvents() {
       setActiveTool(button.dataset.tool);
     });
   });
+  $("#wand-start").addEventListener("click", () => {
+    if (!map || !project.reference_images?.[String(currentHoleNumber)]) { setStatus("Load a local hole image before using Magic Wand.", "error"); return; }
+    autoDraftSetupPending = false; clearWandSelection(); setActiveTool("magic_wand");
+  });
+  $("#wand-clear").addEventListener("click", () => setActiveTool(null));
+  $("#wand-tolerance").addEventListener("input", () => {
+    $("#wand-tolerance-value").value = $("#wand-tolerance").value;
+    if (wandSelection) { const position = wandSelection.position; void previewWand(position); }
+  });
+  $("#wand-smoothing").addEventListener("change", () => {
+    if (wandSelection) { const position = wandSelection.position; void previewWand(position); }
+  });
+  $("#wand-create").addEventListener("click", () => {
+    if (!wandSelection || wandSelection.hole !== currentHole()) { clearWandSelection(); return; }
+    const type = $("#wand-type").value;
+    recordUndo("create Magic Wand shape");
+    const feature = { id: `wand-${Date.now()}`, type, label: `Magic Wand ${type}`, source: "manual_magic_wand", points: wandSelection.points };
+    currentHole().features.push(feature);
+    selectedFeatureId = feature.id; selectedFeatureIds = new Set([feature.id]);
+    setActiveTool(null); persistProject(); renderMappedHole();
+    setStatus("Created an editable shape. Use Undo to restore the previous hole.", "success");
+  });
+  const shapePicker = $("#field-shape-tool");
+  const updateShapePicker = () => {
+    const option = shapePicker.selectedOptions[0];
+    $("#place-field-shape").disabled = Boolean(option?.disabled);
+    $("#tree-brush-width").closest("label").hidden = shapePicker.value !== "tree_brush";
+  };
+  shapePicker.addEventListener("change", () => {
+    autoDraftSetupPending = false;
+    setActiveTool(null);
+    updateShapePicker();
+  });
+  $("#place-field-shape").addEventListener("click", () => {
+    if (!map) { setStatus("Wait for the map to load before selecting a mapping tool.", "error"); return; }
+    if (shapePicker.selectedOptions[0]?.disabled) return;
+    autoDraftSetupPending = false;
+    setActiveTool(shapePicker.value);
+  });
+  updateShapePicker();
   $("#cancel-tool").addEventListener("click", () => {
     autoDraftSetupPending = false;
     setActiveTool(null);
@@ -3560,6 +3822,25 @@ function bindEvents() {
     renderMappedHole();
     setStatus(`Classified the selected shape as ${featureName(feature).toLowerCase()}.`, "success");
   });
+  $("#remove-tee-artwork").addEventListener("click", () => {
+    const hole = currentHole();
+    const count = hole.features.filter(feature => feature.type.startsWith("tee_")).length;
+    if (!count) { setStatus("This hole has no tee artwork. Its tee markers are retained.", "neutral"); return; }
+    setActiveTool(null); recordUndo("remove tee artwork");
+    hole.features = hole.features.filter(feature => !feature.type.startsWith("tee_"));
+    selectedFeatureId = null; selectedFeatureIds.clear();
+    persistProject(); renderMappedHole();
+    setStatus(`Removed ${count} tee shapes. Tee markers and yardages are retained; Undo restores artwork.`, "success");
+  });
+  $("#resize-tee-boxes").addEventListener("click", () => {
+    saveHoleForm();
+    if (!window.confirm("Resize this hole's tee boxes from their yardages? Custom tee outlines will become rectangular. Undo can restore them.")) return;
+    setActiveTool(null); recordUndo("resize tee boxes to yardages");
+    const resized = resizeHoleTeeBoxes(currentHole());
+    persistProject(); renderMappedHole();
+    setStatus(resized.length ? `Resized ${resized.length} tee boxes to match their yardages.` : "Set tee markers, a pin, yardages and tee boxes first.", resized.length ? "success" : "error");
+  });
+  $("#smooth-feature-outline").addEventListener("click", () => { try { smoothSelectedOutline(); } catch (error) { setStatus(error.message, "error"); } });
   $("#delete-feature").addEventListener("click", () => {
     deleteSelectedFeatures();
   });
@@ -3595,11 +3876,32 @@ function bindEvents() {
   $("#fairway-shorter").addEventListener("click", () => stretchFairway(.9));
   $("#fairway-longer").addEventListener("click", () => stretchFairway(1.1));
   $("#enlarge-feature").addEventListener("click", () => scaleSelectedFeature(1.05));
+  $("#merge-fairways").addEventListener("click", () => { void mergeHoleFairways().catch(error => setStatus(error.message, "error")); });
   $("#merge-features").addEventListener("click", mergeSelectedFeatures);
+  for (const [id, order] of [["send-feature-back", "back"], ["bring-feature-front", "front"]]) {
+    $("#" + id).addEventListener("click", () => {
+      const features = selectedFeatures();
+      if (!features.length) return;
+      features.forEach(feature => editorFeatureLayers.set(editorFeatureLayerKey(feature), order));
+      selectedFeatureId = null;
+      selectedFeatureIds.clear();
+      renderMappedHole();
+      setStatus(order === "back" ? "Sent shapes to the back; map clicks pass through them. Use the shape list to select them again. Geometry is unchanged." : "Brought shapes to the front. Geometry is unchanged.", "success");
+    });
+  }
   $("#duplicate-feature").addEventListener("click", () => {
     duplicateSelectedFeature();
   });
   $("#clear-measurements").addEventListener("click", clearMeasurements);
+  $("#gps-alignment-mode").addEventListener("change", event => {
+    recordUndo(`change Hole ${currentHoleNumber} GPS alignment`);
+    currentHole().gps_alignment_mode = event.target.value;
+    persistProject();
+    renderGpsCalibration();
+    setStatus(currentHole().gps_alignment_mode === "manual"
+      ? "This hole uses manual calibration. Map the white tee, green and bunker, then enter all three GPS anchors."
+      : "This hole uses its source alignment. Saved manual anchors are retained.", "success");
+  });
   $("#save-gps-calibration").addEventListener("click", () => saveGpsCalibration());
   ["#gps-white-tee", "#gps-green-center", "#gps-bunker-center", "#gps-bunker-feature"].forEach(selector => {
     $(selector).addEventListener("change", () => {
@@ -3770,10 +4072,6 @@ function bindEvents() {
     const installTarget = $("#install-target").value;
     const targetLabel = mapperInstallTargetsEnabled
       ? (installTarget === "prod" ? "Prod Golfgame (.15)" : "Dev Golfgame (.47)") : "local Golfgame";
-    if (mapperHoleCount(project) === 9) {
-      setStatus("Save or export this nine-hole course. Game installation currently requires 18 holes.", "error");
-      return;
-    }
     saveHoleForm();
     const preparedProject = structuredClone(project);
     prepareCourseTeeBoxes(preparedProject);
@@ -3829,7 +4127,7 @@ function bindEvents() {
     }
     button.textContent = "Installing…";
     setStatus(payloads.length === 1
-      ? `Validating and installing all 18 ${project.course_name} holes…`
+      ? `Validating and installing all ${mapperHoleCount(project)} ${project.course_name} holes…`
       : `Validating 27 holes and installing six ordered 18-hole routes…`);
     try {
       const results = [];

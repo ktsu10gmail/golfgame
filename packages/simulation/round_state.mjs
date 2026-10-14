@@ -67,18 +67,18 @@ function normalizeEvent(event, sequence) {
   return normalized;
 }
 
-function normalizeLegacyHoleArray(value) {
+function normalizeLegacyHoleArray(value, holeCount = 18) {
   if (!Array.isArray(value)) {
-    return Array.from({ length: 18 }, () => []);
+    return Array.from({ length: holeCount }, () => []);
   }
-  return Array.from({ length: 18 }, (_, index) => (Array.isArray(value[index]) ? value[index] : []));
+  return Array.from({ length: holeCount }, (_, index) => (Array.isArray(value[index]) ? value[index] : []));
 }
 
-function normalizeLegacyScores(value) {
+function normalizeLegacyScores(value, holeCount = 18) {
   if (!Array.isArray(value)) {
-    return Array(18).fill(null);
+    return Array(holeCount).fill(null);
   }
-  return Array.from({ length: 18 }, (_, index) => {
+  return Array.from({ length: holeCount }, (_, index) => {
     const score = value[index];
     return Number.isInteger(score) ? score : null;
   });
@@ -153,15 +153,16 @@ function migrateLegacyShot(shot, strokeIndex) {
   ];
 }
 
-export function createRoundState({ courseId, roundSeed, tee = "White" }) {
+export function createRoundState({ courseId, roundSeed, tee = "White", holeCount = 18 }) {
   assertCourseId(courseId);
   assertRoundSeed(roundSeed);
+  if (![9,18].includes(holeCount)) throw new Error("holeCount must be 9 or 18");
   return {
     version: ROUND_STATE_VERSION,
     course_id: courseId,
     round_seed: roundSeed,
     tee,
-    holes: Array.from({ length: 18 }, (_, index) => emptyHole(index))
+    holes: Array.from({ length: holeCount }, (_, index) => emptyHole(index))
   };
 }
 
@@ -170,8 +171,8 @@ export function validateRoundState(roundState) {
   if (roundState.version !== ROUND_STATE_VERSION) throw new Error(`unsupported round state version: ${roundState.version}`);
   assertCourseId(roundState.course_id);
   assertRoundSeed(roundState.round_seed);
-  if (!Array.isArray(roundState.holes) || roundState.holes.length !== 18) {
-    throw new Error("roundState.holes must contain 18 holes");
+  if (!Array.isArray(roundState.holes) || ![9,18].includes(roundState.holes.length)) {
+    throw new Error("roundState.holes must contain 9 or 18 holes");
   }
   roundState.holes.forEach((hole, index) => {
     if (!hole || typeof hole !== "object") throw new Error(`hole ${index + 1} must be an object`);
@@ -198,7 +199,8 @@ export function resetRoundState(roundState, { roundSeed, tee } = {}) {
   const next = createRoundState({
     courseId: roundState.course_id,
     roundSeed: roundSeed ?? roundState.round_seed,
-    tee: tee ?? roundState.tee
+    tee: tee ?? roundState.tee,
+    holeCount: roundState.holes.length
   });
   return next;
 }
@@ -209,11 +211,12 @@ export function migrateLegacyRoundState(roundStateInput) {
     roundSeed,
     tee = "White",
     roundHistory,
+    holeCount = 18,
     scores
   } = roundStateInput || {};
-  const next = createRoundState({ courseId, roundSeed, tee });
-  const normalizedHistory = normalizeLegacyHoleArray(roundHistory);
-  const normalizedScores = normalizeLegacyScores(scores);
+  const next = createRoundState({ courseId, roundSeed, tee, holeCount });
+  const normalizedHistory = normalizeLegacyHoleArray(roundHistory, holeCount);
+  const normalizedScores = normalizeLegacyScores(scores, holeCount);
   normalizedHistory.forEach((legacyHole, holeIndex) => {
     let migrated = next;
     let strokes = 0;
@@ -251,8 +254,8 @@ export function migrateLegacyRoundStateStorage(storage, roundStateInput) {
 
 export function replaceHoleEvents(roundState, holeIndex, events) {
   validateRoundState(roundState);
-  if (!Number.isInteger(holeIndex) || holeIndex < 0 || holeIndex > 17) {
-    throw new Error("holeIndex must be between 0 and 17");
+  if (!Number.isInteger(holeIndex) || holeIndex < 0 || holeIndex >= roundState.holes.length) {
+    throw new Error("holeIndex must be within the round");
   }
   if (!Array.isArray(events)) {
     throw new Error("events must be an array");
@@ -290,8 +293,8 @@ export function deriveHoleShotHistory(events) {
 
 export function buildHoleBrowserState(roundState, holeIndex, initialState = {}) {
   validateRoundState(roundState);
-  if (!Number.isInteger(holeIndex) || holeIndex < 0 || holeIndex > 17) {
-    throw new Error("holeIndex must be between 0 and 17");
+  if (!Number.isInteger(holeIndex) || holeIndex < 0 || holeIndex >= roundState.holes.length) {
+    throw new Error("holeIndex must be within the round");
   }
   const hole = roundState.holes[holeIndex];
   const reduced = reduceHoleState(hole.events, initialState);
@@ -325,8 +328,8 @@ export function buildRoundBrowserState(roundState, initialStates = []) {
 
 export function appendHoleEvent(roundState, holeIndex, event) {
   validateRoundState(roundState);
-  if (!Number.isInteger(holeIndex) || holeIndex < 0 || holeIndex > 17) {
-    throw new Error("holeIndex must be between 0 and 17");
+  if (!Number.isInteger(holeIndex) || holeIndex < 0 || holeIndex >= roundState.holes.length) {
+    throw new Error("holeIndex must be within the round");
   }
   const next = structuredClone(roundState);
   const hole = next.holes[holeIndex];

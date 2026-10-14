@@ -10,7 +10,7 @@
     <title>Course Mapper — Jetta Golf</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.css" />
-    <link rel="stylesheet" href="editor.css?v=20261008-course-batch25" />
+    <link rel="stylesheet" href="editor.css?v=20261012-naip01-1" />
   </head>
   <body>
     <main class="mapper-shell">
@@ -92,7 +92,7 @@
               <label>Forward yd<input id="yards-forward" type="number" min="0" max="800" /></label>
               <label>Elevation m<input id="elevation-change" type="number" min="-100" max="100" step=".1" value="0" /></label>
             </div>
-            <label class="wide-field">Default ball start tee
+            <label class="wide-field">Default ball start tee (all holes)
               <select id="start-tee">
                 <option value="blue">Blue</option>
                 <option value="white" selected>White</option>
@@ -105,23 +105,31 @@
           </section>
 
           <section class="panel-section shape-section">
+            <label>Country<input id="course-country" maxlength="80" placeholder="TW or US" /></label>
+            <label>State / region<input id="course-state" maxlength="200" placeholder="State or region" /></label>
+            <label>City<input id="course-city" maxlength="200" placeholder="Course city" /></label>
             <span class="section-number">03</span>
             <div>
               <h2>Place field shapes</h2>
               <p>Choose a template and click the map. Select a shape to edit its points, or choose Move shape to reposition the whole shape.</p>
             </div>
-            <div class="shape-palette" aria-label="Hole shape tools">
-              <button data-tool="fairway" type="button"><i class="swatch fairway"></i>Rounded fairway</button>
-              <button data-tool="rough" type="button"><i class="swatch rough"></i>Rough</button>
-              <button data-tool="bunker" type="button"><i class="swatch bunker"></i>Sand bunker</button>
-              <button data-tool="bunker_circle" type="button"><i class="swatch bunker circle"></i>Circle bunker</button>
-              <button data-tool="green_oval" type="button"><i class="swatch green"></i>Green oval</button>
-              <button data-tool="green_circle" type="button"><i class="swatch green circle"></i>Green circle</button>
-              <button data-tool="water" type="button"><i class="swatch water"></i>Water</button>
-              <button data-tool="stream_brush" class="stream-brush-tool" type="button"><i class="stream-brush-icon"></i>Stream / ditch brush · 3 yd</button>
-              <button data-tool="cart_path_brush" class="cart-path-brush-tool" type="button"><i class="cart-path-brush-icon"></i>Cart path brush · 4 yd</button>
-              <button data-tool="trees_circle" type="button"><i class="swatch trees circle"></i>Trees circle</button>
-              <button data-tool="tree_brush" class="tree-brush-tool" type="button"><i class="tree-brush-icon"></i>Tree brush</button>
+            <div class="shape-picker">
+              <label for="field-shape-tool">Field shape</label>
+              <select id="field-shape-tool">
+                  <option value="fairway">Rounded fairway</option>
+                  <option value="rough">Rough</option>
+                  <option value="bunker">Sand bunker</option>
+                  <option value="bunker_circle">Circle bunker</option>
+                  <option value="green_oval">Green oval</option>
+                  <option value="green_circle">Green circle</option>
+                  <option value="water">Water</option>
+                  <option value="stream_brush">Stream / ditch brush · 3 yd</option>
+                  <option value="cart_path_brush">Cart path brush · 4 yd</option>
+                  <option value="trees_circle">Trees circle</option>
+                  <option value="tree_brush">Tree brush</option>
+                  <option value="out_of_bounds">Out of bounds</option>
+              </select>
+              <button id="place-field-shape" type="button">Place shape</button>
               <label class="tree-brush-size">Brush width
                 <select id="tree-brush-width">
                   <option value="10">10 yd</option>
@@ -130,16 +138,27 @@
                   <option value="40">40 yd</option>
                 </select>
               </label>
-              <button data-tool="out_of_bounds" type="button"><i class="swatch boundary"></i>Out of bounds</button>
-              <button data-tool="box_select" class="box-select-tool" type="button"><i class="selection-box-icon"></i>Box select trees</button>
+              <button id="merge-fairways" type="button" disabled title="Merge all touching or overlapping fairways in this hole">Merge fairways</button>
+              <button data-tool="box_select" type="button">Box select trees</button>
             </div>
+            <output id="merge-fairways-result" role="status" aria-live="polite"></output>
+            <details class="magic-wand-controls">
+              <summary>Magic Wand · local image</summary>
+              <label>Surface<select id="wand-type"><option value="bunker">Bunker</option><option value="fairway">Fairway</option><option value="green">Green</option><option value="water">Water</option><option value="rough">Rough</option><option value="trees">Trees</option></select></label>
+              <label>Tolerance <output id="wand-tolerance-value">30</output><input id="wand-tolerance" type="range" min="0" max="100" value="30" /></label>
+              <label>Outline smoothing<select id="wand-smoothing"><option value="0">Off — original pixels</option><option value="1" selected>Light</option><option value="2">Smooth</option></select></label>
+              <button id="wand-start" type="button">Select on image</button>
+              <button id="wand-create" type="button" disabled>Create shape</button>
+              <button id="wand-clear" type="button">Clear selection</button>
+              <small>Click a surface to preview its connected color area. The outline fills enclosed gaps; inspect it before creating.</small>
+            </details>
             <button data-game-preview class="preview-game-button" type="button">Preview game map</button>
             <small class="guided-scan-help">Drag a brush across the feature and release to create one editable shape. Stream / ditch stays 3 yards wide; Cart path stays 4 yards wide.</small>
           </section>
 
           <section class="panel-section marker-section">
             <span class="section-number">04</span>
-            <div><h2>Set play points</h2><p>Set the Blue or White start tee and pin. The other tees align automatically from the scorecard yardages.</p></div>
+            <div><h2>Set play points</h2><p>Set the Blue or White start tee and pin. The other tee markers align automatically from the scorecard yardages. Tee boxes are optional artwork.</p></div>
             <div class="marker-palette">
               <button data-tool="marker_blue_tee" type="button">Blue tee / start ball</button>
               <button data-tool="marker_forward_tee" type="button">Forward tee / start ball</button>
@@ -150,6 +169,8 @@
               <button data-tool="measure" class="measure-tool" type="button">Measure two points</button>
               <button id="auto-draft-hole" class="auto-draft-tool" type="button">Auto-draft from tee &amp; pin</button>
               <small class="auto-draft-help">Builds the rough, fairway, green, and tee surfaces. Add trees with the Tree brush.</small>
+              <button id="remove-tee-artwork" type="button">Remove tee artwork</button>
+              <button id="resize-tee-boxes" type="button" hidden>Size optional tee artwork</button>
               <button id="clear-route" type="button">Clear route points</button>
               <button id="clear-play-points" class="clear-play-points" type="button">Clear all play points</button>
             </div>
@@ -197,7 +218,7 @@
               <span class="axis-origin">0,0</span>
               <span class="axis-right">X · golfer right</span>
             </div>
-            <p id="hole-validation">Mark the white tee, pin, white tee box, green, and fairway.</p>
+            <p id="hole-validation">Mark the tee and pin, and map the green and fairway.</p>
           </section>
 
           <section class="ledger-section gps-calibration-section">
@@ -205,6 +226,7 @@
               <div><span class="eyebrow">On-course GPS</span><h2 id="gps-calibration-title">GPS alignment</h2></div>
               <strong id="gps-calibration-mark">—</strong>
             </header>
+            <label>Alignment for this hole<select id="gps-alignment-mode"><option value="default">Use source alignment</option><option value="manual">Manual three-point calibration</option></select></label>
             <p id="gps-calibration-intro" class="gps-calibration-intro">For local or legacy artwork, paste three Google Earth coordinates. The bunker supplies the sideways reference needed to align phone GPS.</p>
             <div id="gps-anchor-list" class="gps-anchor-list">
               <label class="gps-anchor-row">
@@ -275,6 +297,9 @@
                 <small id="cluster-help">Selected shapes must be the same type.</small>
               </div>
               <div class="selected-actions">
+                <button id="smooth-feature-outline" type="button">Smooth outline</button>
+                <button id="send-feature-back" type="button">Send to back</button>
+                <button id="bring-feature-front" type="button">Bring to front</button>
                 <button id="duplicate-feature" type="button">Duplicate</button>
                 <button id="delete-feature" class="danger-button" type="button">Delete</button>
               </div>
@@ -282,16 +307,13 @@
             </div>
           </section>
 
-          <section class="ledger-section feature-ledger">
-            <header>
-              <div><span class="eyebrow">Hole layers</span><h2>Mapped features</h2></div>
-              <div class="feature-ledger-actions">
-                <strong id="feature-count" aria-label="Mapped field shape count">0</strong>
-                <button id="clear-field-shapes" type="button" disabled>Clear field shapes</button>
-              </div>
-            </header>
+          <details class="ledger-section feature-ledger" id="mapped-features-panel">
+            <summary>Mapped features <strong id="feature-count" aria-label="Mapped field shape count">0</strong></summary>
+            <div class="feature-ledger-actions">
+              <button id="clear-field-shapes" type="button" disabled>Clear field shapes</button>
+            </div>
             <div id="feature-list" class="feature-list"></div>
-          </section>
+          </details>
 
           <section class="ledger-section measurement-ledger">
             <header>
@@ -506,7 +528,8 @@
         </header>
         <p>Import in small batches. Review saved drafts here; installation is always a separate action.</p>
         <div class="library-controls">
-          <label>Find course or city<input id="library-search" type="search" placeholder="Warrenbrook or Middlesex" /></label>
+          <label>Find course, city or country<input id="library-search" type="search" placeholder="Warrenbrook or Middlesex" /></label>
+          <label>Country<select id="library-country"><option value="">All countries</option><option value="US">US — United States</option><option value="TW">TW — Taiwan</option></select></label>
           <label>State<input id="library-state" maxlength="30" placeholder="NJ" /></label>
           <label>Import status<select id="library-filter"><option value="">All</option><option>New</option><option>Queued</option><option>Importing</option><option>Retry pending</option><option>Incomplete</option><option>Needs review</option><option>Done</option><option>Failed</option></select></label>
           <button id="library-search-button" type="button">Search / Refresh</button>
@@ -514,6 +537,7 @@
         <div class="library-controls">
           <button id="library-upload" type="button">Add updated CSV</button>
           <input id="library-csv" type="file" accept=".csv,text/csv" hidden />
+          <label>Select for<select id="library-selection-mode"><option value="import">Import new courses</option><option value="install">Install saved courses</option></select></label>
           <button id="library-select-all" type="button">Select all on page</button>
           <button id="library-select-none" type="button">Clear selection</button>
           <button id="library-queue" type="button">Import selected (max 25)</button>
@@ -522,11 +546,56 @@
           <button id="library-save" type="button">Save current library project</button>
           <button id="library-report" type="button">Download results CSV</button>
         </div>
+        <div id="library-batch-controls" class="library-controls" hidden>
+          <label>Destination<select id="library-batch-target"><option value="dev">Dev Golfgame (.47)</option><option value="prod">Prod Golfgame (.15)</option></select></label>
+          <span id="library-selected-count">0 selected</span>
+          <button id="library-batch-install" type="button">Install selected</button>
+          <button id="library-batch-stop" type="button" disabled>Stop after current course</button>
+          <button id="library-batch-report" type="button" disabled>Download batch results</button>
+        </div>
+        <p id="library-batch-status" role="status" aria-live="polite"></p>
+        <ol id="library-batch-results"></ol>
         <output id="library-message" class="dialog-status" role="status" aria-live="polite"></output>
         <p id="library-summary"></p>
         <div id="library-rows" class="library-rows"></div>
         <div class="library-controls"><button id="library-prev" type="button">Previous</button><span id="library-page"></span><button id="library-next" type="button">Next</button></div>
       </section>
+    </dialog>
+    <dialog id="geometry-assist-dialog" class="mapper-dialog geometry-assist-dialog" aria-labelledby="geometry-assist-title">
+      <header><div><span class="eyebrow">NAIP · Geometry review</span><h2 id="geometry-assist-title">Geometry Assist</h2></div><button id="geometry-assist-close" type="button" aria-label="Close Geometry Assist">×</button></header>
+      <p id="geometry-assist-metadata"></p>
+      <div id="geometry-assist-controls" class="geometry-assist-controls">
+        <label>Hole <select id="assist-hole" aria-label="Geometry Assist hole"><option value="">All holes</option></select></label>
+        <label><input type="checkbox" data-assist-layer="naip" checked /> NAIP</label>
+        <label><input type="checkbox" data-assist-layer="osm" checked /> OSM import</label>
+        <label><input type="checkbox" data-assist-layer="jetta" checked /> Jetta draft (pink outline)</label>
+        <label><input type="checkbox" data-assist-layer="routes" checked /> Hole routes</label>
+        <label>NAIP opacity <input id="assist-naip-opacity" type="range" min="0" max="100" value="85" /></label>
+        <label>OSM opacity <input id="assist-osm-opacity" type="range" min="0" max="100" value="80" /></label>
+        <button id="assist-fit" type="button">Fit Course / Reset View</button>
+        <label>Trace <select id="assist-trace-type"><option value="bunker">Bunker</option><option value="green">Green</option><option value="fairway">Fairway</option><option value="water">Water</option><option value="trees">Trees / vegetation</option><option value="tee_blue">Blue tee box</option><option value="tee_white">White tee box</option><option value="tee_forward">Forward tee box</option></select></label>
+        <button id="assist-trace-start" type="button" disabled>Start trace</button>
+        <button id="assist-trace-undo" type="button" disabled>Undo point</button>
+        <button id="assist-trace-preview" type="button" disabled>Preview shape</button>
+        <button id="assist-trace-discard" type="button" disabled>Discard changes</button>
+        <button id="assist-trace-save" type="button" disabled>Save new revision</button>
+        <label>Saved shape <select id="assist-object" disabled><option value="">Select a saved shape</option></select></label>
+        <label>Assign to <select id="assist-object-hole" disabled></select></label>
+        <label>Shape type <select id="assist-object-type" disabled></select></label>
+        <button id="assist-object-reassign" type="button" disabled>Preview reassignment</button>
+        <button id="assist-object-delete" type="button" disabled>Preview deletion</button>
+        <details><summary>Golf features</summary><div class="geometry-assist-controls">
+          <label><input type="checkbox" data-assist-feature="tee" checked /> Tees</label>
+          <label><input type="checkbox" data-assist-feature="green" checked /> Greens</label>
+          <label><input type="checkbox" data-assist-feature="fairway" checked /> Fairways</label>
+          <label><input type="checkbox" data-assist-feature="bunker" checked /> Bunkers</label>
+          <label><input type="checkbox" data-assist-feature="water" checked /> Water</label>
+          <label><input type="checkbox" data-assist-feature="trees" checked /> Trees / vegetation</label>
+        </div></details>
+      </div>
+      <output id="geometry-assist-status" role="status" aria-live="polite"></output>
+      <div id="geometry-assist-map" aria-label="Geographic NAIP and course evidence comparison"></div>
+      <small>Trace a boundary, or select a saved shape from the menu or by tapping its pink outline. Preview deletion or reassignment, then Save new revision. Discard changes cancels the preview. OSM import evidence and GPS calibration are preserved.</small>
     </dialog>
     <dialog id="library-source-dialog" class="mapper-dialog library-dialog" aria-labelledby="library-source-title">
       <section class="mapper-dialog-card">
@@ -558,6 +627,6 @@
     </dialog>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.js"></script>
-  <script type="module" src="editor.js?v=20261009-primary-green1"></script>
+  <script type="module" src="editor.js?v=20261014-batch-install1"></script>
   </body>
 </html>

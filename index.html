@@ -8,7 +8,7 @@
       content="A strategic golf game featuring four complete 18-hole courses."
     />
     <title>Jetta Golf — The Strategy Round</title>
-  <link rel="stylesheet" href="styles.css?v=20261007-first-cut1" />
+  <link rel="stylesheet" href="styles.css?v=20261013-sidebar-reset1" />
   </head>
   <body>
     <div id="loading" class="loading-screen">
@@ -22,6 +22,7 @@
           <span class="brand-mark">J</span>
           <span>
             <strong id="brand-course-name">The Meadows</strong>
+            <span id="brand-course-location" class="brand-course-location" hidden></span>
             <small>Strategy round</small>
           </span>
         </a>
@@ -49,7 +50,7 @@
         </div>
 
         <div class="round-status">
-          <span>Hole <strong id="header-hole">1</strong> of 18</span>
+          <span>Hole <strong id="header-hole">1</strong> of <span id="header-hole-count">18</span></span>
           <span class="status-rule"></span>
           <span><strong id="header-score">E</strong> to par</span>
         </div>
@@ -143,6 +144,7 @@
               <button id="game-finished-button" class="game-finished-button" type="button" disabled>Game finished</button>
             </div>
           </div>
+          <button id="sidebar-reset-game-button" class="secondary-action sidebar-reset-game-button" type="button">Reset game</button>
         </aside>
 
         <section class="course-stage" aria-label="Interactive hole map">
@@ -199,6 +201,7 @@
             <span id="live-map-measure-copy">Record GPS first, then touch the map to measure.</span>
             <button id="live-map-measure-record" type="button">Record GPS</button>
             <button id="live-map-measure-voice" type="button" aria-label="Hear map measurement instructions" title="Hear instructions">Hear</button>
+            <button id="live-map-reset" type="button" hidden>Reset zoom</button>
             <button id="live-map-target-use" type="button" hidden>Use target</button>
             <button id="live-map-target-cancel" type="button" hidden>Cancel</button>
           </div>
@@ -730,6 +733,7 @@
         <label for="gps-page-view"><span>Page preview</span>
           <select id="gps-page-view" aria-label="Preview a GPS mode page">
             <option value="actual">Current round</option>
+            <option value="practice">Practice</option>
             <option value="tee">Tee setup</option>
             <option value="shot">Shot page</option>
             <option value="green">Green page</option>
@@ -739,6 +743,9 @@
         <small id="gps-preview-note" hidden>Preview only · round data will not change</small>
       </div>
 
+      <div class="gps-practice-controls">
+        <button id="gps-practice-restart" type="button" hidden>Restart practice</button>
+      </div>
       <main class="gps-mode-content">
         <section class="gps-yardage-board" aria-live="polite">
           <div id="gps-shot-metrics" class="gps-shot-metrics" hidden>
@@ -773,11 +780,7 @@
             <strong id="gps-location-title">Tee location</strong>
             <small id="gps-location-help">Stand at the white tee, then tap</small>
           </button>
-          <button id="gps-on-green" class="gps-on-green-button" type="button" hidden>
-            <span class="gps-green-mark" aria-hidden="true"><i></i></span>
-            <strong>On Green</strong>
-            <small>Start putting</small>
-          </button>
+
         </div>
 
         <p id="gps-mode-status" class="gps-mode-status" role="status" aria-live="polite">Checking this hole’s GPS calibration…</p>
@@ -846,11 +849,19 @@
           <div id="gps-caddie-choices" class="gps-caddie-choices" hidden></div>
         </section>
 
+        <div id="gps-next-shot-actions" class="gps-location-actions">
+          <button id="gps-next-shot" type="button" class="gps-location-button"><strong>Next Shot</strong><small>Open the next stroke page · no GPS recorded</small></button>
+          <button id="gps-on-green" class="gps-on-green-button" type="button" hidden>
+            <span class="gps-green-mark" aria-hidden="true"><i></i></span>
+            <strong>On Green</strong>
+            <small>Start putting</small>
+          </button>
+        </div>
         <section id="gps-green-controls" class="gps-green-controls" hidden>
           <div class="gps-green-heading"><span>On the green</span><strong id="gps-putt-count">0 putts</strong></div>
           <div class="gps-green-actions">
             <button id="gps-add-putt" class="gps-add-putt" type="button">+1 Putt</button>
-            <button id="gps-holed-out" class="gps-holed-out" type="button"><span aria-hidden="true">●</span> Holed Out</button>
+            <button id="gps-holed-out" class="gps-holed-out" type="button"><span aria-hidden="true">●</span> Holed Out (+1 putt)</button>
           </div>
           <small>Tap +1 Putt for each putt that stays out. Holed Out records the final putt and opens the hole review.</small>
         </section>
@@ -860,6 +871,7 @@
             <div><span>Hole complete</span><h2>Hole Review</h2></div>
             <div class="gps-review-header-actions">
               <button class="gps-review-trace" type="button" data-gps-review-trace>View in Live</button>
+              <button type="button" class="gps-review-trace" data-gps-finish-game>Finish Game</button>
               <button id="gps-review-next" class="gps-review-next" type="button">Next hole <span aria-hidden="true">→</span></button>
             </div>
           </header>
@@ -912,6 +924,33 @@
       </div>
     </section>
 
+    <dialog id="gps-start-dialog" class="modal confirm-modal">
+      <form method="dialog" class="modal-card">
+        <header><h2>On-course GPS</h2><button class="modal-close" value="cancel" aria-label="Close">×</button></header>
+        <p id="gps-start-summary" class="modal-intro"></p>
+        <button id="gps-upload-finished" type="button" class="secondary-action" hidden>Save and finish previous games</button>
+        <p id="gps-upload-status" class="dialog-status" role="status"></p>
+        <p class="modal-intro">New Game starts at hole 1 with an empty scorecard.</p>
+        <div class="modal-actions">
+          <button id="gps-start-new" type="button" class="primary-action">New Game</button>
+          <button id="gps-start-continue" type="button" class="secondary-action">Continue…</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="gps-course-confirm-dialog" class="modal confirm-modal">
+      <form method="dialog" class="modal-card">
+        <header><h2>Confirm your course</h2><button class="modal-close" value="cancel" aria-label="Cancel">×</button></header>
+        <p class="modal-intro">Is this the course you are playing today? If not, select the correct course before starting.</p>
+        <label class="wide-field">Playing course<select id="gps-confirm-course"></select></label>
+        <p id="gps-confirm-course-status" class="dialog-status" role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-action" value="cancel">Cancel</button>
+          <button id="gps-confirm-course-start" type="button" class="primary-action">Confirm and start</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="gps-hole-review-dialog" class="modal confirm-modal gps-hole-review-dialog">
       <form method="dialog" class="modal-card gps-review-card">
         <header>
@@ -935,6 +974,7 @@
         </section>
         <div class="modal-actions">
           <button class="gps-review-trace" type="button" data-gps-review-trace>View trace in Live</button>
+          <button type="button" class="gps-review-trace" data-gps-finish-game>Finish Game</button>
           <button class="primary-action" value="close">Close review</button>
         </div>
       </form>
@@ -1664,6 +1704,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="app.js?v=20261009-dev47"></script>
+    <script type="module" src="app.js?v=20261014-coaching-live4"></script>
   </body>
 </html>

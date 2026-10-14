@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from packages.course_import.library import CourseLibrary
+from packages.course_import.library import CourseLibrary, hole_summary
 from packages.course_import.golf_intelligence import CourseImportError
 from packages.course_import.openstreetmap import normalize_openstreetmap_course
 from tests.test_openstreetmap_import import osm_detail
@@ -35,6 +35,42 @@ class FakeOsm:
 
 
 class CourseLibraryTests(unittest.TestCase):
+    def test_chinese_names_have_distinct_stable_ids(self):
+        text = 'Course Name,Country,State,City,Latitude,Longitude\n林口高爾夫球場,TW,Taipei,Linkou,25.1,121.3\n美麗華高爾夫俱樂部,TW,Taipei,Linkou,25.2,121.4\n'
+        result = self.library.intake(text)
+        self.assertEqual(result['new'], 2)
+        self.assertEqual(result['errors'], [])
+        self.assertEqual(self.library.intake(text)['unchanged'], 2)
+        self.assertEqual(len({c['id'] for c in self.library.listing(country='TW')['courses']}), 2)
+
+    def test_hole_summary_does_not_count_placeholder_holes(self):
+        self.assertEqual(hole_summary({'holes': {str(i): {'route_points': []} for i in range(18)}})['label'], 'Unknown')
+        for count in (9, 18, 27, 36):
+            project = {'external_course_source': {'layout_assessment': {'source_route_count': count}}}
+            self.assertEqual(hole_summary(project)['label'], f'{count} mapped — total unknown')
+            project['external_course_source']['layout_assessment']['declared_hole_count'] = count
+            self.assertEqual(hole_summary(project)['declared'], count)
+        self.assertEqual(self.library.listing()['courses'][0]['hole_summary']['label'], 'Unknown')
+        self.library.queue([self.identity]); self.library.process_one()
+        self.assertGreater(self.library.listing()['courses'][0]['hole_summary']['mapped'], 0)
+
+    def test_country_intake_filter_search_and_migration(self):
+        self.assertEqual(self.library.listing(country='US')['total'], 1)
+        tw = 'Course Name,Country,State,City,Latitude,Longitude\nTaiwan Club,tw,Guishan,Taoyuan,25.0483,121.3853\n'
+        self.assertEqual(self.library.intake(tw)['new'], 1)
+        self.assertEqual(self.library.listing(country='tw')['courses'][0]['country'], 'TW')
+        self.assertEqual(self.library.listing(query='TW')['total'], 1)
+        self.assertEqual(self.library.listing(country='TW', state='NJ')['total'], 0)
+        self.assertEqual(self.library.intake(tw)['unchanged'], 1)
+        self.assertEqual(len(self.library.intake(tw.replace(',tw,', ',Taiwan,'))['errors']), 1)
+        with self.library.connect() as db:
+            db.execute('ALTER TABLE library_courses DROP COLUMN country')
+        reopened = CourseLibrary(self.root, self.osm)
+        self.assertEqual(reopened.listing(country='US')['total'], 2)
+        reopened.intake(tw)
+        self.assertEqual(reopened.listing(country='TW')['total'], 1)
+        self.assertIn('Course Name,Country,State', reopened.report())
+
     def test_course_rejection_flag_persists_and_can_be_cleared(self):
         library = CourseLibrary(self.root, FakeOsm())
         identity = 'openstreetmap:way/100'

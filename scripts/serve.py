@@ -1183,9 +1183,12 @@ class AppHandler(SimpleHTTPRequestHandler):
                     result = library.course_flags()
                 elif action == "courses":
                     result = library.listing(query.get('q',[''])[0], query.get('state',[''])[0],
-                        query.get('status',[''])[0], query.get('offset',[0])[0], limit=25)
+                        query.get('status',[''])[0], query.get('offset',[0])[0], limit=25, country=query.get('country',[''])[0])
                 elif action == "project":
                     result = {"project": library.project(query.get('id',[''])[0],query.get('revision',[None])[0])}
+                elif action == "geometry-assist":
+                    from packages.course_import.naip import geometry_assist
+                    result = geometry_assist(library, query.get('id',[''])[0])
                 elif action == 'history':
                     result = library.history(query.get('id',[''])[0])
                 elif action == 'source-review':
@@ -1283,7 +1286,7 @@ class AppHandler(SimpleHTTPRequestHandler):
             "installed": True,
             "course_id": payload["course_id"],
             "course_name": payload["course_name"],
-            "holes": 18,
+            "holes": len(payload["holes"]),
             "gps_calibrated_holes": sum(
                 1 for hole in payload["holes"].values()
                 if hole.get("hole_metadata", {}).get("gps_calibration")

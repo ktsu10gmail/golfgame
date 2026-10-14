@@ -93,3 +93,22 @@ test("upright full-hole camera flips a reversed legacy route so its tee remains 
   assert.ok(Math.abs(recovered[0] - route[1][0]) < 1e-9);
   assert.ok(Math.abs(recovered[1] - route[1][1]) < 1e-9);
 });
+
+
+test("mobile Warrenbrook hole 18 fit excludes distant hazards and contains playable surfaces", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { mobileFullHoleBounds } = await import("../packages/editor/map_projection.mjs");
+  const hole = JSON.parse(await readFile(new URL("../data/warrenbrook-golf-course-new/hole18.json", import.meta.url), "utf8"));
+  const g = hole.geometries;
+  const corePoints = [...g.tee_boxes.flatMap(item => item.polygon), ...g.fairway_segments.flatMap(item => item.polygon), ...g.green_complex.polygon];
+  const bounds = mobileFullHoleBounds({route: hole.centerline_waypoints.map(item => item.point), corePoints,
+    featurePolygons: [...g.rough_zones, ...g.tree_zones, ...g.hazards].map(item => item.polygon), corridorWidth:75/1.09361});
+  assert.ok(bounds.maxX - bounds.minX < 220);
+  assert.ok(bounds.maxY - bounds.minY < 450);
+  const frame = {left:36, right:480, top:70, bottom:970};
+  const projector = createUniformMapProjector(bounds, frame);
+  for (const point of corePoints) {
+    const [x,y] = projector.point(point);
+    assert.ok(x >= frame.left && x <= frame.right && y >= frame.top && y <= frame.bottom);
+  }
+});
